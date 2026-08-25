@@ -18,7 +18,12 @@ from zoneinfo import ZoneInfo
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 AGENT_DIR = Path(__file__).resolve().parents[1]
-PYTHON_BIN = REPO_ROOT / ".venv" / "bin" / "python"
+# See run_watch.py: the add-on image uses its system interpreter rather than
+# a checkout-local virtual environment.
+_checkout_python = REPO_ROOT / ".venv" / "bin" / "python"
+PYTHON_BIN = Path(os.environ.get("AUCTION_WATCH_PYTHON") or (
+    str(_checkout_python) if _checkout_python.exists() else sys.executable
+))
 RUN_WATCH = AGENT_DIR / "scripts" / "run_watch.py"
 STATE_FILE = AGENT_DIR / "schedule_state.json"
 LOCK_FILE = AGENT_DIR / "schedule.lock"

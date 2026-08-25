@@ -49,7 +49,14 @@ WATCHLIST_FILE = AGENT_DIR / "watchlist.json"
 DISMISSALS_CACHE_FILE = AGENT_DIR / "dismissals-cache.json"
 WEB_EXPORT_SCRIPT = AGENT_DIR / "scripts" / "export_web_snapshot.py"
 EXTRA_SOURCES_SCRIPT = AGENT_DIR / "scripts" / "scan_extra_sources.py"
-PYTHON_BIN = REPO_ROOT / ".venv" / "bin" / "python"
+# A development checkout has a virtual environment at the repository root.
+# The Home Assistant image deliberately does not: it uses the system Python
+# provisioned by its Dockerfile.  Prefer the explicit runtime when supplied,
+# then the checkout venv, and finally the interpreter running this process.
+_checkout_python = REPO_ROOT / ".venv" / "bin" / "python"
+PYTHON_BIN = Path(os.environ.get("AUCTION_WATCH_PYTHON") or (
+    str(_checkout_python) if _checkout_python.exists() else sys.executable
+))
 NOTIFICATION_ENV_FILE = AGENT_DIR / "notification.env"
 WEB_BAVASTRO_BASE = "https://www.bavastronline.com.uy/auctions"
 
