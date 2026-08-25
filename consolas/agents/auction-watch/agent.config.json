@@ -55,13 +55,10 @@
     "metadata": "run.json"
   },
   "notifications": {
-    "macos": {
-      "default_mode": "always"
-    },
     "email": {
       "default_mode": "matches_or_failure",
-      "default_method": "mailapp",
-      "env_file": "agents/auction-watch/notification.env"
+      "default_method": "smtp",
+      "configuration": "Home Assistant add-on options"
     }
   },
   "incremental": {

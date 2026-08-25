@@ -2153,7 +2153,7 @@ def send_macos_notification(
     counts: dict[str, object],
     summary_path: Path,
 ) -> NotificationResult:
-    mode = config.get("AUCTION_WATCH_MACOS_NOTIFY", "always")
+    mode = config.get("AUCTION_WATCH_MACOS_NOTIFY", "disabled")
     total_matches = total_match_count(counts)
 
     if not notification_mode_enabled(mode, status, total_matches):
@@ -2550,13 +2550,13 @@ def prepare_email_delivery(
             "runId": run_id,
             "enabled": False,
             "emailMode": mode,
-            "method": config.get("AUCTION_WATCH_EMAIL_METHOD", "mailapp").strip().lower(),
+            "method": config.get("AUCTION_WATCH_EMAIL_METHOD", "smtp").strip().lower(),
             "detail": f"mode={mode}",
         }
 
     recipients = parse_recipients(config.get("AUCTION_WATCH_EMAIL_TO", ""))
     prefix = config.get("AUCTION_WATCH_EMAIL_SUBJECT_PREFIX", "[Auction Watch]").strip()
-    method = config.get("AUCTION_WATCH_EMAIL_METHOD", "mailapp").strip().lower()
+    method = config.get("AUCTION_WATCH_EMAIL_METHOD", "smtp").strip().lower()
     app_base_url = config.get("AUCTION_WATCH_APP_BASE_URL", "").strip()
 
     subject = build_email_subject(prefix, status, total_matches, watch_hits)
