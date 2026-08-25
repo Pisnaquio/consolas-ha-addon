@@ -1,0 +1,29 @@
+{
+  "generatedAt": null,
+  "runId": "",
+  "status": "unavailable",
+  "issues": [],
+  "sync": {
+    "status": "unavailable",
+    "source": "static",
+    "runId": "",
+    "snapshotHash": "",
+    "generatedAt": null,
+    "acceptedAt": null,
+    "ageSeconds": null
+  },
+  "publicationLifecycle": {
+    "version": 1,
+    "activeKeys": [],
+    "sourceHealth": {}
+  },
+  "activeMatchMetadata": [],
+  "dismissalsApplied": 0,
+  "counts": {
+    "total_matches": 0,
+    "detected_matches": 0,
+    "dismissed_matches": 0
+  },
+  "featured": null,
+  "matches": []
+}

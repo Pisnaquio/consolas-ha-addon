@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mi Catálogo de Consolas</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css?v=20260824a" />
+    <link rel="stylesheet" href="./studio-theme.css?v=20260824a" />
+  </head>
+  <body class="studio-variant">
+    <div class="bg-pattern" aria-hidden="true"></div>
+    <main class="container">
+      <header class="hero">
+        <p class="eyebrow">Catálogo Personal</p>
+        <h1>Mi colección de consolas</h1>
+        <p class="subtitle">
+          Inventario real de consolas y juegos, con foco en disponibilidad y estado.
+        </p>
+        <div class="card-actions">
+          <a class="btn-link btn-primary" href="./opportunities.html">Oportunidades</a>
+          <a class="btn-link" href="./chasing-games.html">Chasing Games</a>
+          <a class="btn-link" href="./database.html">Abrir base general de consolas</a>
+          <a class="btn-link" href="./collection-control.html">Control tengo / no tengo</a>
+        </div>
+      </header>
+
+      <section class="summary" id="summary"></section>
+      <section class="dashboard" id="globalDashboard"></section>
+
+      <section class="controls">
+        <div class="search-wrap">
+          <label for="search">Buscar</label>
+          <input id="search" type="search" placeholder="Nombre, notas, accesorios o juegos..." />
+        </div>
+        <div class="filters">
+          <div>
+            <label for="quickFilter">Vista rápida</label>
+            <select id="quickFilter">
+              <option value="all">Todas</option>
+              <option value="have">Tengo</option>
+              <option value="want">No tengo</option>
+            </select>
+          </div>
+        </div>
+        <details class="advanced-filters">
+          <summary>Más filtros</summary>
+          <div class="filters">
+          <div id="noHaveSubFilterWrap" hidden>
+            <label for="noHaveSubFilter">Subfiltro (No tengo)</label>
+            <select id="noHaveSubFilter">
+              <option value="">Todas</option>
+              <option value="wishlist">Wishlist</option>
+            </select>
+          </div>
+          <div>
+            <label for="brandFilter">Marca</label>
+            <select id="brandFilter">
+              <option value="">Todas</option>
+            </select>
+          </div>
+          <div>
+            <label for="generationFilter">Generación</label>
+            <select id="generationFilter">
+              <option value="">Todas</option>
+            </select>
+          </div>
+          <div>
+            <label for="statusFilter">Estado</label>
+            <select id="statusFilter">
+              <option value="">Todos</option>
+            </select>
+          </div>
+          <div>
+            <label for="sortFilter">Orden</label>
+            <select id="sortFilter">
+              <option value="year-asc">Año (ascendente)</option>
+              <option value="year-desc">Año (descendente)</option>
+              <option value="name-asc">Nombre (A-Z)</option>
+            </select>
+          </div>
+          <div>
+            <label for="groupByFilter">Agrupar por</label>
+            <select id="groupByFilter">
+              <option value="none">Sin agrupar</option>
+              <option value="brand">Fabricante</option>
+              <option value="ownership">Tengo / No tengo</option>
+            </select>
+          </div>
+        </div>
+        </details>
+      </section>
+
+      <section>
+        <div class="section-title-row">
+          <h2>Registrados / ya tengo</h2>
+          <span id="registeredCount" class="count"></span>
+        </div>
+        <div id="registeredGrid" class="grid"></div>
+      </section>
+
+      <section id="collectionInsights" class="dashboard"></section>
+
+      <section>
+        <div class="section-title-row">
+          <h2>Deseados / recomendados</h2>
+          <span id="wishlistCount" class="count"></span>
+        </div>
+        <div id="wishlistGrid" class="grid"></div>
+      </section>
+    </main>
+
+    <template id="consoleCardTemplate">
+      <article class="card">
+        <div class="card-media">
+          <img loading="lazy" decoding="async" />
+        </div>
+        <div class="card-body">
+          <div class="card-head">
+            <h3></h3>
+            <span class="badge"></span>
+          </div>
+          <p class="meta"></p>
+          <p class="state"></p>
+          <div class="chips"></div>
+          <p class="notes"></p>
+          <div class="price-reference"></div>
+          <div class="price-row"></div>
+          <div class="card-actions">
+            <a class="btn-link detail-link">Ver detalle</a>
+          </div>
+        </div>
+      </article>
+    </template>
+
+    <script src="./data-store.js?v=20260710b" defer></script>
+    <script src="./collection-repository.js?v=20260814a" defer></script>
+    <script src="./auction-watch-repository.js?v=20260824a" defer></script>
+    <script src="./app.js?v=20260824a" defer></script>
+    <script src="./studio-bridge.js?v=20260522a" defer></script>
+  </body>
+</html>

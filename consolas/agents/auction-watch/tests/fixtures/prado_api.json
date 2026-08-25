@@ -1,0 +1,47 @@
+{
+  "products": [
+    {
+      "id": 272662,
+      "name": "Lote #056 &#8211; Consola Radofin Tele-Sports",
+      "slug": "lote-056-radofin",
+      "type": "auction",
+      "permalink": "https://pradorematesenlinea.uy/producto/lote-056-radofin/",
+      "short_description": "<p>Dos controles, cables y fuente.</p>",
+      "price_html": "<span class=\"woo-ua-auction-price current-bid\" data-bid=\"1000\" data-status=\"running\">Oferta actual: $1.000</span>",
+      "images": [
+        {"src": "https://img.example/radofin.jpg"}
+      ],
+      "categories": [
+        {
+          "id": 122693,
+          "name": "Vintage &amp; Coleccionables",
+          "link": "https://pradorematesenlinea.uy/categoria-producto/vintage/"
+        }
+      ],
+      "is_in_stock": true,
+      "is_password_protected": false
+    },
+    {
+      "id": 2,
+      "name": "Lote #002 &#8211; Subasta terminada",
+      "type": "auction",
+      "permalink": "https://pradorematesenlinea.uy/producto/lote-002/",
+      "price_html": "<span class=\"woo-ua-auction-price current-bid\" data-bid=\"500\" data-status=\"expired\">Oferta final: $500</span>",
+      "images": [],
+      "categories": [],
+      "is_in_stock": true,
+      "is_password_protected": false
+    },
+    {
+      "id": 3,
+      "name": "Producto de venta directa",
+      "type": "simple",
+      "permalink": "https://pradorematesenlinea.uy/producto/venta-directa/",
+      "price_html": "$900",
+      "images": [],
+      "categories": [],
+      "is_in_stock": true,
+      "is_password_protected": false
+    }
+  ]
+}

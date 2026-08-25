@@ -1,0 +1,65 @@
+name: "Consolas"
+version: "0.1.11"
+slug: "consolas"
+description: "Coleccion de consolas y juegos como add-on de Home Assistant con SQLite server-side."
+arch:
+  - aarch64
+  - amd64
+startup: application
+boot: auto
+stage: experimental
+init: false
+
+ingress: true
+ingress_port: 8788
+ingress_entry: /
+ingress_stream: true
+ingress_panel: true
+panel_icon: mdi:gamepad-variant
+panel_title: "Consolas"
+panel_admin: false
+watchdog: "http://[HOST]:[PORT:8788]/api/health"
+
+webui: "http://[HOST]:[PORT:8788]"
+ports:
+  8788/tcp: 8788
+ports_description:
+  8788/tcp: "Consolas web/API para acceso LAN; Ingress no usa este puerto externo."
+
+map:
+  - type: data
+    read_only: false
+backup: cold
+
+options:
+  log_level: info
+  ebay_environment: sandbox
+  ebay_client_id: ""
+  ebay_client_secret: ""
+  auction_watch_email_mode: matches_or_failure
+  auction_watch_email_method: smtp
+  auction_watch_smtp_host: ""
+  auction_watch_smtp_port: 587
+  auction_watch_smtp_username: ""
+  auction_watch_smtp_password: ""
+  auction_watch_email_from: ""
+  auction_watch_email_to: ""
+schema:
+  log_level: list(trace|debug|info|notice|warning|error|fatal)
+  ebay_environment: list(sandbox|production)
+  ebay_client_id: str?
+  ebay_client_secret: password?
+  auction_watch_email_mode: list(disabled|matches_or_failure|always)
+  auction_watch_email_method: list(smtp)
+  auction_watch_smtp_host: str?
+  auction_watch_smtp_port: port?
+  auction_watch_smtp_username: str?
+  auction_watch_smtp_password: password?
+  auction_watch_email_from: str?
+  auction_watch_email_to: str?
+
+environment:
+  CONSOLAS_HOST: "0.0.0.0"
+  CONSOLAS_PORT: "8788"
+  CONSOLAS_DATA_DIR: "/data"
+  CONSOLAS_STATIC_DIR: "/app/web"

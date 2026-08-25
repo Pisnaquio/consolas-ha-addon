@@ -1,0 +1,875 @@
+.detail-block--games {
+  grid-column: 1 / -1;
+}
+
+.games-filter-shell {
+  border: 2px solid rgba(95, 184, 232, 0.45);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(252, 254, 255, 0.98), rgba(241, 249, 255, 0.96));
+  padding: 13px;
+  box-shadow: 0 12px 24px rgba(21, 92, 143, 0.1);
+}
+
+.games-filterbar {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.games-filterbar label {
+  display: grid;
+  gap: 6px;
+  font-size: 0.76rem;
+  color: #586673;
+  font-family: "IBM Plex Mono", monospace;
+}
+
+.games-filterbar .filter-search {
+  grid-column: span 2;
+}
+
+.games-filterbar input,
+.games-filterbar select {
+  min-height: 38px;
+  border: 1px solid #b7cce7;
+  border-radius: 10px;
+  background: #fff;
+  padding: 8px 11px;
+  font: inherit;
+  color: #1f2b36;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  transition: border-color 140ms ease, box-shadow 140ms ease, background-color 140ms ease;
+}
+
+.games-filterbar input:hover,
+.games-filterbar select:hover {
+  border-color: #94a6bd;
+}
+
+.games-filterbar input:focus,
+.games-filterbar select:focus {
+  outline: none;
+  border-color: #1565c0;
+  box-shadow: 0 0 0 3px rgba(21, 101, 192, 0.16);
+}
+
+.games-count {
+  margin: 10px 0 0;
+  color: #586673;
+  font-size: 0.84rem;
+  font-family: "IBM Plex Mono", monospace;
+}
+
+.games-stats-strip {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.games-stat-item {
+  border: 1px solid #bdd2ec;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff, #f4faff);
+  padding: 9px 11px;
+  display: grid;
+  gap: 4px;
+}
+
+.games-stat-item small {
+  color: #61707d;
+  font-size: 0.72rem;
+  font-family: "IBM Plex Mono", monospace;
+}
+
+.games-stat-item strong {
+  color: #1f2b36;
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.games-subsection {
+  margin-top: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.games-subsection-collapsible {
+  border: 2px solid rgba(95, 184, 232, 0.36);
+  border-radius: 16px;
+  background: linear-gradient(180deg, #ffffff, #f5faff);
+  padding: 10px 12px 12px;
+}
+
+.games-subsection-collapsible[open] {
+  background: #f8fbff;
+}
+
+.games-subtitle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  list-style: none;
+  gap: 10px;
+}
+
+.games-subtitle-row::-webkit-details-marker {
+  display: none;
+}
+
+.games-subtitle-count {
+  border: 1px solid #c8d3e2;
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-size: 0.75rem;
+  color: #5b6975;
+  font-family: "IBM Plex Mono", monospace;
+  background: #fff;
+}
+
+.games-subsection-extras .games-subtitle {
+  color: #4f6170;
+}
+
+.games-subtitle {
+  margin: 0;
+  font-size: 1rem;
+  color: #1f2b36;
+}
+
+.games-register-form {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr auto;
+  gap: 10px;
+  border: 1px solid #bed2ec;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #ffffff, #f5faff);
+  padding: 12px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+}
+
+.games-register-form label {
+  display: grid;
+  gap: 6px;
+  font-size: 0.74rem;
+  color: #56646f;
+  font-family: "IBM Plex Mono", monospace;
+}
+
+.games-register-form input,
+.games-register-form select {
+  min-height: 36px;
+  border: 1px solid #c8d3e2;
+  border-radius: 9px;
+  background: #fff;
+  padding: 8px;
+  font: inherit;
+}
+
+.games-register-form .btn-link {
+  align-self: end;
+  min-height: 36px;
+}
+
+.manual-game-launcher {
+  margin-top: 10px;
+}
+
+.manual-game-dialog {
+  border: 2px solid rgba(95, 184, 232, 0.45);
+  border-radius: 20px;
+  padding: 0;
+  width: min(920px, 94vw);
+  max-height: 88vh;
+  background: linear-gradient(180deg, #ffffff, #f5faff);
+  box-shadow: 0 24px 44px rgba(20, 27, 33, 0.28);
+}
+
+.manual-game-dialog::backdrop {
+  background: rgba(14, 22, 28, 0.45);
+  backdrop-filter: blur(2px);
+}
+
+.manual-game-dialog.is-open-fallback {
+  display: block;
+}
+
+.manual-game-dialog-shell {
+  margin: 0;
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.manual-game-dialog-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 10px;
+}
+
+.manual-game-dialog-head h3 {
+  margin: 0;
+  font-size: 1.08rem;
+}
+
+.manual-game-dialog-head p {
+  margin: 4px 0 0;
+  color: #5a6874;
+  font-size: 0.78rem;
+}
+
+.manual-step-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.manual-step-field {
+  display: grid;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: #586673;
+  font-family: "IBM Plex Mono", monospace;
+}
+
+.manual-step-field input {
+  min-height: 38px;
+  border: 1px solid #d7c8b0;
+  border-radius: 9px;
+  background: #fff;
+  padding: 8px;
+  font: inherit;
+}
+
+.manual-detect-hint {
+  margin: 0;
+  grid-column: 1 / -1;
+  color: #516171;
+  font-size: 0.72rem;
+  font-family: "IBM Plex Mono", monospace;
+}
+
+.manual-inline-error {
+  margin: 0;
+  grid-column: 1 / -1;
+  color: #8c2f2f;
+  font-size: 0.72rem;
+  font-family: "IBM Plex Mono", monospace;
+}
+
+.manual-preview-panel {
+  border: 1px solid #d6deea;
+  border-radius: 12px;
+  background: #fbfdff;
+  padding: 8px;
+}
+
+.manual-preview-card {
+  margin: 0;
+}
+
+.manual-quick-fields {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.manual-quick-fields label {
+  display: grid;
+  gap: 6px;
+  font-size: 0.74rem;
+  color: #56646f;
+  font-family: "IBM Plex Mono", monospace;
+}
+
+.manual-quick-fields select {
+  min-height: 36px;
+  border: 1px solid #c8d3e2;
+  border-radius: 9px;
+  background: #fff;
+  padding: 8px;
+  font: inherit;
+}
+
+.manual-advanced {
+  border: 1px solid #d6deea;
+  border-radius: 12px;
+  background: #fbfdff;
+  padding: 8px 10px;
+}
+
+.manual-advanced summary {
+  cursor: pointer;
+  font-size: 0.76rem;
+  color: #516171;
+  font-family: "IBM Plex Mono", monospace;
+}
+
+.manual-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.manual-dialog-actions .btn-link:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.games-register-form--manual {
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.manual-form-title {
+  margin: 0;
+  font-size: 0.93rem;
+}
+
+.manual-form-subtitle {
+  margin: 0;
+  color: #5a6874;
+  font-size: 0.76rem;
+}
+
+.manual-form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.manual-form-grid label,
+.manual-price-grid label {
+  display: grid;
+  gap: 6px;
+  font-size: 0.74rem;
+  color: #56646f;
+  font-family: "IBM Plex Mono", monospace;
+}
+
+.manual-form-grid input,
+.manual-form-grid select,
+.manual-form-grid textarea,
+.manual-price-grid input,
+.manual-price-grid textarea {
+  min-height: 36px;
+  border: 1px solid #c8d3e2;
+  border-radius: 9px;
+  background: #fff;
+  padding: 8px;
+  font: inherit;
+}
+
+.manual-form-grid .manual-notes {
+  grid-column: span 2;
+}
+
+.manual-form-grid .manual-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  align-self: end;
+}
+
+.manual-cover-preview-wrap {
+  border: 1px solid #d6deea;
+  border-radius: 10px;
+  background: #fbfdff;
+  padding: 4px;
+  min-height: 110px;
+}
+
+.manual-cover-preview-wrap img {
+  width: 100%;
+  height: 100px;
+  object-fit: contain;
+  display: block;
+}
+
+.manual-price-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.manual-price-grid .manual-price-notes {
+  grid-column: span 1;
+}
+
+.gba-games-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.gba-game-card {
+  border: 2px solid rgba(95, 184, 232, 0.52);
+  border-radius: 22px;
+  background: linear-gradient(180deg, #ffffff, #eff8ff);
+  padding: 10px;
+  display: grid;
+  gap: 7px;
+  transition: transform 170ms ease, box-shadow 170ms ease, border-color 170ms ease;
+}
+
+.gba-game-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 18px 30px rgba(16, 54, 89, 0.16);
+  border-color: rgba(15, 142, 168, 0.62);
+}
+
+.gba-game-card.is-owned {
+  border-color: rgba(15, 142, 168, 0.5);
+  background: linear-gradient(180deg, #f5fbff, #e8f6ff);
+}
+
+.gba-game-card.is-pokemon {
+  box-shadow: inset 0 0 0 1px rgba(49, 107, 183, 0.35);
+}
+
+.gba-game-layout {
+  display: grid;
+  grid-template-columns: 128px 1fr;
+  gap: 10px;
+  align-items: start;
+}
+
+.gba-game-cover {
+  border: 2px solid #bed6ef;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #edf6ff, #f7fcff);
+  overflow: hidden;
+  aspect-ratio: 3 / 4;
+  height: auto;
+  padding: 3px;
+}
+
+.gba-game-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+  display: block;
+}
+
+.gba-game-main {
+  display: grid;
+  gap: 7px;
+}
+
+.gba-game-head {
+  display: grid;
+  gap: 5px;
+}
+
+.gba-game-title {
+  margin: 0;
+  font-size: 0.98rem;
+  line-height: 1.2;
+}
+
+.gba-game-meta {
+  margin: 0;
+  color: #586673;
+  font-size: 0.79rem;
+}
+
+.gba-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.gba-badge {
+  border: 1px solid #c0cee0;
+  border-radius: 999px;
+  background: #f1f7ff;
+  padding: 3px 8px;
+  font-size: 0.68rem;
+  font-family: "IBM Plex Mono", monospace;
+}
+
+.gba-badge.want {
+  background: linear-gradient(90deg, #0f8ea8, #3f9dd6);
+  border-color: #258ec2;
+  color: #ffffff;
+}
+
+.gba-badge.standby {
+  background: #eef2f8;
+  border-color: #c9d4e5;
+}
+
+.gba-badge.ownership-physical {
+  background: #e5f5eb;
+  border-color: #b8ddc7;
+}
+
+.gba-badge.ownership-digital {
+  background: #eef3fa;
+  border-color: #c9d6e7;
+}
+
+.gba-badge.ownership-both {
+  background: #ede9ff;
+  border-color: #cbc0f2;
+}
+
+.gba-badge.keep-wishlist {
+  background: #dbecff;
+  border-color: #9fc3e6;
+}
+
+.gba-badge.keep-off {
+  background: #f2f4f6;
+  border-color: #d4d9de;
+}
+
+.gba-badge.registered {
+  background: #f0faf3;
+  border-color: #b8ddc7;
+}
+
+.gba-badge.pokemon {
+  background: #e7f2ff;
+  border-color: #b8cde8;
+}
+
+.gba-badge.manual {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.gba-badge.priority-alta {
+  background: #ffe5e3;
+  border-color: #efb0aa;
+}
+
+.gba-badge.priority-media-alta {
+  background: #ffefdf;
+  border-color: #edc9a3;
+}
+
+.gba-badge.priority-media {
+  background: #f1f4f8;
+  border-color: #d0d8e2;
+}
+
+.gba-badge.priority-baja {
+  background: #ececec;
+  border-color: #cfcfcf;
+}
+
+.gba-badge.status-confirmed {
+  background: #e5f5eb;
+  border-color: #b8ddc7;
+}
+
+.gba-badge.status-rumored {
+  background: #fff1e8;
+  border-color: #efc6b2;
+}
+
+.gba-badge.status-wishlist {
+  background: #eef3fa;
+  border-color: #c9d6e7;
+}
+
+.gba-game-controls {
+  display: grid;
+  grid-template-columns: auto auto auto 1fr 1fr;
+  gap: 7px;
+  align-items: end;
+}
+
+.gba-game-controls .btn-link {
+  min-height: 36px;
+  padding: 7px 12px;
+  font-size: 0.74rem;
+  line-height: 1;
+}
+
+.gba-game-controls .btn-link.active {
+  background: linear-gradient(90deg, #0f8ea8, #3f9dd6);
+  border-color: #258ec2;
+  color: #f8fbff;
+  box-shadow: 0 10px 16px rgba(15, 142, 168, 0.24);
+}
+
+.gba-game-controls .btn-link.unwant {
+  background: #f6f3ef;
+  border-color: #d8cfc1;
+  color: #5d6a76;
+}
+
+.gba-game-controls .btn-link.unwant.active {
+  background: #8a5a47;
+  border-color: #8a5a47;
+  color: #fff9f6;
+}
+
+.gba-game-controls .btn-link.standby.active {
+  background: #4d5f76;
+  border-color: #4d5f76;
+  color: #f5f8ff;
+}
+
+.mini-field {
+  display: grid;
+  gap: 4px;
+  font-size: 0.68rem;
+  color: #586673;
+  font-family: "IBM Plex Mono", monospace;
+}
+
+.mini-field select {
+  min-height: 36px;
+  border: 1px solid #c8d3e2;
+  border-radius: 9px;
+  background: #fff;
+  padding: 7px 8px;
+  font: inherit;
+}
+
+.keep-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.72rem;
+  color: #586673;
+  font-family: "IBM Plex Mono", monospace;
+}
+
+.keep-toggle input {
+  width: 16px;
+  height: 16px;
+}
+
+.gba-game-price-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.gba-price-item {
+  border: 1px solid #c3d4e8;
+  border-radius: 11px;
+  background: #fff;
+  padding: 5px 8px;
+}
+
+.gba-price-item.low {
+  background: #edf7ff;
+  border-color: #b8d0ee;
+}
+
+.gba-price-item.mid {
+  background: #f3f7ff;
+  border-color: #d1dceb;
+}
+
+.gba-price-item.high {
+  background: #f6f0ff;
+  border-color: #d7cbef;
+}
+
+.gba-price-item small {
+  display: block;
+  color: #61707d;
+  font-size: 0.62rem;
+  font-family: "IBM Plex Mono", monospace;
+}
+
+.gba-price-item strong {
+  font-size: 0.79rem;
+  line-height: 1.05;
+}
+
+.gba-game-note {
+  margin: 0;
+  color: #657381;
+  font-size: 0.73rem;
+}
+
+.gba-variants {
+  display: grid;
+  gap: 4px;
+}
+
+.gba-variants-title {
+  margin: 0;
+  color: #5f6d79;
+  font-size: 0.67rem;
+  font-family: "IBM Plex Mono", monospace;
+}
+
+.gba-variants-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.gba-variant-pill {
+  border: 1px solid #d8cfbf;
+  border-radius: 999px;
+  background: #fff8ea;
+  color: #4f5f6f;
+  padding: 2px 7px;
+  font-size: 0.66rem;
+  font-family: "IBM Plex Mono", monospace;
+}
+
+.game-edit-panel {
+  border: 1px solid #c4d6eb;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff, #f4faff);
+  padding: 7px 9px 9px;
+}
+
+.game-edit-panel summary {
+  cursor: pointer;
+  font-size: 0.72rem;
+  color: #526272;
+  list-style: none;
+  font-family: "IBM Plex Mono", monospace;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #d8cfbf;
+  border-radius: 999px;
+  padding: 4px 10px;
+  background: #fff;
+}
+
+.game-edit-panel[open] summary {
+  margin-bottom: 7px;
+}
+
+.gba-game-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.gba-game-fields label {
+  display: grid;
+  gap: 5px;
+  font-size: 0.72rem;
+  color: #56646f;
+  font-family: "IBM Plex Mono", monospace;
+}
+
+.gba-game-fields input,
+.gba-game-fields textarea {
+  border: 1px solid #d7c8b0;
+  border-radius: 9px;
+  background: #fffefb;
+  padding: 8px;
+  font: inherit;
+}
+
+@media (max-width: 1120px) {
+  .games-filterbar {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .games-filterbar .filter-search {
+    grid-column: span 3;
+  }
+
+  .games-register-form {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .games-register-form .btn-link {
+    grid-column: 1 / -1;
+  }
+
+  .gba-games-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .manual-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .manual-price-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .manual-quick-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .games-stats-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .games-filterbar {
+    grid-template-columns: 1fr;
+  }
+
+  .games-filterbar .filter-search {
+    grid-column: span 1;
+  }
+
+  .gba-game-layout {
+    grid-template-columns: 118px 1fr;
+  }
+
+  .gba-game-cover {
+    align-self: start;
+  }
+
+  .gba-game-controls {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .gba-game-controls .btn-link,
+  .gba-game-controls .mini-field,
+  .gba-game-controls .keep-toggle {
+    min-width: 0;
+  }
+
+  .gba-game-controls .keep-toggle {
+    grid-column: 1 / -1;
+  }
+
+  .gba-game-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .games-register-form {
+    grid-template-columns: 1fr;
+  }
+
+  .manual-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .manual-form-grid .manual-notes,
+  .manual-price-grid .manual-price-notes {
+    grid-column: span 1;
+  }
+
+  .manual-price-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .manual-step-grid,
+  .manual-quick-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .games-stats-strip {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 340px) {
+  .gba-game-layout {
+    grid-template-columns: 1fr;
+  }
+}

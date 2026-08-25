@@ -1,0 +1,138 @@
+{
+  "byConsole": {
+    "ps1": {
+      "accessoriesCatalog": [
+        { "id": "ps1-controller", "nombre": "Control original", "tipo": "control", "esencial": true, "orden": 10 },
+        { "id": "ps1-memory-card", "nombre": "Memory Card", "tipo": "memoria", "esencial": false, "orden": 20 },
+        { "id": "ps1-multitap", "nombre": "Multitap", "tipo": "control", "esencial": false, "orden": 30 }
+      ]
+    },
+    "ps4": {
+      "accessoriesCatalog": [
+        { "id": "dualshock-4", "nombre": "DualShock 4", "image": "./assets/accessories/ps4/dualshock-4.jpg", "tipo": "control", "esencial": true, "orden": 10 },
+        { "id": "mono-headset", "nombre": "Auricular mono original", "image": "./assets/accessories/ps4/mono-headset.jpg", "tipo": "audio", "esencial": false, "orden": 20 },
+        { "id": "charging-dock", "nombre": "Base de carga oficial", "image": "./assets/accessories/ps4/charging-dock.png", "tipo": "carga", "esencial": false, "orden": 30 },
+        { "id": "vertical-stand", "nombre": "Soporte vertical oficial", "image": "./assets/accessories/ps4/vertical-stand.jpg", "tipo": "soporte", "esencial": false, "orden": 40 },
+        { "id": "camera", "nombre": "PlayStation Camera", "image": "./assets/accessories/ps4/camera.jpg", "tipo": "sensor", "esencial": true, "orden": 50 },
+        { "id": "media-remote", "nombre": "Media Remote", "image": "./assets/accessories/ps4/media-remote.png", "tipo": "control", "esencial": false, "orden": 60 },
+        { "id": "gold-headset", "nombre": "Gold Wireless Headset", "image": "./assets/accessories/ps4/gold-headset.jpg", "tipo": "audio", "esencial": false, "orden": 70 },
+        { "id": "psvr-headset", "nombre": "PlayStation VR", "image": "./assets/accessories/ps4/psvr-headset.jpg", "tipo": "vr", "esencial": true, "orden": 80 }
+      ]
+    },
+    "ps5": {
+      "accessoriesCatalog": [
+        { "id": "dualsense", "nombre": "DualSense", "tipo": "control", "esencial": true, "orden": 10 },
+        { "id": "dualsense-charging-station", "nombre": "Base de carga oficial", "tipo": "carga", "esencial": false, "orden": 20 },
+        { "id": "media-remote", "nombre": "Media Remote", "tipo": "control", "esencial": false, "orden": 30 },
+        { "id": "hd-camera", "nombre": "HD Camera", "tipo": "sensor", "esencial": false, "orden": 40 },
+        { "id": "pulse-3d", "nombre": "Pulse 3D Headset", "tipo": "audio", "esencial": false, "orden": 50 },
+        { "id": "psvr2", "nombre": "PlayStation VR2", "tipo": "vr", "esencial": false, "orden": 60 }
+      ]
+    },
+    "atari": {
+      "accessoriesCatalog": [
+        { "id": "cx40-joystick", "nombre": "CX40 Joystick", "tipo": "control", "esencial": true, "orden": 10 },
+        { "id": "paddle-controllers", "nombre": "Paddle Controllers", "tipo": "control", "esencial": false, "orden": 20 }
+      ]
+    },
+    "wii": {
+      "accessoriesCatalog": [
+        { "id": "wii-remote", "nombre": "Wii Remote", "tipo": "control", "esencial": true, "orden": 10 },
+        { "id": "nunchuk", "nombre": "Nunchuk", "tipo": "control", "esencial": true, "orden": 20 },
+        { "id": "sensor-bar", "nombre": "Sensor Bar", "tipo": "sensor", "esencial": true, "orden": 30 },
+        { "id": "classic-controller", "nombre": "Classic Controller", "tipo": "control", "esencial": false, "orden": 40 },
+        { "id": "wii-motionplus", "nombre": "Wii MotionPlus", "tipo": "control", "esencial": false, "orden": 50 },
+        { "id": "balance-board", "nombre": "Wii Balance Board", "tipo": "control", "esencial": false, "orden": 60 }
+      ]
+    },
+    "gamecube": {
+      "accessoriesCatalog": [
+        { "id": "gamecube-controller", "nombre": "Control original", "tipo": "control", "esencial": true, "orden": 10 },
+        { "id": "gamecube-memory-card", "nombre": "Memory Card", "tipo": "memoria", "esencial": false, "orden": 20 },
+        { "id": "wavebird", "nombre": "WaveBird", "tipo": "control", "esencial": false, "orden": 30 }
+      ]
+    },
+    "switch": {
+      "accessoriesCatalog": [
+        { "id": "joy-con-pair", "nombre": "Joy-Con", "tipo": "control", "esencial": true, "orden": 10 },
+        { "id": "pro-controller", "nombre": "Pro Controller", "tipo": "control", "esencial": false, "orden": 20 },
+        { "id": "dock", "nombre": "Dock", "tipo": "soporte", "esencial": true, "orden": 30 },
+        { "id": "ring-con", "nombre": "Ring-Con", "tipo": "control", "esencial": false, "orden": 40 }
+      ]
+    },
+    "switch2": {
+      "accessoriesCatalog": [
+        { "id": "joy-con-2", "nombre": "Joy-Con 2", "tipo": "control", "esencial": true, "orden": 10 },
+        { "id": "pro-controller", "nombre": "Pro Controller", "tipo": "control", "esencial": false, "orden": 20 },
+        { "id": "dock", "nombre": "Dock", "tipo": "soporte", "esencial": true, "orden": 30 }
+      ]
+    },
+    "gba-sp": {
+      "accessoriesCatalog": [
+        { "id": "link-cable", "nombre": "Cable Link", "tipo": "red", "esencial": false, "orden": 10 },
+        { "id": "wireless-adapter", "nombre": "Wireless Adapter", "tipo": "red", "esencial": false, "orden": 20 }
+      ]
+    },
+    "nes-clonica": {
+      "accessoriesCatalog": [
+        { "id": "nes-controller", "nombre": "Control original", "tipo": "control", "esencial": true, "orden": 10 },
+        { "id": "zapper", "nombre": "Zapper", "tipo": "control", "esencial": false, "orden": 20 }
+      ]
+    },
+    "genesis": {
+      "accessoriesCatalog": [
+        { "id": "genesis-controller", "nombre": "Control original", "tipo": "control", "esencial": true, "orden": 10 },
+        { "id": "six-button-pad", "nombre": "Control de 6 botones", "tipo": "control", "esencial": false, "orden": 20 }
+      ]
+    },
+    "dreamcast": {
+      "accessoriesCatalog": [
+        { "id": "dreamcast-controller", "nombre": "Control original", "tipo": "control", "esencial": true, "orden": 10 },
+        { "id": "vmu", "nombre": "VMU", "tipo": "memoria", "esencial": false, "orden": 20 },
+        { "id": "arcade-stick", "nombre": "Arcade Stick", "tipo": "control", "esencial": false, "orden": 30 }
+      ]
+    },
+    "ds-lite": {
+      "accessoriesCatalog": [
+        { "id": "rumble-pak", "nombre": "Rumble Pak", "tipo": "control", "esencial": false, "orden": 10 },
+        { "id": "guitar-grip", "nombre": "Guitar Grip", "tipo": "control", "esencial": false, "orden": 20 }
+      ]
+    },
+    "gb-color": {
+      "accessoriesCatalog": [
+        { "id": "link-cable", "nombre": "Cable Link", "tipo": "red", "esencial": false, "orden": 10 },
+        { "id": "game-boy-camera", "nombre": "Game Boy Camera", "tipo": "sensor", "esencial": false, "orden": 20 }
+      ]
+    },
+    "gb-original": {
+      "accessoriesCatalog": [
+        { "id": "link-cable", "nombre": "Cable Link", "tipo": "red", "esencial": false, "orden": 10 },
+        { "id": "game-boy-camera", "nombre": "Game Boy Camera", "tipo": "sensor", "esencial": false, "orden": 20 },
+        { "id": "game-boy-printer", "nombre": "Game Boy Printer", "tipo": "otro", "esencial": false, "orden": 30 }
+      ]
+    },
+    "snes": {
+      "accessoriesCatalog": [
+        { "id": "snes-controller", "nombre": "Control original", "tipo": "control", "esencial": true, "orden": 10 },
+        { "id": "super-scope", "nombre": "Super Scope", "tipo": "control", "esencial": false, "orden": 20 },
+        { "id": "snes-mouse", "nombre": "Mouse", "tipo": "control", "esencial": false, "orden": 30 }
+      ]
+    },
+    "xbox-360-e": {
+      "accessoriesCatalog": [
+        { "id": "wireless-controller", "nombre": "Wireless Controller", "tipo": "control", "esencial": true, "orden": 10 },
+        { "id": "kinect", "nombre": "Kinect", "tipo": "sensor", "esencial": false, "orden": 20 },
+        { "id": "media-remote", "nombre": "Media Remote", "tipo": "control", "esencial": false, "orden": 30 },
+        { "id": "headset", "nombre": "Headset", "tipo": "audio", "esencial": false, "orden": 40 }
+      ]
+    },
+    "n64": {
+      "accessoriesCatalog": [
+        { "id": "n64-controller", "nombre": "Control original", "tipo": "control", "esencial": true, "orden": 10 },
+        { "id": "controller-pak", "nombre": "Controller Pak", "tipo": "memoria", "esencial": false, "orden": 20 },
+        { "id": "rumble-pak", "nombre": "Rumble Pak", "tipo": "control", "esencial": false, "orden": 30 },
+        { "id": "transfer-pak", "nombre": "Transfer Pak", "tipo": "memoria", "esencial": false, "orden": 40 }
+      ]
+    }
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "terms": [
+    {
+      "id": 39,
+      "count": 1,
+      "name": "Videojuegos y Tecnología",
+      "link": "https://todoremates.com.uy/remates/videojuegos-y-tecnologia/"
+    }
+  ],
+  "products": [
+    {
+      "id": 3017,
+      "name": "Lote 080",
+      "slug": "lote-080-6",
+      "type": "simple",
+      "permalink": "https://todoremates.com.uy/producto/lote-080-6/",
+      "description": "<p>2 Wii originales &amp; accesorios usados.<br>Funcionando.</p>",
+      "prices": {
+        "price": "3900",
+        "currency_code": "USD",
+        "currency_minor_unit": 0
+      },
+      "images": [
+        {"src": "https://img.example/wii.jpg"}
+      ],
+      "is_in_stock": true,
+      "is_password_protected": false
+    }
+  ]
+}

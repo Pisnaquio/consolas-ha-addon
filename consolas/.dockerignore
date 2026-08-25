@@ -1,0 +1,11 @@
+.DS_Store
+**/__pycache__/
+**/*.pyc
+web/runtime/*
+!web/runtime/README.md
+agents/auction-watch/notification.env
+agents/auction-watch/state.json
+agents/auction-watch/schedule_state.json
+agents/auction-watch/schedule.lock
+agents/auction-watch/logs/
+agents/auction-watch/runs/
