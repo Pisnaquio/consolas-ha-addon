@@ -11,9 +11,17 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-LATEST_DIR = REPO_ROOT / "agents" / "auction-watch" / "runs" / "latest"
-DEFAULT_OUTPUT = REPO_ROOT / "web" / "runtime" / "auction-watch.json"
-DEFAULT_DISMISSALS = REPO_ROOT / "agents" / "auction-watch" / "dismissals-cache.json"
+AGENT_DIR = Path(__file__).resolve().parents[1]
+if str(AGENT_DIR) not in sys.path:
+    sys.path.insert(0, str(AGENT_DIR))
+
+from runtime_paths import bootstrap_runtime, resolve_runtime_paths  # noqa: E402
+
+
+RUNTIME_PATHS = resolve_runtime_paths(AGENT_DIR)
+LATEST_DIR = RUNTIME_PATHS.latest
+DEFAULT_OUTPUT = RUNTIME_PATHS.root / "export" / "auction-watch.json"
+DEFAULT_DISMISSALS = RUNTIME_PATHS.dismissals_cache
 EXTRA_MATCHES_FILENAME = "consolas_extra_matches.csv"
 PUBLICATION_LIFECYCLE_VERSION = 1
 
@@ -329,6 +337,39 @@ def normalize_extra_rows(rows: list[dict[str, str]], watch_lookup: dict[str, dic
     return items
 
 
+def attach_lifecycle_metadata(
+    items: list[dict],
+    lifecycle: object,
+) -> list[dict]:
+    if not isinstance(lifecycle, dict):
+        return items
+    enriched: list[dict] = []
+    for item in items:
+        key = f"{str(item.get('source') or '').strip().lower()}\x1f{str(item.get('lotId') or '').strip()}"
+        metadata = lifecycle.get(key)
+        if not isinstance(metadata, dict):
+            enriched.append(item)
+            continue
+        enriched.append(
+            {
+                **item,
+                "firstSeenAt": str(metadata.get("firstSeenAt") or ""),
+                "lastSeenAt": str(metadata.get("lastSeenAt") or ""),
+                "firstSeenRunId": str(metadata.get("firstSeenRunId") or ""),
+                "lastSeenRunId": str(metadata.get("lastSeenRunId") or ""),
+                "seenCount": int(metadata.get("seenCount") or 0),
+                "active": metadata.get("active") is True,
+                "firstSeenInRun": metadata.get("firstSeenInRun") is True,
+                "wasActive": metadata.get("wasActive") is True,
+                "disappearedAfterAuthoritativeRefresh": metadata.get(
+                    "disappearedAfterAuthoritativeRefresh"
+                )
+                is True,
+            }
+        )
+    return enriched
+
+
 def sort_matches(items: list[dict]) -> list[dict]:
     def key(item: dict) -> tuple:
         closing_dt = parse_dt(item.get("closingAt", ""))
@@ -496,11 +537,13 @@ def export_snapshot(
     bavastro_rows = read_csv_rows(input_dir / "consolas_bavastro_matches.csv")
     extra_rows = read_csv_rows(input_dir / EXTRA_MATCHES_FILENAME)
 
-    all_matches = sort_matches(
+    all_matches = attach_lifecycle_metadata(
         normalize_castells_rows(castells_rows, watch_lookup, now)
         + normalize_bavastro_rows(bavastro_rows, watch_lookup, now)
-        + normalize_extra_rows(extra_rows, watch_lookup, now)
+        + normalize_extra_rows(extra_rows, watch_lookup, now),
+        run_json.get("opportunityLifecycle"),
     )
+    all_matches = sort_matches(all_matches)
     # Publication is an immutable inventory fact. `dismissals_path` remains in
     # the signature for old callers, but local/cache decisions must never alter
     # what HA receives. SQLite owns the visible/followed/dismissed projection.
@@ -525,6 +568,9 @@ def export_snapshot(
     counts["detected_matches"] = len(matches)
     counts["dismissed_matches"] = 0
     counts["total_matches"] = len(matches)
+    counts["visible_matches"] = len(matches)
+    counts["new_matches"] = sum(item.get("firstSeenInRun") is True for item in matches)
+    counts["removed_matches"] = len(run_json.get("removedOpportunityLifecycle") or [])
     legacy_status = str(run_json.get("status") or "unknown")
     raw_scan_status = str(run_json.get("scanStatus") or legacy_status).strip().lower()
     scan_status = {
@@ -541,6 +587,11 @@ def export_snapshot(
         "scanStatus": scan_status,
         "issues": build_run_issues(run_json),
         "publicationLifecycle": build_publication_lifecycle(run_json, all_matches),
+        "coverage": run_json.get("coverage") or {},
+        "opportunityLifecycle": {
+            "new": run_json.get("newOpportunityLifecycle") or [],
+            "removed": run_json.get("removedOpportunityLifecycle") or [],
+        },
         "activeMatchMetadata": build_active_match_metadata(all_matches),
         "counts": counts,
         "featured": featured,
@@ -555,6 +606,7 @@ def export_snapshot(
 
 def main() -> int:
     args = parse_args()
+    bootstrap_runtime(AGENT_DIR)
     payload = export_snapshot(
         Path(args.input_dir),
         Path(args.output),

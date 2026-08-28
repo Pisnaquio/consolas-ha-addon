@@ -3,9 +3,11 @@
 
 import argparse
 import csv
+import json
 import sys
 import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 
 import requests
@@ -157,16 +159,29 @@ def build_matches(
     page_size: int,
     timeout: int,
     delay: float,
+    receipts_out: list[dict] | None = None,
 ) -> tuple[list[Match], int]:
     matches: list[Match] = []
     scanned_lots = 0
 
     for idx, auction_id in enumerate(auction_ids, start=1):
         auction_url = f"{WEB_BASE}/auctions/{auction_id}"
+        started_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
         try:
             lots = fetch_auction_lots(auction_id, page_size=page_size, timeout=timeout, delay=delay)
         except requests.RequestException as exc:
             print(f"[ERR] subasta {auction_id}: {exc}")
+            if receipts_out is not None:
+                receipts_out.append(
+                    {
+                        "groupId": str(auction_id),
+                        "status": "failed",
+                        "lotCount": 0,
+                        "errorCount": 1,
+                        "startedAt": started_at,
+                        "finishedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                    }
+                )
             continue
 
         print(f"[{idx}/{len(auction_ids)}] subasta {auction_id} -> {len(lots)} lotes")
@@ -230,6 +245,18 @@ def build_matches(
                 )
             )
 
+        if receipts_out is not None:
+            receipts_out.append(
+                {
+                    "groupId": str(auction_id),
+                    "status": "complete",
+                    "lotCount": len(lots),
+                    "errorCount": 0,
+                    "startedAt": started_at,
+                    "finishedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                }
+            )
+
     return matches, scanned_lots
 
 
@@ -252,6 +279,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT)
     parser.add_argument("--sleep", type=float, default=DEFAULT_SLEEP)
     parser.add_argument("--min-score", type=int, default=0, help="Filtra matches por score mínimo.")
+    parser.add_argument("--receipt", default="", help="Ruta JSON para el recibo de cobertura por subasta.")
     parser.add_argument("--max-desc", type=int, default=220, help="Máximo de caracteres en descripción impresa.")
     return parser.parse_args()
 
@@ -281,12 +309,14 @@ def main() -> int:
     print()
 
     started = time.time()
+    receipts: list[dict] = []
     matches, scanned_lots = build_matches(
         auction_ids,
         patterns,
         page_size=max(1, args.page_size),
         timeout=max(1, args.timeout),
         delay=max(0.0, args.sleep),
+        receipts_out=receipts,
     )
     matches = [m for m in matches if m.score >= args.min_score]
 
@@ -315,6 +345,34 @@ def main() -> int:
     print(f"Lotes escaneados: {scanned_lots}")
     print(f"Matches: {len(matches)}")
     print(f"Tiempo: {elapsed:.1f}s")
+
+    if args.receipt:
+        receipt_path = Path(args.receipt)
+        receipt_path.parent.mkdir(parents=True, exist_ok=True)
+        complete = bool(receipts) and len(receipts) == len(auction_ids) and all(
+            item.get("status") == "complete" for item in receipts
+        )
+        receipt_path.write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "sourceId": "bavastro",
+                    "status": "complete" if complete else "partial" if receipts else "failed",
+                    "inventoryAuthoritative": complete,
+                    "receipts": receipts,
+                    "startedAt": datetime.fromtimestamp(started, timezone.utc).isoformat(
+                        timespec="seconds"
+                    ),
+                    "finishedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                    "lotCount": scanned_lots,
+                    "errorCount": sum(int(item.get("errorCount") or 0) for item in receipts),
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
 
     with Path(args.output).open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(

@@ -26,7 +26,7 @@ from xml.etree import ElementTree
 
 import requests
 
-from .model import AuctionGroup, AuctionLot, SourceScanResult
+from .model import AuctionGroup, AuctionLot, GroupReceipt, SourceScanResult
 
 
 SOURCE_ID = "remotes"
@@ -623,12 +623,43 @@ class RemotesSource:
             if response is not None:
                 response.close()
 
+        lots_by_group: dict[str, int] = {}
+        for lot in lots:
+            lots_by_group[lot.group_id] = lots_by_group.get(lot.group_id, 0) + 1
+        finished_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        receipts = [
+            GroupReceipt(
+                group_id=group.group_id,
+                status=(
+                    "complete"
+                    if int(group.extra.get("declared_lot_count") or 0)
+                    == lots_by_group.get(group.group_id, 0)
+                    else "partial"
+                ),
+                lot_count=lots_by_group.get(group.group_id, 0),
+                error_count=(
+                    0
+                    if int(group.extra.get("declared_lot_count") or 0)
+                    == lots_by_group.get(group.group_id, 0)
+                    else 1
+                ),
+                started_at=finished_at,
+                finished_at=finished_at,
+            )
+            for group in groups
+        ]
+        discovery_complete = not errors and all(
+            receipt.status == "complete" for receipt in receipts
+        )
+
         return SourceScanResult(
             source_id=self.source_id,
             label=self.label,
             groups=groups,
             lots=lots,
             errors=errors,
+            receipts=receipts,
+            discovery_complete=discovery_complete,
         )
 
     def enrich_lots(

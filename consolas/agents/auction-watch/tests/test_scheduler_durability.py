@@ -392,6 +392,121 @@ class SchedulerDurabilityTests(unittest.TestCase):
         scan.assert_called_once()
         self.assertEqual(scan.call_args.kwargs["run_id"], "manual-run_existing")
 
+    def test_fresh_successful_manual_publication_satisfies_only_the_next_slot(self) -> None:
+        now = datetime(2026, 8, 24, 17, 10, tzinfo=ZoneInfo("America/Montevideo"))
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            state_path = root / "schedule.json"
+            lock_path = root / "schedule.lock"
+            run_id = "manual-fresh-1659"
+            run_dir = root / "runs" / run_id
+            run_dir.mkdir(parents=True)
+            run_watch.write_json(
+                run_dir / "run.json",
+                {
+                    "runId": run_id,
+                    "scanStatus": "success",
+                    "snapshotStatus": "published",
+                    "overallStatus": "completed",
+                    "completedAt": "2026-08-24T16:59:00-03:00",
+                },
+            )
+            state_path.write_text(
+                json.dumps(
+                    {
+                        "version": 2,
+                        "days": {
+                            "2026-08-24": {
+                                "mode": "twice",
+                                "fulfilled_slots": ["morning"],
+                                "fulfilledByRunId": {"morning": "auto-morning"},
+                            }
+                        },
+                        "manualCompletions": {
+                            "run_request_fresh": {
+                                "requestId": "run_request_fresh",
+                                "runId": run_id,
+                                "status": "completed",
+                                "completedAt": "2026-08-24T16:59:00-03:00",
+                            }
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with (
+                patch.object(scheduler, "AGENT_DIR", root),
+                patch.object(scheduler, "STATE_FILE", state_path),
+                patch.object(scheduler, "LOCK_FILE", lock_path),
+                patch.object(scheduler, "PYTHON_BIN", Path(sys.executable)),
+                patch.object(scheduler, "now_local", return_value=now),
+                patch.object(
+                    scheduler,
+                    "parse_args",
+                    return_value=argparse.Namespace(mode="twice", dry_run=False),
+                ),
+                patch.object(scheduler, "load_notification_config", return_value={}),
+                patch.object(
+                    scheduler.run_watch_module,
+                    "load_delivery_outbox",
+                    return_value={"version": 1, "items": []},
+                ),
+                patch.object(scheduler.run_watch_module, "pending_delivery_items", return_value=[]),
+                patch.object(scheduler, "claim_manual_run", return_value=None),
+                patch.object(scheduler, "run_watch") as scan,
+            ):
+                exit_code = scheduler.main()
+
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(exit_code, 0)
+        scan.assert_not_called()
+        self.assertEqual(
+            state["days"]["2026-08-24"]["fulfilledByRunId"]["afternoon"],
+            run_id,
+        )
+        self.assertEqual(state["days"]["2026-08-24"]["fulfilled_slots"], ["afternoon", "morning"])
+
+    def test_old_manual_publication_does_not_satisfy_the_scheduled_slot(self) -> None:
+        now = datetime(2026, 8, 24, 17, 10, tzinfo=ZoneInfo("America/Montevideo"))
+        state = {
+            "version": 2,
+            "days": {},
+            "manualCompletions": {
+                "run_request_old": {
+                    "requestId": "run_request_old",
+                    "runId": "manual-old",
+                    "status": "completed",
+                }
+            },
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            run_dir = root / "runs" / "manual-old"
+            run_dir.mkdir(parents=True)
+            run_watch.write_json(
+                run_dir / "run.json",
+                {
+                    "runId": "manual-old",
+                    "scanStatus": "success",
+                    "snapshotStatus": "published",
+                    "overallStatus": "completed",
+                    "completedAt": "2026-08-24T16:00:00-03:00",
+                },
+            )
+            with patch.object(scheduler, "AGENT_DIR", root):
+                changed = scheduler.satisfy_slots_from_fresh_manual(
+                    state,
+                    mode="twice",
+                    schedule_date="2026-08-24",
+                    slots=[scheduler.Slot("afternoon", 17, 10)],
+                    now=now,
+                )
+
+        self.assertFalse(changed)
+        self.assertEqual(state["days"], {})
+
     def test_terminal_completion_conflict_is_dead_lettered_without_freezing_schedule(self) -> None:
         state = {
             "version": 2,

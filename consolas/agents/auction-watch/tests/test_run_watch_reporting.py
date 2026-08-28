@@ -364,6 +364,20 @@ class ReportingTests(unittest.TestCase):
                         "finished_at": "2026-08-05T12:00:00-03:00",
                         "status": "success",
                         "counts": {"total_matches": 1},
+                        "opportunityLifecycle": {
+                            "prado\u001fl-1": {
+                                "sourceId": "prado",
+                                "lotId": "l-1",
+                                "firstSeenAt": "2026-08-04T12:00:00-03:00",
+                                "lastSeenAt": "2026-08-05T12:00:00-03:00",
+                                "firstSeenRunId": "older-run",
+                                "lastSeenRunId": "test-run",
+                                "seenCount": 2,
+                                "active": True,
+                                "firstSeenInRun": False,
+                                "wasActive": True,
+                            }
+                        },
                     }
                 ),
                 encoding="utf-8",
@@ -398,6 +412,8 @@ class ReportingTests(unittest.TestCase):
             self.assertEqual(payload["matches"][0]["source"], "prado")
             self.assertEqual(payload["matches"][0]["priceValue"], 1419.6)
             self.assertEqual(payload["matches"][0]["title"], "Radofin Tele-Sports")
+            self.assertEqual(payload["matches"][0]["firstSeenRunId"], "older-run")
+            self.assertEqual(payload["matches"][0]["seenCount"], 2)
             self.assertEqual(payload["scanStatus"], "success")
 
             dismissals_path = Path(temp_dir) / "dismissals-cache.json"
@@ -506,6 +522,30 @@ class ReportingTests(unittest.TestCase):
         self.assertEqual(
             lifecycle["sourceHealth"]["remotes"],
             {"status": "success", "inventoryAuthoritative": False},
+        )
+
+    def test_partial_discovery_makes_source_health_non_authoritative(self) -> None:
+        lifecycle = build_publication_lifecycle(
+            {
+                "steps": [
+                    {
+                        "name": "bavastro_discovery",
+                        "status": "partial",
+                        "inventory_authoritative": False,
+                    },
+                    {
+                        "name": "bavastro_matches",
+                        "status": "success",
+                        "inventory_authoritative": True,
+                    },
+                ]
+            },
+            [],
+        )
+
+        self.assertEqual(
+            lifecycle["sourceHealth"]["bavastro"],
+            {"status": "partial", "inventoryAuthoritative": False},
         )
 
     def test_old_incremental_cache_is_invalidated_for_new_search_rules(self) -> None:

@@ -9,7 +9,7 @@ import os
 import subprocess
 import sys
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -18,6 +18,14 @@ from zoneinfo import ZoneInfo
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 AGENT_DIR = Path(__file__).resolve().parents[1]
+if str(AGENT_DIR) not in sys.path:
+    sys.path.insert(0, str(AGENT_DIR))
+
+from runtime_paths import bootstrap_runtime, resolve_runtime_paths  # noqa: E402
+
+
+RUNTIME_PATHS = resolve_runtime_paths(AGENT_DIR)
+RUNTIME_ROOT = RUNTIME_PATHS.root
 # See run_watch.py: the add-on image uses its system interpreter rather than
 # a checkout-local virtual environment.
 _checkout_python = REPO_ROOT / ".venv" / "bin" / "python"
@@ -25,10 +33,14 @@ PYTHON_BIN = Path(os.environ.get("AUCTION_WATCH_PYTHON") or (
     str(_checkout_python) if _checkout_python.exists() else sys.executable
 ))
 RUN_WATCH = AGENT_DIR / "scripts" / "run_watch.py"
-STATE_FILE = AGENT_DIR / "schedule_state.json"
-LOCK_FILE = AGENT_DIR / "schedule.lock"
+STATE_FILE = RUNTIME_PATHS.schedule_state
+LOCK_FILE = RUNTIME_PATHS.schedule_lock
 KEEP_DAYS = 14
 SCHEDULE_STATE_VERSION = 2
+MANUAL_FRESHNESS_MINUTES = max(
+    0,
+    int(os.environ.get("AUCTION_WATCH_MANUAL_FRESHNESS_MINUTES", "30")),
+)
 NOTIFICATION_ENV_FILE = AGENT_DIR / "notification.env"
 LOCAL_TIMEZONE = ZoneInfo("America/Montevideo")
 
@@ -62,6 +74,11 @@ def parse_args() -> argparse.Namespace:
 
 def now_local() -> datetime:
     return datetime.now(LOCAL_TIMEZONE)
+
+
+def runtime_runs_dir() -> Path:
+    """Resolve runs through the same central runtime policy as the runner."""
+    return resolve_runtime_paths(AGENT_DIR).runs
 
 
 def load_state(path: Path) -> dict:
@@ -235,7 +252,7 @@ def claim_manual_run(config: dict[str, str]) -> dict | None:
 
 def run_result_detail(run_id: str, exit_code: int) -> str:
     metadata = run_watch_module.read_json_object(
-        AGENT_DIR / "runs" / run_id / "run.json"
+        runtime_runs_dir() / run_id / "run.json"
     )
     return (
         f"run={run_id} exit={exit_code} "
@@ -252,7 +269,7 @@ def complete_manual_run(
     exit_code: int,
 ) -> bool | str:
     metadata = run_watch_module.read_json_object(
-        AGENT_DIR / "runs" / run_id / "run.json"
+        runtime_runs_dir() / run_id / "run.json"
     )
     try:
         response = post_run_request(
@@ -432,7 +449,7 @@ def fail_missing_manual_delivery_outbox(
     request_id: str,
 ) -> dict[str, object] | None:
     """Turn a crashed pre-outbox manual worker into an explicit terminal result."""
-    run_dir = AGENT_DIR / "runs" / run_id
+    run_dir = runtime_runs_dir() / run_id
     metadata = run_watch_module.read_json_object(run_dir / "run.json")
     if not metadata:
         return None
@@ -571,11 +588,75 @@ def mark_slots_fulfilled(
     return True
 
 
+def manual_run_is_fresh_published(
+    completion: dict,
+    *,
+    slot_time: datetime,
+    freshness: timedelta,
+) -> bool:
+    """Only a fully published, successful manual inventory can satisfy a slot."""
+    run_id = str(completion.get("runId") or "").strip()
+    if completion.get("status") != "completed" or not run_id:
+        return False
+    metadata = run_watch_module.read_json_object(runtime_runs_dir() / run_id / "run.json")
+    if not isinstance(metadata, dict):
+        return False
+    if str(metadata.get("runId") or metadata.get("run_id") or "").strip() != run_id:
+        return False
+    if str(metadata.get("snapshotStatus") or "").strip().lower() != "published":
+        return False
+    if str(metadata.get("overallStatus") or "").strip().lower() != "completed":
+        return False
+    if str(metadata.get("scanStatus") or metadata.get("status") or "").strip().lower() != "success":
+        return False
+    completed_at = run_watch_module.parse_iso_datetime(
+        metadata.get("completedAt") or completion.get("completedAt")
+    )
+    if completed_at is None:
+        return False
+    completed_at = completed_at.astimezone(slot_time.tzinfo)
+    return completed_at <= slot_time and slot_time - completed_at <= freshness
+
+
+def satisfy_slots_from_fresh_manual(
+    state: dict,
+    *,
+    mode: str,
+    schedule_date: str,
+    slots: list[Slot],
+    now: datetime,
+    freshness: timedelta | None = None,
+) -> bool:
+    """Mark only the due slots covered by a recent manual publication."""
+    completions = state.get("manualCompletions")
+    if not isinstance(completions, dict):
+        return False
+    freshness = freshness or timedelta(minutes=MANUAL_FRESHNESS_MINUTES)
+    changed = False
+    for slot in slots:
+        slot_time = now.replace(hour=slot.hour, minute=slot.minute, second=0, microsecond=0)
+        for completion in completions.values():
+            if not isinstance(completion, dict):
+                continue
+            if manual_run_is_fresh_published(completion, slot_time=slot_time, freshness=freshness):
+                changed = mark_slots_fulfilled(
+                    state,
+                    schedule_date=schedule_date,
+                    mode=mode,
+                    slots=[slot.key],
+                    run_id=str(completion.get("runId") or "").strip(),
+                    observed_at=now,
+                ) or changed
+                break
+    return changed
+
+
 def main() -> int:
     args = parse_args()
     if not PYTHON_BIN.exists():
         print(f"Missing runtime: {PYTHON_BIN}", file=sys.stderr)
         return 1
+    bootstrap_runtime(AGENT_DIR)
 
     LOCK_FILE.parent.mkdir(parents=True, exist_ok=True)
     with LOCK_FILE.open("a+", encoding="utf-8") as lock_handle:
@@ -619,6 +700,21 @@ def main() -> int:
         )
         fulfilled = set(day_state.get("fulfilled_slots") or [])
         pending = [slot for slot in slots_due if slot.key not in fulfilled]
+
+        if not args.dry_run and pending:
+            fresh_manual_changed = satisfy_slots_from_fresh_manual(
+                state,
+                mode=args.mode,
+                schedule_date=today_key,
+                slots=pending,
+                now=now,
+            )
+            if fresh_manual_changed:
+                save_state(STATE_FILE, state)
+                day_state = state["days"][today_key]
+                fulfilled = set(day_state.get("fulfilled_slots") or [])
+                pending = [slot for slot in slots_due if slot.key not in fulfilled]
+                print("Scheduler satisfied fresh automatic slots from a completed manual publication.")
 
         print(
             f"now={now.isoformat(timespec='seconds')} mode={args.mode} "

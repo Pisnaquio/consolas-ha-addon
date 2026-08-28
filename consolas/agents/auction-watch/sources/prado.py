@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import requests
 
-from .model import AuctionGroup, AuctionLot, SourceScanResult
+from .model import AuctionGroup, AuctionLot, GroupReceipt, SourceScanResult
 
 
 SOURCE_ID = "prado"
@@ -372,12 +372,29 @@ class PradoSource:
                 )
             )
 
+        lots_by_group: dict[str, int] = {}
+        for lot in lots:
+            lots_by_group[lot.group_id] = lots_by_group.get(lot.group_id, 0) + 1
+        finished_at = datetime.now().astimezone().isoformat(timespec="seconds")
+        receipts = [
+            GroupReceipt(
+                group_id=group.group_id,
+                status="complete",
+                lot_count=lots_by_group.get(group.group_id, 0),
+                error_count=0,
+                started_at=finished_at,
+                finished_at=finished_at,
+            )
+            for group in groups_by_id.values()
+        ]
         return SourceScanResult(
             source_id=self.source_id,
             label=self.label,
             groups=list(groups_by_id.values()),
             lots=lots,
             errors=errors,
+            receipts=receipts,
+            discovery_complete=not errors,
         )
 
     def enrich_lots(

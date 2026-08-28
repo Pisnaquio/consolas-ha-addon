@@ -33,7 +33,7 @@ from typing import Any
 
 
 SERVICE_NAME = "consolas-server"
-SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.10")
+SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.15")
 DEFAULT_DATA_DIR = "/data"
 DEFAULT_STATIC_DIR = "/app/web"
 DATABASE_NAME = "consolas.sqlite"
@@ -51,6 +51,7 @@ AUCTION_WATCH_SNAPSHOT_HASH_HEADER = "X-Auction-Watch-Snapshot-Hash"
 AUCTION_WATCH_SNAPSHOT_STATUSES = {"skipped", "published", "failed"}
 AUCTION_WATCH_EMAIL_STATUSES = {"disabled", "pending", "sent", "failed", "uncertain"}
 AUCTION_WATCH_OVERALL_STATUSES = {"completed", "degraded", "delivery_pending", "failed"}
+AUCTION_WATCH_PUBLICATION_STATES = {"current", "superseded", "missing"}
 CHASING_GAMES_VERSION = 1
 CHASING_GAMES_SOURCE = "ebay-us"
 CHASING_GAMES_INTERVAL_SECONDS = int(os.getenv("CHASING_GAMES_INTERVAL_SECONDS", "86400"))
@@ -948,11 +949,20 @@ def filter_auction_watch_snapshot(config: AppConfig, snapshot: dict[str, Any]) -
         if source_id:
             source_counts[source_id] = source_counts.get(source_id, 0) + 1
     detected_matches = int(counts.get("detected_matches") or counts.get("total_matches") or len(raw_matches))
+    new_matches = int(
+        counts.get("new_matches")
+        or sum(
+            isinstance(item, dict) and item.get("firstSeenInRun") is True
+            for item in raw_matches
+        )
+    )
     counts.update(
         {
             "detected_matches": detected_matches,
             "dismissed_matches": max(0, detected_matches - len(visible_matches)),
             "total_matches": len(visible_matches),
+            "visible_matches": len(visible_matches),
+            "new_matches": new_matches,
             "bavastro_matches": source_counts.get("bavastro", 0),
             "castells_matches": source_counts.get("castells", 0),
             "extra_matches": sum(
@@ -1072,13 +1082,93 @@ def record_auction_watch_publication_receipt(config: AppConfig, receipt: dict[st
         )
 
 
-def auction_watch_publication_history_hash(config: AppConfig, run_id: str) -> str:
+def auction_watch_publication_history(config: AppConfig, run_id: str) -> dict[str, Any] | None:
     with connect_db(config) as conn:
         row = conn.execute(
-            "SELECT snapshot_hash FROM auction_watch_publications WHERE run_id = ?",
+            """
+            SELECT run_id, snapshot_hash, generated_at, accepted_at, matches, recorded_at
+            FROM auction_watch_publications WHERE run_id = ?
+            """,
             (run_id,),
         ).fetchone()
-    return str(row["snapshot_hash"] or "").strip().lower() if row is not None else ""
+    return dict(row) if row is not None else None
+
+
+def auction_watch_publication_history_hash(config: AppConfig, run_id: str) -> str:
+    history = auction_watch_publication_history(config, run_id)
+    return str(history.get("snapshot_hash") or "").strip().lower() if history else ""
+
+
+def current_auction_watch_publication(config: AppConfig) -> dict[str, Any] | None:
+    """Return the verified server snapshot identity currently visible to clients."""
+    with _AUCTION_WATCH_SNAPSHOT_LOCK:
+        payload = read_json_object(config.auction_watch_dir / "export" / "auction-watch.json")
+        receipt = read_json_object(auction_watch_receipt_path(config))
+    if not isinstance(payload, dict) or not isinstance(receipt, dict):
+        return None
+
+    run_id = str(payload.get("runId") or "").strip()
+    generated_at = str(payload.get("generatedAt") or "").strip()
+    snapshot_hash = canonical_auction_watch_snapshot_hash(payload)
+    receipt_valid = (
+        bool(run_id)
+        and bool(generated_at)
+        and str(receipt.get("runId") or "").strip() == run_id
+        and str(receipt.get("snapshotHash") or "").strip().lower() == snapshot_hash
+        and str(receipt.get("generatedAt") or "").strip() == generated_at
+        and bool(str(receipt.get("acceptedAt") or "").strip())
+    )
+    if not receipt_valid:
+        return None
+    try:
+        generated_datetime = parse_auction_watch_timestamp(generated_at, "generatedAt")
+        accepted_at = str(receipt.get("acceptedAt") or "").strip()
+        accepted_datetime = parse_auction_watch_timestamp(accepted_at, "acceptedAt")
+    except ApiError:
+        return None
+    return {
+        "runId": run_id,
+        "snapshotHash": snapshot_hash,
+        "generatedAt": generated_at,
+        "generatedDatetime": generated_datetime,
+        "acceptedAt": accepted_at,
+        "acceptedDatetime": accepted_datetime,
+    }
+
+
+def auction_watch_publication_state(
+    config: AppConfig,
+    request: dict[str, Any],
+) -> dict[str, Any]:
+    """Classify a terminal published request against current and historical receipts."""
+    snapshot_status = str(request.get("snapshotStatus") or "").strip().lower()
+    if snapshot_status != "published":
+        return {}
+
+    run_id = str(request.get("runId") or "").strip()
+    snapshot_hash = str(request.get("snapshotHash") or "").strip().lower()
+    current = current_auction_watch_publication(config)
+    if current and current["runId"] == run_id and current["snapshotHash"] == snapshot_hash:
+        return {"publicationState": "current"}
+
+    history = auction_watch_publication_history(config, run_id) if run_id else None
+    historical_valid = False
+    history_accepted: datetime | None = None
+    if history and str(history.get("snapshot_hash") or "").strip().lower() == snapshot_hash:
+        try:
+            history_accepted = parse_auction_watch_timestamp(history.get("accepted_at"), "acceptedAt")
+            historical_valid = True
+        except ApiError:
+            historical_valid = False
+
+    if historical_valid and current:
+        is_posterior = current["acceptedDatetime"] > history_accepted
+        if is_posterior:
+            return {
+                "publicationState": "superseded",
+                "supersededByRunId": current["runId"],
+            }
+    return {"publicationState": "missing"}
 
 
 def auction_watch_snapshot_sync(
@@ -1425,7 +1515,10 @@ def latest_auction_watch_run_request(config: AppConfig) -> dict[str, Any]:
         row = conn.execute(
             "SELECT * FROM auction_watch_run_requests ORDER BY requested_at DESC LIMIT 1"
         ).fetchone()
-    return {"ok": True, "request": auction_watch_run_request_row(row)}
+    request = auction_watch_run_request_row(row)
+    if request is not None:
+        request.update(auction_watch_publication_state(config, request))
+    return {"ok": True, "request": request}
 
 
 def enqueue_auction_watch_run(config: AppConfig) -> dict[str, Any]:

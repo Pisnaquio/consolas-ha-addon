@@ -58,17 +58,43 @@ class AuctionLot:
 
 
 @dataclass(slots=True)
+class GroupReceipt:
+    """Evidence that one auction/remate was queried completely."""
+
+    group_id: str
+    status: str
+    lot_count: int
+    error_count: int
+    started_at: str
+    finished_at: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "groupId": self.group_id,
+            "status": self.status,
+            "lotCount": self.lot_count,
+            "errorCount": self.error_count,
+            "startedAt": self.started_at,
+            "finishedAt": self.finished_at,
+        }
+
+
+@dataclass(slots=True)
 class SourceScanResult:
     source_id: str
     label: str
     groups: list[AuctionGroup] = field(default_factory=list)
     lots: list[AuctionLot] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
+    receipts: list[GroupReceipt] = field(default_factory=list)
+    discovery_complete: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         """Return the complete source result without sharing mutable containers."""
 
-        return asdict(self)
+        payload = asdict(self)
+        payload["receipts"] = [receipt.to_dict() for receipt in self.receipts]
+        return payload
 
 
 AUCTION_GROUP_FIELDS = tuple(item.name for item in fields(AuctionGroup))
@@ -82,5 +108,6 @@ __all__ = [
     "SOURCE_SCAN_RESULT_FIELDS",
     "AuctionGroup",
     "AuctionLot",
+    "GroupReceipt",
     "SourceScanResult",
 ]

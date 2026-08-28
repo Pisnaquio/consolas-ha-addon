@@ -11,8 +11,15 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 AGENT_DIR = REPO_ROOT / "agents" / "auction-watch"
-WATCHLIST_FILE = AGENT_DIR / "watchlist.json"
-LATEST_DIR = AGENT_DIR / "runs" / "latest"
+if str(AGENT_DIR) not in sys.path:
+    sys.path.insert(0, str(AGENT_DIR))
+
+from runtime_paths import bootstrap_runtime, resolve_runtime_paths  # noqa: E402
+
+
+RUNTIME_PATHS = resolve_runtime_paths(AGENT_DIR)
+WATCHLIST_FILE = RUNTIME_PATHS.watchlist
+LATEST_DIR = RUNTIME_PATHS.latest
 CASTELLS_MATCHES_CSV = LATEST_DIR / "consolas_castells_matches.csv"
 BAVASTRO_MATCHES_CSV = LATEST_DIR / "consolas_bavastro_matches.csv"
 
@@ -271,6 +278,7 @@ def remove_item(args: argparse.Namespace) -> int:
 
 def main() -> int:
     args = parse_args()
+    bootstrap_runtime(AGENT_DIR)
     if args.command == "list":
         return print_watchlist(load_watchlist())
     if args.command == "active":

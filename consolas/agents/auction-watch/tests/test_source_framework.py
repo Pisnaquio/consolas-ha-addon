@@ -89,7 +89,15 @@ class ModelTests(unittest.TestCase):
         )
         self.assertEqual(
             [item.name for item in fields(SourceScanResult)],
-            ["source_id", "label", "groups", "lots", "errors"],
+                [
+                    "source_id",
+                    "label",
+                    "groups",
+                    "lots",
+                    "errors",
+                    "receipts",
+                    "discovery_complete",
+                ],
         )
 
         lot = fixture_lots()[0]
@@ -345,6 +353,8 @@ class ScannerTests(unittest.TestCase):
         self.assertEqual(status["status"], "success")
         self.assertEqual(status["sources"][0]["status"], "success")
         self.assertEqual(status["sources"][0]["errors"], [])
+        self.assertFalse(status["sources"][0]["inventory_authoritative"])
+        self.assertFalse(status["inventory_authoritative"])
         self.assertEqual(
             status["sources"][0]["warnings"],
             ["optional metadata unavailable"],

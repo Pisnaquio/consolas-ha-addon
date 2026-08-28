@@ -18,7 +18,7 @@ from zoneinfo import ZoneInfo
 
 import requests
 
-from .model import AuctionGroup, AuctionLot, SourceScanResult
+from .model import AuctionGroup, AuctionLot, GroupReceipt, SourceScanResult
 
 
 SOURCE_ID = "todoremates"
@@ -255,6 +255,7 @@ class TodoRematesSource:
         lots: list[AuctionLot] = []
         errors: list[str] = []
         seen_lots: set[str] = set()
+        receipts: list[GroupReceipt] = []
 
         try:
             term_pages = _paged_json(
@@ -277,6 +278,7 @@ class TodoRematesSource:
             term_id = str(term.get("id") or "").strip()
             if not term_id:
                 continue
+            group_started_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
             group_title = _clean_text(term.get("name")) or f"Remate {term_id}"
             group_url = html.unescape(str(term.get("link") or BASE_URL))
             group = AuctionGroup(
@@ -308,8 +310,20 @@ class TodoRematesSource:
                 products = [product for page in product_pages for product in page]
             except (requests.RequestException, TypeError, ValueError) as exc:
                 errors.append(f"{group_title}: no se pudieron obtener lotes: {exc}")
+                finished_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+                receipts.append(
+                    GroupReceipt(
+                        group_id=term_id,
+                        status="failed",
+                        lot_count=0,
+                        error_count=1,
+                        started_at=group_started_at,
+                        finished_at=finished_at,
+                    )
+                )
                 continue
 
+            group_lot_count = 0
             for product in products:
                 if not _active_product(product):
                     continue
@@ -317,6 +331,7 @@ class TodoRematesSource:
                 if not lot_id or lot_id in seen_lots:
                     continue
                 seen_lots.add(lot_id)
+                group_lot_count += 1
 
                 title = _clean_text(product.get("name")) or f"Lote {lot_id}"
                 description = _clean_text(product.get("description"))
@@ -353,12 +368,25 @@ class TodoRematesSource:
                     )
                 )
 
+            receipts.append(
+                GroupReceipt(
+                    group_id=term_id,
+                    status="complete",
+                    lot_count=group_lot_count,
+                    error_count=0,
+                    started_at=group_started_at,
+                    finished_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                )
+            )
+
         return SourceScanResult(
             source_id=self.source_id,
             label=self.label,
             groups=groups,
             lots=lots,
             errors=errors,
+            receipts=receipts,
+            discovery_complete=not errors,
         )
 
     def enrich_lots(

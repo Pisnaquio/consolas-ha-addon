@@ -9,6 +9,7 @@ import re
 import sys
 import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urljoin
 
@@ -104,6 +105,8 @@ def fetch_text(url: str, timeout: int) -> str:
 
 def discover_auctions(timeout: int) -> list[Auction]:
     text = fetch_text(HOME_URL, timeout)
+    if "GXState" not in text or "RemateImagen" not in text:
+        raise ValueError("respuesta de Castells sin marcador de datos de remates")
     seen: set[int] = set()
     auctions: list[Auction] = []
 
@@ -186,26 +189,54 @@ def build_matches(
     timeout: int,
     limit: int,
     delay: float,
+    receipts_out: list[dict] | None = None,
 ) -> tuple[list[Match], int, int]:
     matches: list[Match] = []
     scanned_lots = 0
     error_count = 0
 
     for idx, auction in enumerate(auctions, start=1):
+        started_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
         try:
             auction = enrich_auction(auction, timeout)
             lots = fetch_lots(auction, timeout=timeout, limit=limit)
         except requests.RequestException as exc:
             error_count += 1
             print(f"[ERR] remate {auction.remate_id} ({auction.name}): {exc}")
+            if receipts_out is not None:
+                receipts_out.append(
+                    {
+                        "groupId": str(auction.remate_id),
+                        "status": "failed",
+                        "lotCount": 0,
+                        "errorCount": 1,
+                        "startedAt": started_at,
+                        "finishedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                    }
+                )
             continue
         except ValueError as exc:
             error_count += 1
             print(f"[ERR] remate {auction.remate_id} ({auction.name}): respuesta JSON inválida: {exc}")
+            if receipts_out is not None:
+                receipts_out.append(
+                    {
+                        "groupId": str(auction.remate_id),
+                        "status": "failed",
+                        "lotCount": 0,
+                        "errorCount": 1,
+                        "startedAt": started_at,
+                        "finishedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                    }
+                )
             continue
 
         print(f"[{idx}/{len(auctions)}] remate {auction.remate_id} ({auction.name}) -> {len(lots)} lotes")
         scanned_lots += len(lots)
+        truncated = len(lots) >= limit
+        if truncated:
+            error_count += 1
+            print(f"[ERR] remate {auction.remate_id}: respuesta alcanza el límite de {limit} lotes")
 
         for lot in lots:
             description = (lot.get("LoteDescripcion") or "").strip()
@@ -252,6 +283,18 @@ def build_matches(
                         market_value=current_value,
                     ),
                 )
+            )
+
+        if receipts_out is not None:
+            receipts_out.append(
+                {
+                    "groupId": str(auction.remate_id),
+                    "status": "partial" if truncated else "complete",
+                    "lotCount": len(lots),
+                    "errorCount": 1 if truncated else 0,
+                    "startedAt": started_at,
+                    "finishedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                }
             )
 
         if delay > 0:
@@ -386,6 +429,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--sleep", type=float, default=DEFAULT_SLEEP)
     parser.add_argument("--limit", type=int, default=DEFAULT_LIMIT)
     parser.add_argument("--min-score", type=int, default=0, help="Filtra matches por score mínimo.")
+    parser.add_argument("--receipt", default="", help="Ruta JSON para el recibo de cobertura por remate.")
     parser.add_argument("--discover-only", action="store_true", help="Solo descubre remates activos y guarda CSV.")
     parser.add_argument("--discover-output", default=DEFAULT_DISCOVERY_CSV, help="Ruta CSV para remates descubiertos.")
     parser.add_argument("--no-markdown", action="store_true")
@@ -411,7 +455,11 @@ def main() -> int:
     print("=" * 88)
     print(f"Keywords: {', '.join(keywords)}")
 
-    discovered_auctions = discover_auctions(timeout=max(1, args.timeout))
+    try:
+        discovered_auctions = discover_auctions(timeout=max(1, args.timeout))
+    except (requests.RequestException, ValueError) as exc:
+        print(f"[ERR] discovery Castells: {exc}")
+        return 1
 
     if args.discover_only:
         if args.ids:
@@ -452,12 +500,14 @@ def main() -> int:
     print()
 
     started = time.time()
+    receipts: list[dict] = []
     matches, scanned_lots, error_count = build_matches(
         auctions,
         patterns=patterns,
         timeout=max(1, args.timeout),
         limit=max(1, args.limit),
         delay=max(0.0, args.sleep),
+        receipts_out=receipts,
     )
     matches = [m for m in matches if m.score >= args.min_score]
     matches.sort(key=lambda m: (-m.score, m.remate_id, int(m.lot_number or 0)))
@@ -483,6 +533,34 @@ def main() -> int:
     print(f"Matches: {len(matches)}")
     print(f"Errores: {error_count}")
     print(f"Tiempo: {elapsed:.1f}s")
+
+    if args.receipt:
+        receipt_path = Path(args.receipt)
+        receipt_path.parent.mkdir(parents=True, exist_ok=True)
+        complete = bool(receipts) and len(receipts) == len(auctions) and all(
+            item.get("status") == "complete" for item in receipts
+        )
+        receipt_path.write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "sourceId": "castells",
+                    "status": "complete" if complete else "partial" if receipts else "failed",
+                    "inventoryAuthoritative": complete,
+                    "receipts": receipts,
+                    "startedAt": datetime.fromtimestamp(started, timezone.utc).isoformat(
+                        timespec="seconds"
+                    ),
+                    "finishedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                    "lotCount": scanned_lots,
+                    "errorCount": error_count,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
 
     output_path = Path(args.output)
     write_csv(matches, output_path)

@@ -1,6 +1,6 @@
 (() => {
   const REMOTE_API_BASE = window.CONSOLAS_API_BASE || "./api";
-  const STATIC_SNAPSHOT_CACHE_KEY = "20260824a";
+  const STATIC_SNAPSHOT_CACHE_KEY = "20260827a";
   const REQUEST_TIMEOUT_MS = Math.max(250, Number(window.CONSOLAS_AUCTION_WATCH_TIMEOUT_MS) || 8000);
   const LEGACY_STALE_AFTER_SECONDS = Math.max(
     60,
@@ -399,6 +399,7 @@
       status: "idle",
       scanStatus: "idle",
       sync: {},
+      coverage: {},
       issues: [],
       counts: {},
       dismissalsApplied: 0,
@@ -461,6 +462,15 @@
       imageUrl: raw.imageUrl || raw.image_url || "",
       watchlist: raw.watchlist === true,
       notes: raw.notes || "",
+      firstSeenAt: raw.firstSeenAt || "",
+      lastSeenAt: raw.lastSeenAt || "",
+      firstSeenRunId: raw.firstSeenRunId || "",
+      lastSeenRunId: raw.lastSeenRunId || "",
+      seenCount: Number(raw.seenCount) || 0,
+      active: raw.active !== false,
+      firstSeenInRun: raw.firstSeenInRun === true,
+      wasActive: raw.wasActive === true,
+      disappearedAfterAuthoritativeRefresh: raw.disappearedAfterAuthoritativeRefresh === true,
       featured: raw.featured === true
     };
 
@@ -558,6 +568,7 @@
       status: scanStatus,
       scanStatus,
       sync: raw.sync && typeof raw.sync === "object" ? { ...raw.sync } : {},
+      coverage: raw.coverage && typeof raw.coverage === "object" ? { ...raw.coverage } : {},
       issues: Array.isArray(raw.issues)
         ? raw.issues
             .filter((issue) => issue && typeof issue === "object")

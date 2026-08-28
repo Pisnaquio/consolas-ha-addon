@@ -287,6 +287,11 @@ def run_scan(
         preliminary_matches_count = 0
         source_rows: list[dict[str, Any]] = []
         session: requests.Session | None = None
+        receipts: list[dict[str, Any]] = []
+        discovery_complete = False
+        coverage_complete = False
+        collection_succeeded = False
+        status = "failed"
 
         try:
             adapter = spec.load()
@@ -300,7 +305,15 @@ def run_scan(
             groups_count = len(result.groups)
             errors.extend(str(item) for item in (result.errors or []) if str(item).strip())
             collection_succeeded = not (errors and not result.groups and not result.lots)
+            receipts = [receipt.to_dict() for receipt in result.receipts]
             lots = normalize_collected_lots(result, spec, errors)
+            discovery_complete = bool(result.discovery_complete)
+            receipt_group_ids = {str(item.get("groupId") or "") for item in receipts}
+            coverage_complete = discovery_complete and not errors and (
+                len(receipts) == len(result.groups)
+                and receipt_group_ids == {group.group_id for group in result.groups}
+                and all(item.get("status") == "complete" for item in receipts)
+            )
             lots_count = len(lots)
             active_lots = [lot for lot in lots if is_active(lot)]
             active_lots_count = len(active_lots)
@@ -316,18 +329,26 @@ def run_scan(
                         timeout=timeout,
                     )
                     candidates = merge_enriched_lots(candidates, enriched)
-                    errors.extend(
+                    enrichment_errors = [
                         str(item)
                         for item in (getattr(adapter, "last_enrichment_errors", []) or [])
                         if str(item).strip()
-                    )
+                    ]
+                    if coverage_complete:
+                        warnings.extend(enrichment_errors)
+                    else:
+                        errors.extend(enrichment_errors)
                     warnings.extend(
                         str(item)
                         for item in (getattr(adapter, "last_enrichment_warnings", []) or [])
                         if str(item).strip()
                     )
                 except Exception as exc:  # keep preliminary matches on detail/API failure
-                    errors.append(f"enrich_lots failed: {type(exc).__name__}: {exc}")
+                    detail = f"enrich_lots failed: {type(exc).__name__}: {exc}"
+                    if coverage_complete:
+                        warnings.append(detail)
+                    else:
+                        errors.append(detail)
 
             for lot in candidates:
                 row = canonical_match_row(lot, minimum_score=minimum_score)
@@ -367,6 +388,9 @@ def run_scan(
                 "matches": len(source_rows),
                 "errors": errors,
                 "warnings": warnings,
+                "receipts": receipts,
+                "discovery_complete": discovery_complete,
+                "inventory_authoritative": coverage_complete,
                 "started_at": source_started_at,
                 "finished_at": now_iso(),
                 "duration_ms": duration_ms,
@@ -402,6 +426,8 @@ def run_scan(
             else "success"
         ),
         "sources": source_statuses,
+        "inventory_authoritative": bool(source_statuses)
+        and all(item["inventory_authoritative"] is True for item in source_statuses),
         "totals": {
             "configured_sources": len(specs),
             "successful_sources": successful_sources,

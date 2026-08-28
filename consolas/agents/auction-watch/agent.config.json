@@ -49,8 +49,8 @@
     }
   ],
   "outputs": {
-    "runs_dir": "agents/auction-watch/runs",
-    "latest_dir": "agents/auction-watch/runs/latest",
+    "runs_dir": "AUCTION_WATCH_RUNTIME_ROOT/runs",
+    "latest_dir": "AUCTION_WATCH_RUNTIME_ROOT/runs/latest",
     "summary": "summary.md",
     "metadata": "run.json"
   },
@@ -63,10 +63,10 @@
   },
   "incremental": {
     "enabled": true,
-    "state_file": "agents/auction-watch/state.json",
-    "watchlist_file": "agents/auction-watch/watchlist.json",
-    "bavastro_daily_policy": "process_each_active_auction_once",
-    "castells_daily_policy": "process_each_active_remate_once"
+    "state_file": "AUCTION_WATCH_RUNTIME_ROOT/state.json",
+    "watchlist_file": "AUCTION_WATCH_RUNTIME_ROOT/watchlist.json",
+    "bavastro_daily_policy": "refresh_all_active_auctions",
+    "castells_daily_policy": "refresh_all_active_remates"
   },
   "schedule": {
     "supported": [

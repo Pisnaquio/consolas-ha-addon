@@ -139,6 +139,11 @@ class RemotesSourceTests(unittest.TestCase):
 
         self.assertEqual(result.errors, [])
         self.assertEqual(result.source_id, "remotes")
+        self.assertTrue(result.discovery_complete)
+        self.assertEqual(
+            [(receipt.group_id, receipt.status, receipt.lot_count) for receipt in result.receipts],
+            [("7544", "complete", 2), ("7440", "complete", 1)],
+        )
         self.assertEqual(len(result.groups), 2)
         self.assertEqual(len(result.lots), 3)
         self.assertEqual([lot.lot_id for lot in result.lots], [

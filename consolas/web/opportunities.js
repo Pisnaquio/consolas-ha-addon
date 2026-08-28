@@ -14,7 +14,9 @@ let manualRunRequestedLocally = false;
 let manualRunPollTimer = null;
 let manualRunSyncPending = false;
 let manualRunSyncFailed = false;
+let manualRunSyncTimedOut = false;
 let manualRunPollIssue = "";
+const MANUAL_RUN_SYNC_TIMEOUT_MS = 120 * 1000;
 
 function getAuctionWatchSyncState() {
   const repo = window.AuctionWatchRepository;
@@ -45,6 +47,7 @@ function renderOpportunityBadges(item = {}) {
     ...(item.dismissed ? ["descartada"] : []),
     ...(item.following ? ["siguiendo"] : []),
     ...(item.watchlist ? ["watchlist"] : []),
+    ...(item.firstSeenInRun ? ["nueva"] : []),
     ...(item.matchedKeywords || []).slice(0, 2)
   ];
 
@@ -453,7 +456,9 @@ function getManualRunReceipt(request = {}) {
     scanStatus: normalizeAuctionWatchScanStatus(scanStatusValue),
     snapshotStatus: String(request.snapshotStatus || nested.snapshotStatus || nested.status || "").trim().toLowerCase(),
     emailStatus: String(request.emailStatus || nested.emailStatus || "").trim().toLowerCase(),
-    overallStatus: String(request.overallStatus || nested.overallStatus || "").trim().toLowerCase()
+    overallStatus: String(request.overallStatus || nested.overallStatus || "").trim().toLowerCase(),
+    publicationState: String(request.publicationState || nested.publicationState || "").trim().toLowerCase(),
+    supersededByRunId: String(request.supersededByRunId || nested.supersededByRunId || "").trim()
   };
 }
 
@@ -497,6 +502,8 @@ function isRecentRunRequest(request = {}) {
 function isSnapshotConfirmedForRun(request = {}) {
   const receipt = getManualRunReceipt(request);
   const sync = getAuctionWatchSyncState();
+  if (receipt.publicationState === "current" || receipt.publicationState === "superseded") return true;
+  if (receipt.publicationState === "missing") return false;
   if (sync.origin !== "server" || ["stale", "unavailable"].includes(sync.status)) return false;
   if (receipt.snapshotStatus && ["failed", "unavailable", "not_configured", "skipped"].includes(receipt.snapshotStatus)) {
     return false;
@@ -511,6 +518,15 @@ function isSnapshotConfirmedForRun(request = {}) {
   return Number.isFinite(requestedAt) && Number.isFinite(generatedAt) && generatedAt >= requestedAt - 60_000;
 }
 
+function isManualRunSyncTimedOut(request = {}) {
+  const finishedAt = Date.parse(request.finishedAt || "");
+  return !Number.isFinite(finishedAt) || Date.now() - finishedAt >= MANUAL_RUN_SYNC_TIMEOUT_MS;
+}
+
+function isSnapshotSupersededForRun(request = {}) {
+  return getManualRunReceipt(request).publicationState === "superseded";
+}
+
 function hasTerminalSnapshotFailure(request = {}) {
   const status = getManualRunReceipt(request).snapshotStatus;
   return ["failed", "unavailable", "not_configured", "not_published", "publish_failed", "skipped"].includes(status);
@@ -518,7 +534,9 @@ function hasTerminalSnapshotFailure(request = {}) {
 
 function renderManualRunControl() {
   const status = getManualRunDisplayStatus(manualRunState || {});
-  const busy = isManualRunBusy(manualRunState || {}) || manualRunSyncPending;
+  const superseded = isSnapshotSupersededForRun(manualRunState || {});
+  const syncPending = manualRunSyncPending && !superseded && !manualRunSyncTimedOut;
+  const busy = isManualRunBusy(manualRunState || {}) || syncPending;
   const receipt = getManualRunReceipt(manualRunState || {});
   const emailUncertain = receipt.emailStatus === "uncertain";
   const labels = {
@@ -530,13 +548,17 @@ function renderManualRunControl() {
     failed: "Reintentar búsqueda"
   };
   let message = "Hace una búsqueda completa y envía el reporte por mail.";
-  if (emailUncertain && manualRunSyncFailed) {
+  if (superseded) {
+    message = "La corrida terminó correctamente y luego fue reemplazada por una actualización automática más reciente. La página ya muestra esa versión.";
+  } else if (emailUncertain && manualRunSyncFailed) {
     message = "La corrida no pudo publicar el snapshot y el proveedor tampoco confirmó si el mail salió. No lo reenviamos automáticamente para evitar duplicados.";
-  } else if (emailUncertain && manualRunSyncPending) {
+  } else if (manualRunSyncTimedOut) {
+    message = "El servidor no pudo confirmar la publicación de esta corrida dentro de 120 segundos. Podés verificar de nuevo o iniciar otra búsqueda; conservamos el snapshot más reciente.";
+  } else if (emailUncertain && syncPending) {
     message = "La página todavía no confirmó el snapshot nuevo. Seguimos verificando solo esa publicación; el mail quedó sin confirmación y no se reenviará automáticamente.";
   } else if (manualRunSyncFailed) {
     message = "La corrida terminó, pero el servidor informó que no pudo publicar el snapshot. La página conserva la versión anterior.";
-  } else if (manualRunSyncPending) {
+  } else if (syncPending) {
     message = "La corrida terminó, pero la página todavía no confirmó el snapshot nuevo. Seguimos verificando automáticamente.";
   } else if (status === "pending") {
     message = "La solicitud quedó registrada. Seguimos consultando su estado sin crear otra búsqueda.";
@@ -563,20 +585,24 @@ function renderManualRunControl() {
   const visibleMessage = manualRunPollIssue && busy
     ? `${message} ${manualRunPollIssue}`.trim()
     : message;
-  const visualStatus = manualRunSyncFailed
+  const visualStatus = superseded
+    ? "completed"
+    : manualRunSyncFailed || manualRunSyncTimedOut
     ? "failed"
-    : manualRunSyncPending || status === "delivery_pending"
+    : syncPending || status === "delivery_pending"
       ? "syncing"
       : status === "email_uncertain"
         ? "failed"
         : status;
-  const buttonLabel = emailUncertain
+  const buttonLabel = superseded || emailUncertain
     ? "Buscar otra vez"
+    : manualRunSyncTimedOut
+      ? "Reintentar búsqueda"
     : manualRunSyncFailed
       ? "Reintentar búsqueda"
       : status === "delivery_pending"
         ? labels.delivery_pending
-        : manualRunSyncPending
+        : syncPending
           ? "Sincronizando página…"
           : labels[status] || "Buscar ahora y enviar mail";
   return `
@@ -658,12 +684,15 @@ function renderPage({ focusSelector = "" } = {}) {
   const showingDismissed = opportunityView === "dismissed";
   const showingFollowing = opportunityView === "following";
   const visibleItems = showingDismissed ? dismissed : showingFollowing ? following : activeMatches;
-  const failedScan = normalizeAuctionWatchScanStatus(sync.scanStatus || snapshot?.scanStatus || snapshot?.status) === "failed";
-  const inventoryIsReference = ["stale", "unavailable"].includes(sync.status) || failedScan;
-  const activeSummaryTitle = inventoryIsReference ? "En snapshot" : "Activas ahora";
+  const scanStatus = normalizeAuctionWatchScanStatus(sync.scanStatus || snapshot?.scanStatus || snapshot?.status);
+  const snapshotCounts = snapshot?.counts || {};
+  const detectedCount = Number(snapshotCounts.detected_matches ?? active.length + dismissed.length);
+  const newCount = Number(snapshotCounts.new_matches ?? 0);
+  const inventoryIsReference = ["stale", "unavailable"].includes(sync.status) || scanStatus !== "success";
+  const activeSummaryTitle = inventoryIsReference ? "En snapshot" : "Visibles ahora";
   const activeSummaryDetail = inventoryIsReference
-    ? "sin vigencia confirmada"
-    : "publicaciones nuevas por revisar";
+    ? "cobertura no completamente confirmada"
+    : "publicaciones activas sin descarte";
 
   root.innerHTML = `
     <div class="back-link">
@@ -676,7 +705,9 @@ function renderPage({ focusSelector = "" } = {}) {
           <h1>Oportunidades</h1>
           <p class="subtitle">Acá quedan las publicaciones activas que encontró el agente en todas las fuentes monitoreadas, con foco en consolas, controles, juegos y hardware relacionado.</p>
           <div class="mini-grid opportunity-summary-grid">
+            ${renderSummaryCard("Detectadas", String(detectedCount), "inventario encontrado por la corrida")}
             ${renderSummaryCard(activeSummaryTitle, String(active.length), activeSummaryDetail)}
+            ${renderSummaryCard("Nuevas", String(newCount), "aparecieron en esta corrida")}
             ${renderSummaryCard("Siguiendo", String(following.length), "publicaciones guardadas para decidir")}
             ${renderSummaryCard("Cierran pronto", String(urgentCount), "urgencia hoy, pronto o inminente")}
             ${renderSummaryCard("Descartadas", String(dismissed.length), "historial reversible de publicaciones vistas")}
@@ -760,6 +791,7 @@ async function handleOpportunityClick(event) {
       manualRunRequestedLocally = true;
       manualRunSyncPending = false;
       manualRunSyncFailed = false;
+      manualRunSyncTimedOut = false;
       manualRunPollIssue = "";
       renderPage({ focusSelector: "[data-auction-run-now]" });
       scheduleManualRunPoll();
@@ -868,6 +900,7 @@ async function refreshManualRunState() {
     manualRunState = request;
     manualRunRequestedLocally = true;
     manualRunPollIssue = "";
+    manualRunSyncTimedOut = false;
     if (requestStatus === "delivery_pending") {
       await loadAuctionWatchSnapshot();
       manualRunSyncPending = false;
@@ -876,7 +909,16 @@ async function refreshManualRunState() {
       await loadAuctionWatchSnapshot();
       manualRunSyncFailed = hasTerminalSnapshotFailure(request);
       const publishedSnapshot = getManualRunReceipt(request).snapshotStatus === "published";
-      manualRunSyncPending = publishedSnapshot && !manualRunSyncFailed && !isSnapshotConfirmedForRun(request);
+      const publicationState = getManualRunReceipt(request).publicationState;
+      if (publishedSnapshot && !manualRunSyncFailed && isSnapshotSupersededForRun(request)) {
+        manualRunSyncPending = false;
+      } else if (publishedSnapshot && !manualRunSyncFailed && !isSnapshotConfirmedForRun(request)) {
+        manualRunSyncTimedOut = publicationState === "missing" && isManualRunSyncTimedOut(request);
+        manualRunSyncPending = !manualRunSyncTimedOut;
+        if (manualRunSyncTimedOut) manualRunSyncFailed = false;
+      } else {
+        manualRunSyncPending = false;
+      }
     } else {
       manualRunSyncPending = false;
       manualRunSyncFailed = false;
@@ -895,10 +937,18 @@ async function refreshManualRunState() {
 
 function scheduleManualRunPoll() {
   if (manualRunPollTimer) window.clearTimeout(manualRunPollTimer);
+  const publicationState = getManualRunReceipt(manualRunState || {}).publicationState;
+  const finishedAt = Date.parse(manualRunState?.finishedAt || "");
+  const remaining = Number.isFinite(finishedAt)
+    ? MANUAL_RUN_SYNC_TIMEOUT_MS - (Date.now() - finishedAt)
+    : 0;
+  const delay = publicationState === "missing" && remaining > 0
+    ? Math.min(5000, remaining)
+    : 5000;
   manualRunPollTimer = window.setTimeout(() => {
     manualRunPollTimer = null;
     refreshManualRunState();
-  }, 5000);
+  }, delay);
 }
 
 async function init() {

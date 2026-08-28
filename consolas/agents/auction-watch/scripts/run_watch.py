@@ -39,14 +39,22 @@ from auction_search_config import (
 
 
 AGENT_DIR = Path(__file__).resolve().parents[1]
-RUNS_DIR = AGENT_DIR / "runs"
-LATEST_DIR = RUNS_DIR / "latest"
-LATEST_MATCHES_DIR = RUNS_DIR / "latest-matches"
-STATE_FILE = AGENT_DIR / "state.json"
-DELIVERY_OUTBOX_FILE = AGENT_DIR / "delivery-outbox.json"
-RUN_LOCK_FILE = AGENT_DIR / "run.lock"
-WATCHLIST_FILE = AGENT_DIR / "watchlist.json"
-DISMISSALS_CACHE_FILE = AGENT_DIR / "dismissals-cache.json"
+if str(AGENT_DIR) not in sys.path:
+    sys.path.insert(0, str(AGENT_DIR))
+
+from runtime_paths import bootstrap_runtime, resolve_runtime_paths  # noqa: E402
+
+
+RUNTIME_PATHS = resolve_runtime_paths(AGENT_DIR)
+RUNTIME_ROOT = RUNTIME_PATHS.root
+RUNS_DIR = RUNTIME_PATHS.runs
+LATEST_DIR = RUNTIME_PATHS.latest
+LATEST_MATCHES_DIR = RUNTIME_PATHS.latest_matches
+STATE_FILE = RUNTIME_PATHS.state
+DELIVERY_OUTBOX_FILE = RUNTIME_PATHS.delivery_outbox
+RUN_LOCK_FILE = RUNTIME_PATHS.run_lock
+WATCHLIST_FILE = RUNTIME_PATHS.watchlist
+DISMISSALS_CACHE_FILE = RUNTIME_PATHS.dismissals_cache
 WEB_EXPORT_SCRIPT = AGENT_DIR / "scripts" / "export_web_snapshot.py"
 EXTRA_SOURCES_SCRIPT = AGENT_DIR / "scripts" / "scan_extra_sources.py"
 # A development checkout has a virtual environment at the repository root.
@@ -96,6 +104,7 @@ class StepResult:
     finished_at: str
     skipped_reason: str = ""
     inventory_authoritative: bool = False
+    receipts: list[dict[str, object]] = field(default_factory=list)
 
 
 @dataclass
@@ -114,6 +123,7 @@ class AgentState:
     active_bavastro_matches_by_group: dict[str, list[dict[str, str]]] = field(default_factory=dict)
     active_castells_matches_by_group: dict[str, list[dict[str, str]]] = field(default_factory=dict)
     active_extra_matches_by_source: dict[str, list[dict[str, str]]] = field(default_factory=dict)
+    opportunity_lifecycle: dict[str, dict[str, object]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -246,6 +256,7 @@ def parse_args() -> argparse.Namespace:
 def ensure_runtime() -> None:
     if not PYTHON_BIN.exists():
         raise FileNotFoundError(f"No se encontro el runtime esperado: {PYTHON_BIN}")
+    bootstrap_runtime(AGENT_DIR)
 
 
 def read_csv_rows(path: Path) -> list[dict[str, str]]:
@@ -254,6 +265,16 @@ def read_csv_rows(path: Path) -> list[dict[str, str]]:
     with path.open("r", encoding="utf-8", newline="") as handle:
         reader = csv.DictReader(handle)
         return list(reader)
+
+
+def csv_has_field(path: Path, field: str) -> bool:
+    if not path.exists():
+        return False
+    try:
+        with path.open("r", encoding="utf-8", newline="") as handle:
+            return field in (csv.DictReader(handle).fieldnames or [])
+    except OSError:
+        return False
 
 
 def read_json_object(path: Path) -> dict[str, object]:
@@ -485,6 +506,19 @@ def load_state(path: Path) -> AgentState:
         active_extra_matches_by_source=parse_match_groups(
             payload.get("active_extra_matches_by_source")
         ),
+        opportunity_lifecycle=(
+            {
+                str(key): {
+                    str(field): value
+                    for field, value in value.items()
+                    if isinstance(field, str)
+                }
+                for key, value in (payload.get("opportunity_lifecycle") or {}).items()
+                if isinstance(value, dict)
+            }
+            if isinstance(payload.get("opportunity_lifecycle"), dict)
+            else {}
+        ),
     )
 
 
@@ -497,6 +531,7 @@ def save_state(path: Path, state: AgentState) -> None:
         "active_bavastro_matches_by_group": state.active_bavastro_matches_by_group,
         "active_castells_matches_by_group": state.active_castells_matches_by_group,
         "active_extra_matches_by_source": state.active_extra_matches_by_source,
+        "opportunity_lifecycle": state.opportunity_lifecycle,
     }
     atomic_write_json(path, payload)
 
@@ -1072,6 +1107,154 @@ def match_unique_key(source: str, row: dict[str, str]) -> str:
     )
 
 
+def opportunity_lifecycle_key(source: str, row: dict[str, str]) -> str:
+    if source == "bavastro":
+        lot_id = str(row.get("lot_auction_id") or row.get("lot_id") or "").strip()
+    else:
+        lot_id = str(
+            row.get("lot_id") or row.get("lot_url") or row.get("lot_web_url") or ""
+        ).strip()
+    return f"{source.lower().strip()}\x1f{lot_id}"
+
+
+def opportunity_lifecycle_key_from_public_item(item: dict[str, object]) -> str:
+    source = str(item.get("source") or "").strip().lower()
+    lot_id = str(item.get("lotId") or "").strip()
+    return f"{source}\x1f{lot_id}"
+
+
+def lifecycle_group_id(source: str, row: dict[str, str]) -> str:
+    normalized_source = source.strip().lower()
+    if normalized_source == "bavastro":
+        return str(row.get("auction_id") or "").strip()
+    if normalized_source == "castells":
+        return str(row.get("remate_id") or "").strip()
+    return str(row.get("group_id") or "").strip()
+
+
+def update_opportunity_lifecycle(
+    state: AgentState,
+    run_id: str,
+    observed_at: str,
+    source_rows: dict[str, list[dict[str, str]]],
+    authoritative_groups: dict[str, set[str]],
+    prior_source_rows: dict[str, list[dict[str, str]]] | None = None,
+) -> dict[str, set[str]]:
+    """Record first/last sightings without letting incremental state limit scans."""
+
+    previously_active = {
+        key
+        for key, value in state.opportunity_lifecycle.items()
+        if value.get("active") is True
+    }
+    known_group_ids: dict[str, str] = {}
+    prior_sources = set(prior_source_rows or {})
+    prior_sources.update(state.active_extra_matches_by_source)
+    prior_sources.update({"bavastro", "castells"})
+    for source in prior_sources:
+        if source == "bavastro" or source == "castells":
+            cached_rows = active_match_rows_for_source(state, source)
+        else:
+            cached_rows = state.active_extra_matches_by_source.get(source, [])
+        rows = [*(prior_source_rows or {}).get(source, []), *cached_rows]
+        for row in rows:
+            key = opportunity_lifecycle_key(source, row)
+            previously_active.add(key)
+            group_id = lifecycle_group_id(source, row)
+            if group_id:
+                known_group_ids[key] = group_id
+    for key in previously_active:
+        if key in state.opportunity_lifecycle:
+            continue
+        source, separator, lot_id = key.partition("\x1f")
+        if not separator or not source or not lot_id:
+            continue
+        state.opportunity_lifecycle[key] = {
+            "sourceId": source,
+            "lotId": lot_id,
+            "groupId": known_group_ids.get(key, ""),
+            "firstSeenAt": "",
+            "lastSeenAt": "",
+            "firstSeenRunId": "",
+            "lastSeenRunId": "",
+            "seenCount": 0,
+            "active": True,
+            "firstSeenInRun": False,
+            "wasActive": True,
+            "disappearedAfterAuthoritativeRefresh": False,
+        }
+
+    observed: set[str] = set()
+    new_keys: set[str] = set()
+    for source, rows in source_rows.items():
+        normalized_source = source.strip().lower()
+        for row in rows:
+            if normalized_source == "bavastro":
+                lot_id = str(row.get("lot_auction_id") or row.get("lot_id") or "").strip()
+            else:
+                lot_id = str(
+                    row.get("lot_id") or row.get("lot_url") or row.get("lot_web_url") or ""
+                ).strip()
+            if not normalized_source or not lot_id:
+                continue
+            key = opportunity_lifecycle_key(normalized_source, row)
+            observed.add(key)
+            previous = state.opportunity_lifecycle.get(key)
+            was_active = key in previously_active or bool(previous and previous.get("active"))
+            if previous is None:
+                previous = {}
+                new_keys.add(key)
+            first_seen_at = str(previous.get("firstSeenAt") or observed_at)
+            first_seen_run_id = str(previous.get("firstSeenRunId") or run_id)
+            try:
+                seen_count = int(previous.get("seenCount") or 0)
+            except (TypeError, ValueError):
+                seen_count = 0
+            state.opportunity_lifecycle[key] = {
+                "sourceId": normalized_source,
+                "lotId": lot_id,
+                "groupId": lifecycle_group_id(normalized_source, row),
+                "firstSeenAt": first_seen_at,
+                "lastSeenAt": observed_at,
+                "firstSeenRunId": first_seen_run_id,
+                "lastSeenRunId": run_id,
+                "seenCount": seen_count + 1,
+                "active": True,
+                "firstSeenInRun": first_seen_run_id == run_id,
+                "wasActive": was_active,
+                "disappearedAfterAuthoritativeRefresh": False,
+            }
+
+    removed_keys: set[str] = set()
+    for key, previous in state.opportunity_lifecycle.items():
+        if key in observed:
+            continue
+        source = str(previous.get("sourceId") or key.split("\x1f", 1)[0]).strip().lower()
+        group_id = str(previous.get("groupId") or "").strip()
+        if (
+            key in previously_active
+            and group_id
+            and group_id in authoritative_groups.get(source, set())
+        ):
+            previous["active"] = False
+            previous["wasActive"] = True
+            previous["disappearedAfterAuthoritativeRefresh"] = True
+            removed_keys.add(key)
+
+    return {"new": new_keys, "removed": removed_keys, "observed": observed}
+
+
+def lifecycle_rows_for_run(
+    state: AgentState,
+    keys: set[str],
+) -> list[dict[str, object]]:
+    return [
+        dict(state.opportunity_lifecycle[key])
+        for key in sorted(keys)
+        if key in state.opportunity_lifecycle
+    ]
+
+
 def row_int(row: dict[str, str], key: str) -> int:
     raw = str(row.get(key) or "").strip()
     try:
@@ -1157,6 +1340,7 @@ def reconcile_active_match_state(
     inventory_authoritative: bool,
     refresh_succeeded: bool,
     refresh_complete: bool | None = None,
+    completed_group_ids: set[str] | None = None,
 ) -> list[dict[str, str]]:
     groups = active_match_groups_for_source(state, source)
     group_key = match_group_key(source)
@@ -1176,7 +1360,12 @@ def reconcile_active_match_state(
             if group_id in rows_by_group:
                 rows_by_group[group_id].append(dict(row))
         for group_id, rows in rows_by_group.items():
-            if refresh_complete is not False:
+            group_is_complete = (
+                refresh_complete is not False
+                if completed_group_ids is None
+                else group_id in completed_group_ids
+            )
+            if group_is_complete:
                 # Only a confirmed-complete refresh is allowed to prove that a
                 # previously known lot disappeared from an active group.
                 groups[group_id] = rows
@@ -1224,13 +1413,16 @@ def reconcile_extra_match_state(
         if source_id:
             rows_by_source.setdefault(source_id, []).append(dict(row))
 
-    reported_statuses: dict[str, str] = {}
+    reported_statuses: dict[str, tuple[str, bool]] = {}
     for entry in source_statuses:
         if not isinstance(entry, dict):
             continue
         source_id = str(entry.get("source_id") or "").strip().lower()
         if source_id:
-            reported_statuses[source_id] = str(entry.get("status") or "unknown").strip().lower()
+            reported_statuses[source_id] = (
+                str(entry.get("status") or "unknown").strip().lower(),
+                entry.get("inventory_authoritative") is True,
+            )
 
     # A valid status file enumerates the configured registry. Sources absent
     # from it were deliberately removed; a missing/corrupt status file proves
@@ -1239,13 +1431,13 @@ def reconcile_extra_match_state(
         for removed_source in set(groups) - set(reported_statuses):
             groups.pop(removed_source, None)
 
-    for source_id, status in reported_statuses.items():
+    for source_id, (status, inventory_authoritative) in reported_statuses.items():
         fresh_rows = rows_by_source.pop(source_id, [])
         fresh_by_key = {
             match_unique_key(source_id, row): dict(row)
             for row in fresh_rows
         }
-        if status == "success":
+        if status == "success" and inventory_authoritative:
             groups[source_id] = list(fresh_by_key.values())
             continue
 
@@ -1439,39 +1631,258 @@ def skipped_step(name: str, reason: str, run_dir: Path) -> StepResult:
     )
 
 
+def load_group_receipt(path: Path) -> tuple[dict[str, object], list[dict[str, object]]]:
+    payload = read_json_object(path)
+    raw_receipts = payload.get("receipts")
+    receipts = [item for item in raw_receipts if isinstance(item, dict)] if isinstance(raw_receipts, list) else []
+    return payload, receipts
+
+
+def apply_group_receipt(step: StepResult, path: Path, expected_ids: list[int]) -> StepResult:
+    payload, receipts = load_group_receipt(path)
+    step.receipts = receipts
+    expected = {str(item) for item in expected_ids}
+    complete = complete_group_ids(step)
+    step.inventory_authoritative = bool(
+        step.status == "success"
+        and payload.get("inventoryAuthoritative") is True
+        and len(receipts) == len(expected_ids)
+        and all(receipt_has_required_fields(item) for item in receipts)
+        and expected == {str(item.get("groupId") or "") for item in receipts}
+        and complete == expected
+    )
+    if step.status == "success" and not step.inventory_authoritative:
+        step.status = "partial"
+    return step
+
+
+def receipt_has_required_fields(item: dict[str, object]) -> bool:
+    if not all(
+        str(item.get(field) or "").strip()
+        for field in ("groupId", "startedAt", "finishedAt")
+    ):
+        return False
+    if str(item.get("status") or "").strip().lower() not in {"complete", "partial", "failed"}:
+        return False
+    try:
+        return int(item.get("lotCount") or 0) >= 0 and int(item.get("errorCount") or 0) >= 0
+    except (TypeError, ValueError):
+        return False
+
+
+def complete_group_ids(step: StepResult) -> set[str]:
+    complete: set[str] = set()
+    for item in step.receipts:
+        group_id = str(item.get("groupId") or "")
+        if not receipt_has_required_fields(item):
+            continue
+        if (
+            group_id
+            and str(item.get("status") or "").strip().lower() == "complete"
+            and int(item["errorCount"] or 0) == 0
+        ):
+            complete.add(group_id)
+    return complete
+
+
+def effective_inventory_authority(
+    discovery: StepResult,
+    matches: StepResult,
+    active_ids: list[int],
+    queried_ids: list[int],
+) -> bool:
+    """Calculate source authority once from discovery plus group coverage proof."""
+
+    return bool(
+        discovery.inventory_authoritative
+        and matches.status in {"success", "skipped"}
+        and matches.inventory_authoritative
+        and set(active_ids) == set(queried_ids)
+    )
+
+
+def known_group_ids_for_source(state: AgentState, source: str) -> set[str]:
+    if source == "bavastro":
+        groups = set(state.active_bavastro_matches_by_group)
+    elif source == "castells":
+        groups = set(state.active_castells_matches_by_group)
+    else:
+        groups = {
+            str(row.get("group_id") or "").strip()
+            for rows in state.active_extra_matches_by_source.get(source, [])
+            for row in rows
+            if str(row.get("group_id") or "").strip()
+        }
+    groups.update(
+        str(value.get("groupId") or "").strip()
+        for value in state.opportunity_lifecycle.values()
+        if str(value.get("sourceId") or "").strip().lower() == source
+        and str(value.get("groupId") or "").strip()
+    )
+    return groups
+
+
+def coverage_summary(
+    run_dir: Path,
+    step: StepResult,
+    active_ids: list[int],
+    queried_ids: list[int],
+    rows: list[dict[str, str]],
+    new_rows: list[dict[str, str]],
+    removed_keys: set[str],
+    source: str,
+    *,
+    discovery_complete: bool,
+) -> dict[str, object]:
+    expected = {str(item) for item in active_ids}
+    complete = {
+        str(item.get("groupId") or "")
+        for item in step.receipts
+        if str(item.get("status") or "").strip().lower() == "complete"
+    }
+    incomplete = sorted(expected - complete)
+    incomplete.extend(
+        sorted(
+            {
+                str(item.get("groupId") or "")
+                for item in step.receipts
+                if str(item.get("status") or "").strip().lower() != "complete"
+                and str(item.get("groupId") or "")
+            }
+            - set(incomplete)
+        )
+    )
+    observed_lots = extract_metric(
+        read_text(run_dir / step.stdout_path),
+        "Lotes escaneados",
+    )
+    return {
+        "sourceId": source,
+        "discoveryComplete": discovery_complete,
+        "groupsDiscovered": len(active_ids),
+        "groupsQueried": len(queried_ids),
+        "completeGroups": sorted(complete),
+        "partialOrFailedGroups": incomplete,
+        "lotCount": observed_lots if observed_lots is not None else len(rows),
+        "matchesDetected": len(rows),
+        "matchesNew": len(new_rows),
+        "matchesRemoved": sum(
+            key.startswith(f"{source}\x1f") for key in removed_keys
+        ),
+        "status": (
+            "complete"
+            if step.inventory_authoritative
+            else "failed"
+            if step.status == "failed"
+            else "partial"
+        ),
+        "inventoryAuthoritative": step.inventory_authoritative,
+        "groupReceipts": step.receipts,
+    }
+
+
 def source_status(step: StepResult, default_skipped_reason: str = "skipped") -> str:
     if step.status == "skipped":
         return step.skipped_reason or default_skipped_reason
     return step.status
 
 
-def classify_bavastro_discovery(step: StepResult, run_dir: Path) -> StepResult:
+def classify_bavastro_discovery(
+    step: StepResult,
+    run_dir: Path,
+    *,
+    active_mode: bool = True,
+    discovery_path: Path | None = None,
+) -> StepResult:
     if step.status != "success":
         return step
 
     stdout_text = read_text(run_dir / step.stdout_path)
     errors = extract_metric(stdout_text, "Errores red/HTTP")
-    existing = extract_metric(stdout_text, "Subastas existentes")
-    matches = extract_metric(stdout_text, "Coincidencias")
 
-    if errors and (existing or 0) == 0 and (matches or 0) == 0:
+    # An exit code of zero is not evidence that active discovery succeeded.
+    # Require the explicit active-result metric so parser drift fails closed.
+    evidence_metric = (
+        "Subastas activas detectadas" if active_mode else "Total IDs escaneados"
+    )
+    if extract_metric(stdout_text, evidence_metric) is None:
         step.status = "failed"
-    elif errors:
+        return step
+    if active_mode and errors is None:
+        step.status = "failed"
+        return step
+    if active_mode and discovery_path is not None:
+        rows = read_csv_rows(discovery_path)
+        row_ids = {
+            str(row.get("id") or "").strip()
+            for row in rows
+            if str(row.get("id") or "").strip()
+        }
+        if (
+            not csv_has_field(discovery_path, "id")
+            or len(rows) != len(row_ids)
+            or extract_metric(stdout_text, evidence_metric) != len(row_ids)
+        ):
+            step.status = "failed"
+            return step
+    if errors:
         step.status = "partial"
+    elif active_mode:
+        step.inventory_authoritative = True
     return step
 
 
-def classify_bavastro_matches(step: StepResult, run_dir: Path) -> StepResult:
+def classify_castells_discovery(
+    step: StepResult,
+    run_dir: Path,
+    discovery_path: Path,
+) -> StepResult:
+    if step.status != "success":
+        return step
+
+    stdout_text = read_text(run_dir / step.stdout_path)
+    detected = extract_metric(stdout_text, "Remates activos detectados")
+    rows = read_csv_rows(discovery_path)
+    row_ids = {
+        str(row.get("remate_id") or "").strip()
+        for row in rows
+        if str(row.get("remate_id") or "").strip()
+    }
+    if (
+        not csv_has_field(discovery_path, "remate_id")
+        or detected is None
+        or detected != len(row_ids)
+        or len(rows) != len(row_ids)
+    ):
+        step.status = "failed"
+        return step
+    step.inventory_authoritative = True
+    return step
+
+
+def classify_bavastro_matches(
+    step: StepResult,
+    run_dir: Path,
+    receipt_path: Path | None = None,
+    expected_ids: list[int] | None = None,
+) -> StepResult:
     if step.status != "success":
         return step
 
     stdout_text = read_text(run_dir / step.stdout_path)
     if "[ERR]" in stdout_text:
         step.status = "partial"
+    if receipt_path is not None and expected_ids is not None and receipt_path.exists():
+        step = apply_group_receipt(step, receipt_path, expected_ids)
     return step
 
 
-def classify_castells_matches(step: StepResult, run_dir: Path) -> StepResult:
+def classify_castells_matches(
+    step: StepResult,
+    run_dir: Path,
+    receipt_path: Path | None = None,
+    expected_ids: list[int] | None = None,
+) -> StepResult:
     if step.status != "success":
         return step
 
@@ -1483,6 +1894,8 @@ def classify_castells_matches(step: StepResult, run_dir: Path) -> StepResult:
         step.status = "failed"
     elif errors:
         step.status = "partial"
+    if receipt_path is not None and expected_ids is not None and receipt_path.exists():
+        step = apply_group_receipt(step, receipt_path, expected_ids)
     return step
 
 
@@ -1511,10 +1924,16 @@ def overall_status(steps: list[StepResult]) -> str:
     castells_failed = castells_discovery.status == "failed" or castells_matches.status == "failed"
     extra_failed = extra_sources is not None and extra_sources.status == "failed"
     has_partial = any(step.status == "partial" for step in steps)
+    has_unproven_coverage = any(
+        step.name in {"bavastro_matches", "castells_matches", "extra_sources"}
+        and step.status == "success"
+        and not step.inventory_authoritative
+        for step in steps
+    )
 
     if bavastro_failed and castells_failed and (extra_sources is None or extra_failed):
         return "failure"
-    if bavastro_failed or castells_failed or extra_failed or has_partial:
+    if bavastro_failed or castells_failed or extra_failed or has_partial or has_unproven_coverage:
         return "partial_failure"
     return "success"
 
@@ -3472,6 +3891,9 @@ def export_web_snapshot(
         return False, str(exc)
 
     if result.returncode == 0:
+        if RUNTIME_ROOT != AGENT_DIR:
+            detail = (result.stdout or "").strip() or "ok"
+            return True, f"{detail}; local web runtime fallback skipped"
         try:
             atomic_write_text(
                 REPO_ROOT / "web" / "runtime" / "auction-watch.json",
@@ -4233,8 +4655,10 @@ def run_scan(args: argparse.Namespace) -> int:
 
     bavastro_auctions_csv = run_dir / "auctions_bavastro_matches.csv"
     bavastro_matches_csv = run_dir / "consolas_bavastro_matches.csv"
+    bavastro_receipt_json = run_dir / "bavastro_coverage.json"
     castells_auctions_csv = run_dir / "consolas_castells_auctions.csv"
     castells_csv = run_dir / "consolas_castells_matches.csv"
+    castells_receipt_json = run_dir / "castells_coverage.json"
     castells_md = run_dir / "consolas_castells_matches_readable.md"
     extra_matches_csv = run_dir / EXTRA_MATCHES_FILENAME
     extra_status_json = run_dir / EXTRA_STATUS_FILENAME
@@ -4265,7 +4689,12 @@ def run_scan(args: argparse.Namespace) -> int:
         ),
         run_dir,
     )
-    bavastro_discovery = classify_bavastro_discovery(bavastro_discovery, run_dir)
+    bavastro_discovery = classify_bavastro_discovery(
+        bavastro_discovery,
+        run_dir,
+        active_mode=args.bavastro_discovery_mode == "active",
+        discovery_path=bavastro_auctions_csv,
+    )
 
     bavastro_auction_rows = read_csv_rows(bavastro_auctions_csv)
     bavastro_active_ids = extract_int_ids(bavastro_auction_rows, "id")
@@ -4277,9 +4706,7 @@ def run_scan(args: argparse.Namespace) -> int:
     )
     if bavastro_discovery.status == "success":
         state.processed_bavastro_auction_ids.intersection_update(bavastro_active_ids)
-    if args.refresh_active_matches:
-        new_bavastro_auction_ids = bavastro_active_ids[:]
-    elif args.bavastro_discovery_mode == "active":
+    if args.bavastro_discovery_mode == "active":
         new_bavastro_auction_ids = [
             auction_id
             for auction_id in bavastro_active_ids
@@ -4287,14 +4714,16 @@ def run_scan(args: argparse.Namespace) -> int:
         ]
     else:
         new_bavastro_auction_ids = bavastro_active_ids[:]
-    bavastro_scan_ids = sorted(set(new_bavastro_auction_ids) | set(bavastro_watch_refresh_ids))
+    # Processed IDs and watchlist membership are telemetry only. Coverage is
+    # controlled by the active discovery result and always scans every group.
+    bavastro_scan_ids = bavastro_active_ids[:]
 
     if bavastro_discovery.status == "failed":
         bavastro_matches = skipped_step("bavastro_matches", "bavastro_discovery_failed", run_dir)
     elif not bavastro_active_ids:
         bavastro_matches = skipped_step("bavastro_matches", "no_active_bavastro_auctions", run_dir)
     elif not bavastro_scan_ids:
-        bavastro_matches = skipped_step("bavastro_matches", "no_new_bavastro_auctions", run_dir)
+        bavastro_matches = skipped_step("bavastro_matches", "no_active_bavastro_auctions", run_dir)
     else:
         bavastro_matches = run_step(
             "bavastro_matches",
@@ -4305,14 +4734,21 @@ def run_scan(args: argparse.Namespace) -> int:
                 ",".join(str(auction_id) for auction_id in bavastro_scan_ids),
                 "--output",
                 str(bavastro_matches_csv),
+                "--receipt",
+                str(bavastro_receipt_json),
                 "--min-score",
                 "-999",
             ],
             run_dir,
         )
-        bavastro_matches = classify_bavastro_matches(bavastro_matches, run_dir)
+        bavastro_matches = classify_bavastro_matches(
+            bavastro_matches,
+            run_dir,
+            bavastro_receipt_json,
+            bavastro_scan_ids,
+        )
         if args.bavastro_discovery_mode == "active" and bavastro_matches.status == "success":
-            state.processed_bavastro_auction_ids.update(new_bavastro_auction_ids)
+            state.processed_bavastro_auction_ids.update(bavastro_active_ids)
 
     castells_discovery = run_step(
         "castells_discovery",
@@ -4325,6 +4761,11 @@ def run_scan(args: argparse.Namespace) -> int:
         ],
         run_dir,
     )
+    castells_discovery = classify_castells_discovery(
+        castells_discovery,
+        run_dir,
+        castells_auctions_csv,
+    )
 
     castells_discovery_rows = read_csv_rows(castells_auctions_csv)
     castells_active_ids = extract_int_ids(castells_discovery_rows, "remate_id")
@@ -4336,22 +4777,19 @@ def run_scan(args: argparse.Namespace) -> int:
     )
     if castells_discovery.status == "success":
         state.processed_castells_remate_ids.intersection_update(castells_active_ids)
-    if args.refresh_active_matches:
-        new_castells_remate_ids = castells_active_ids[:]
-    else:
-        new_castells_remate_ids = [
-            remate_id
-            for remate_id in castells_active_ids
-            if remate_id not in state.processed_castells_remate_ids
-        ]
-    castells_scan_ids = sorted(set(new_castells_remate_ids) | set(castells_watch_refresh_ids))
+    new_castells_remate_ids = [
+        remate_id
+        for remate_id in castells_active_ids
+        if remate_id not in state.processed_castells_remate_ids
+    ]
+    castells_scan_ids = castells_active_ids[:]
 
     if castells_discovery.status == "failed":
         castells_matches = skipped_step("castells_matches", "castells_discovery_failed", run_dir)
     elif not castells_active_ids:
         castells_matches = skipped_step("castells_matches", "no_active_castells_remates", run_dir)
     elif not castells_scan_ids:
-        castells_matches = skipped_step("castells_matches", "no_new_castells_remates", run_dir)
+        castells_matches = skipped_step("castells_matches", "no_active_castells_remates", run_dir)
     else:
         castells_matches = run_step(
             "castells_matches",
@@ -4364,6 +4802,8 @@ def run_scan(args: argparse.Namespace) -> int:
                 str(max(1, args.castells_limit)),
                 "--output",
                 str(castells_csv),
+                "--receipt",
+                str(castells_receipt_json),
                 "--markdown",
                 str(castells_md),
                 "--min-score",
@@ -4371,9 +4811,14 @@ def run_scan(args: argparse.Namespace) -> int:
             ],
             run_dir,
         )
-        castells_matches = classify_castells_matches(castells_matches, run_dir)
+        castells_matches = classify_castells_matches(
+            castells_matches,
+            run_dir,
+            castells_receipt_json,
+            castells_scan_ids,
+        )
         if castells_matches.status == "success":
-            state.processed_castells_remate_ids.update(new_castells_remate_ids)
+            state.processed_castells_remate_ids.update(castells_active_ids)
 
     extra_sources = run_step(
         "extra_sources",
@@ -4389,63 +4834,234 @@ def run_scan(args: argparse.Namespace) -> int:
     )
     extra_sources = classify_extra_sources(extra_sources, extra_status_json)
 
-    bavastro_new_match_rows = read_csv_rows(bavastro_matches_csv)
-    castells_new_match_rows = read_csv_rows(castells_csv)
-    extra_rows = read_csv_rows(extra_matches_csv)
+    bavastro_observed_match_rows = read_csv_rows(bavastro_matches_csv)
+    castells_observed_match_rows = read_csv_rows(castells_csv)
+    extra_observed_rows = read_csv_rows(extra_matches_csv)
     extra_status_payload = read_json_object(extra_status_json)
     extra_status_payload_valid = (
         isinstance(extra_status_payload, dict)
         and isinstance(extra_status_payload.get("sources"), list)
     )
     extra_source_rows = extra_status_payload.get("sources") if extra_status_payload_valid else []
+    prior_lifecycle_rows = {
+        "bavastro": active_match_rows_for_source(state, "bavastro"),
+        "castells": active_match_rows_for_source(state, "castells"),
+        **{
+            source_id: [dict(row) for row in rows]
+            for source_id, rows in state.active_extra_matches_by_source.items()
+        },
+    }
+    prior_group_ids = {
+        source: {
+            lifecycle_group_id(source, row)
+            for row in rows
+            if lifecycle_group_id(source, row)
+        }
+        for source, rows in prior_lifecycle_rows.items()
+    }
     extra_rows = reconcile_extra_match_state(
         state,
-        extra_rows,
+        extra_observed_rows,
         extra_source_rows,
         status_payload_valid=extra_status_payload_valid,
     )
-    for source_entry in extra_source_rows:
-        if isinstance(source_entry, dict):
-            source_entry["inventory_authoritative"] = source_entry.get("status") == "success"
     extra_sources.inventory_authoritative = bool(extra_source_rows) and all(
         isinstance(source_entry, dict)
         and source_entry.get("inventory_authoritative") is True
         for source_entry in extra_source_rows
     )
 
-    bavastro_matches.inventory_authoritative = bavastro_discovery.status == "success" and (
-        bavastro_matches.status == "success"
-        or bavastro_matches.skipped_reason
-        in {"no_active_bavastro_auctions", "no_new_bavastro_auctions"}
+    if not bavastro_scan_ids and bavastro_matches.status == "skipped":
+        bavastro_matches.inventory_authoritative = bavastro_discovery.inventory_authoritative
+    if not castells_scan_ids and castells_matches.status == "skipped":
+        castells_matches.inventory_authoritative = castells_discovery.inventory_authoritative
+    bavastro_source_authoritative = effective_inventory_authority(
+        bavastro_discovery,
+        bavastro_matches,
+        bavastro_active_ids,
+        bavastro_scan_ids,
     )
-    castells_matches.inventory_authoritative = castells_discovery.status == "success" and (
-        castells_matches.status == "success"
-        or castells_matches.skipped_reason
-        in {"no_active_castells_remates", "no_new_castells_remates"}
+    castells_source_authoritative = effective_inventory_authority(
+        castells_discovery,
+        castells_matches,
+        castells_active_ids,
+        castells_scan_ids,
     )
-    bavastro_discovery.inventory_authoritative = bavastro_discovery.status == "success"
-    castells_discovery.inventory_authoritative = castells_discovery.status == "success"
+    bavastro_matches.inventory_authoritative = bavastro_source_authoritative
+    castells_matches.inventory_authoritative = castells_source_authoritative
+    # Discovery authority is evidence about the active-group list; the matches
+    # step carries the single effective source decision used downstream.
 
     bavastro_match_rows = reconcile_active_match_state(
         state,
         "bavastro",
         bavastro_active_ids,
-        bavastro_new_match_rows,
+        bavastro_observed_match_rows,
         refreshed_ids=bavastro_scan_ids,
-        inventory_authoritative=bavastro_discovery.status == "success",
+        inventory_authoritative=bavastro_matches.inventory_authoritative,
         refresh_succeeded=bavastro_matches.status in {"success", "partial"},
         refresh_complete=bavastro_matches.status == "success",
+        completed_group_ids=complete_group_ids(bavastro_matches),
     )
     castells_rows = reconcile_active_match_state(
         state,
         "castells",
         castells_active_ids,
-        castells_new_match_rows,
+        castells_observed_match_rows,
         refreshed_ids=castells_scan_ids,
-        inventory_authoritative=castells_discovery.status == "success",
+        inventory_authoritative=castells_matches.inventory_authoritative,
         refresh_succeeded=castells_matches.status in {"success", "partial"},
         refresh_complete=castells_matches.status == "success",
+        completed_group_ids=complete_group_ids(castells_matches),
     )
+
+    authoritative_groups = {
+        "bavastro": complete_group_ids(bavastro_matches),
+        "castells": complete_group_ids(castells_matches),
+    }
+    for source, source_authoritative in (
+        ("bavastro", bavastro_source_authoritative),
+        ("castells", castells_source_authoritative),
+    ):
+        if source_authoritative:
+            authoritative_groups[source].update(prior_group_ids.get(source, set()))
+            authoritative_groups[source].update(known_group_ids_for_source(state, source))
+    for source_entry in extra_source_rows:
+        if not isinstance(source_entry, dict):
+            continue
+        source_id = str(source_entry.get("source_id") or "").strip().lower()
+        if source_id and source_entry.get("inventory_authoritative") is True:
+            authoritative_groups[source_id] = known_group_ids_for_source(state, source_id)
+            authoritative_groups[source_id].update(
+                str(item.get("groupId") or "").strip()
+                for item in source_entry.get("receipts", [])
+                if isinstance(item, dict)
+                and str(item.get("status") or "").strip().lower() == "complete"
+                and str(item.get("groupId") or "").strip()
+            )
+    lifecycle_result = update_opportunity_lifecycle(
+        state,
+        run_id,
+        now_iso(),
+        {
+            "bavastro": bavastro_observed_match_rows,
+            "castells": castells_observed_match_rows,
+            **{
+                source_id: [
+                    row
+                    for row in extra_observed_rows
+                    if str(row.get("source_id") or "").strip().lower() == source_id
+                ]
+                for source_id in {
+                    str(row.get("source_id") or "").strip().lower()
+                    for row in extra_observed_rows
+                    if str(row.get("source_id") or "").strip()
+                }
+            },
+        },
+        authoritative_groups,
+        prior_source_rows=prior_lifecycle_rows,
+    )
+    new_opportunity_keys = lifecycle_result["new"]
+    removed_opportunity_keys = lifecycle_result["removed"]
+
+    def is_new_row(source: str, row: dict[str, str]) -> bool:
+        return opportunity_lifecycle_key(source, row) in new_opportunity_keys
+
+    new_bavastro_match_rows = [
+        row for row in bavastro_observed_match_rows if is_new_row("bavastro", row)
+    ]
+    new_castells_match_rows = [
+        row for row in castells_observed_match_rows if is_new_row("castells", row)
+    ]
+    new_extra_rows = [
+        row
+        for row in extra_observed_rows
+        if is_new_row(str(row.get("source_id") or "").strip().lower(), row)
+    ]
+    extra_coverage: list[dict[str, object]] = []
+    for source_entry in extra_source_rows:
+        if not isinstance(source_entry, dict):
+            continue
+        source_id = str(source_entry.get("source_id") or "").strip().lower()
+        source_rows = [
+            row
+            for row in extra_observed_rows
+            if str(row.get("source_id") or "").strip().lower() == source_id
+        ]
+        source_new_rows = [
+            row
+            for row in new_extra_rows
+            if str(row.get("source_id") or "").strip().lower() == source_id
+        ]
+        receipts = [item for item in source_entry.get("receipts", []) if isinstance(item, dict)]
+        extra_coverage.append(
+            {
+                "sourceId": source_id,
+                "discoveryComplete": source_entry.get("discovery_complete") is True,
+                "groupsDiscovered": int(source_entry.get("groups") or 0),
+                "groupsQueried": int(source_entry.get("groups") or 0),
+                "completeGroups": [
+                    str(item.get("groupId") or "")
+                    for item in receipts
+                    if str(item.get("status") or "").lower() == "complete"
+                ],
+                "partialOrFailedGroups": [
+                    str(item.get("groupId") or "")
+                    for item in receipts
+                    if str(item.get("status") or "").lower() != "complete"
+                ],
+                "lotCount": int(source_entry.get("lots") or 0),
+                "matchesDetected": len(source_rows),
+                "matchesNew": len(source_new_rows),
+                "matchesRemoved": sum(
+                    key.startswith(f"{source_id}\x1f") for key in removed_opportunity_keys
+                ),
+                "status": (
+                    "complete"
+                    if source_entry.get("inventory_authoritative") is True
+                    else str(source_entry.get("status") or "partial")
+                ),
+                "inventoryAuthoritative": source_entry.get("inventory_authoritative") is True,
+                "groupReceipts": receipts,
+            }
+        )
+    coverage_sources = [
+        coverage_summary(
+            run_dir,
+            bavastro_matches,
+            bavastro_active_ids,
+            bavastro_scan_ids if bavastro_matches.status != "skipped" else [],
+            bavastro_observed_match_rows,
+            new_bavastro_match_rows,
+            removed_opportunity_keys,
+            "bavastro",
+            discovery_complete=bavastro_discovery.inventory_authoritative,
+        ),
+        coverage_summary(
+            run_dir,
+            castells_matches,
+            castells_active_ids,
+            castells_scan_ids if castells_matches.status != "skipped" else [],
+            castells_observed_match_rows,
+            new_castells_match_rows,
+            removed_opportunity_keys,
+            "castells",
+            discovery_complete=castells_discovery.inventory_authoritative,
+        ),
+        *extra_coverage,
+    ]
+    coverage_payload = {
+        "sources": coverage_sources,
+        "groupsDiscovered": sum(int(item.get("groupsDiscovered") or 0) for item in coverage_sources),
+        "groupsQueried": sum(int(item.get("groupsQueried") or 0) for item in coverage_sources),
+        "lotsObserved": sum(int(item.get("lotCount") or 0) for item in coverage_sources),
+        "matchesDetected": len(all_match_views) if "all_match_views" in locals() else 0,
+        "matchesNew": len(new_opportunity_keys),
+        "matchesRemoved": len(removed_opportunity_keys),
+        "inventoryAuthoritative": bool(coverage_sources)
+        and all(item.get("inventoryAuthoritative") is True for item in coverage_sources),
+    }
 
     if bavastro_match_rows:
         write_csv_dict_rows(bavastro_matches_csv, bavastro_match_rows)
@@ -4469,6 +5085,7 @@ def run_scan(args: argparse.Namespace) -> int:
     )
 
     all_match_views = build_match_views(bavastro_match_rows, castells_rows, extra_rows)
+    coverage_payload["matchesDetected"] = len(all_match_views)
     match_views, dismissed_match_views = filter_dismissed_match_views(
         all_match_views,
         dismissal_state.keys,
@@ -4493,20 +5110,23 @@ def run_scan(args: argparse.Namespace) -> int:
         "bavastro_active_auctions": len(bavastro_active_ids),
         "bavastro_new_auctions": len(new_bavastro_auction_ids),
         "bavastro_matches": visible_counts_by_source.get("bavastro", 0),
-        "bavastro_new_matches": len(bavastro_new_match_rows),
+        "bavastro_new_matches": len(new_bavastro_match_rows),
         "bavastro_match_auctions": unique_count(bavastro_match_rows, "auction_id"),
-        "bavastro_new_match_auctions": unique_count(bavastro_new_match_rows, "auction_id"),
+        "bavastro_new_match_auctions": unique_count(new_bavastro_match_rows, "auction_id"),
         "castells_active_remates": len(castells_active_ids),
         "castells_new_remates": len(new_castells_remate_ids),
         "castells_matches": visible_counts_by_source.get("castells", 0),
-        "castells_new_matches": len(castells_new_match_rows),
+        "castells_new_matches": len(new_castells_match_rows),
         "castells_match_remates": unique_count(castells_rows, "remate_id"),
-        "castells_new_match_remates": unique_count(castells_new_match_rows, "remate_id"),
+        "castells_new_match_remates": unique_count(new_castells_match_rows, "remate_id"),
         "extra_matches": sum(extra_counts_by_source.values()),
         "extra_matches_by_source": extra_counts_by_source,
         "total_matches": len(match_views),
         "detected_matches": len(all_match_views),
         "dismissed_matches": len(dismissed_match_views),
+        "visible_matches": len(match_views),
+        "new_matches": len(new_opportunity_keys),
+        "removed_matches": len(removed_opportunity_keys),
     }
     raw_extra_counts_by_source = {
         source_id: match_count
@@ -4522,6 +5142,9 @@ def run_scan(args: argparse.Namespace) -> int:
         "total_matches": len(all_match_views),
         "detected_matches": len(all_match_views),
         "dismissed_matches": 0,
+        "visible_matches": len(all_match_views),
+        "new_matches": len(new_opportunity_keys),
+        "removed_matches": len(removed_opportunity_keys),
     }
 
     finished_at = now_iso()
@@ -4616,6 +5239,10 @@ def run_scan(args: argparse.Namespace) -> int:
         "repo_root": str(REPO_ROOT),
         "steps": [asdict(step) for step in steps],
         "counts": counts,
+        "coverage": coverage_payload,
+        "opportunityLifecycle": state.opportunity_lifecycle,
+        "newOpportunityLifecycle": lifecycle_rows_for_run(state, new_opportunity_keys),
+        "removedOpportunityLifecycle": lifecycle_rows_for_run(state, removed_opportunity_keys),
         "extra_sources": extra_status_payload,
         "dismissals": {
             "source": dismissal_state.source,

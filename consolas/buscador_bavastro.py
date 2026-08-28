@@ -101,7 +101,11 @@ def fetch_current_published_ids(timeout: int, list_limit: int) -> list[int]:
         resp.raise_for_status()
 
         data = resp.json()
+        if not isinstance(data, dict) or "results" not in data:
+            raise ValueError("respuesta de listado sin campo results")
         results = data.get("results", [])
+        if not isinstance(results, list):
+            raise ValueError("respuesta de listado con results inválido")
         if not results:
             break
 

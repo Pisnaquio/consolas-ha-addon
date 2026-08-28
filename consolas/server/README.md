@@ -20,7 +20,7 @@ persistencia editable del navegador al servidor.
   `X-Consolas-Auction-Watch: 1`, el SHA-256 canónico en
   `X-Auction-Watch-Snapshot-Hash` y JSON válido con `runId` + `generatedAt`.
 - `GET/POST /api/auction-watch/run-now`: consulta o encola una corrida manual.
-- `POST /api/auction-watch/run-now/claim`: permite que el scheduler de la Mac reclame la solicitud pendiente.
+- `POST /api/auction-watch/run-now/claim`: permite que el worker/scheduler interno del add-on de Home Assistant reclame la solicitud pendiente.
 - `POST /api/auction-watch/run-now/complete`: registra el resultado final para mostrarlo en la web.
 - `GET /api/auction-watch/dismissals`: lista las oportunidades descartadas.
 - `POST /api/auction-watch/dismissals`: descarta un lote por `sourceId` + `lotId`.

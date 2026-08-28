@@ -7,5 +7,10 @@ agents/auction-watch/notification.env
 agents/auction-watch/state.json
 agents/auction-watch/schedule_state.json
 agents/auction-watch/schedule.lock
+agents/auction-watch/delivery-outbox.json
+agents/auction-watch/dismissals-cache.json
+agents/auction-watch/run.lock
+agents/auction-watch/watchlist.json
+agents/auction-watch/export/
 agents/auction-watch/logs/
 agents/auction-watch/runs/

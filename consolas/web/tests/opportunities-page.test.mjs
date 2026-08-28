@@ -325,6 +325,64 @@ test("marks a completed manual run as pending while snapshot identity does not m
   assert.match(page.html, /data-auction-run-now disabled/);
 });
 
+test("treats a published manual run replaced by a newer automatic snapshot as terminal", async () => {
+  const page = await renderOpportunitiesPage({
+    syncStates: [{
+      status: "ready",
+      source: "export",
+      origin: "server",
+      generatedAt: new Date().toISOString(),
+      runId: "auto-new",
+      snapshotHash: "hash-auto"
+    }],
+    runRequests: [{
+      id: "request-superseded",
+      status: "completed",
+      finishedAt: new Date().toISOString(),
+      runId: "run-manual",
+      snapshotHash: "hash-manual",
+      snapshotStatus: "published",
+      emailStatus: "sent",
+      publicationState: "superseded",
+      supersededByRunId: "auto-new"
+    }]
+  });
+
+  assert.match(page.html, /luego fue reemplazada por una actualización automática/);
+  assert.match(page.html, /La página ya muestra esa versión/);
+  assert.match(page.html, /Buscar otra vez/);
+  assert.doesNotMatch(page.html, /data-auction-run-now disabled/);
+  assert.equal(await page.runNextPoll(), false);
+});
+
+test("unlocks a missing publication after the bounded confirmation window", async () => {
+  const page = await renderOpportunitiesPage({
+    syncStates: [{
+      status: "ready",
+      source: "export",
+      origin: "server",
+      generatedAt: new Date().toISOString(),
+      runId: "auto-new",
+      snapshotHash: "hash-auto"
+    }],
+    runRequests: [{
+      id: "request-missing",
+      status: "completed",
+      finishedAt: new Date(Date.now() - 121 * 1000).toISOString(),
+      runId: "run-missing",
+      snapshotHash: "hash-missing",
+      snapshotStatus: "published",
+      emailStatus: "sent",
+      publicationState: "missing"
+    }]
+  });
+
+  assert.match(page.html, /no pudo confirmar la publicación de esta corrida dentro de 120 segundos/);
+  assert.match(page.html, /Reintentar búsqueda/);
+  assert.doesNotMatch(page.html, /data-auction-run-now disabled/);
+  assert.equal(await page.runNextPoll(), false);
+});
+
 test("reports a terminal snapshot publish failure without claiming the page updated", async () => {
   const page = await renderOpportunitiesPage({
     runRequests: [{

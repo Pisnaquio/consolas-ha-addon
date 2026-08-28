@@ -25,6 +25,6 @@ test("all Auction Watch consumers use the same cache-busted repository asset", a
 
   for (const file of files) {
     const source = await readFile(new URL(`../${file}`, import.meta.url), "utf8");
-    assert.match(source, /auction-watch-repository\.js\?v=20260824a/);
+    assert.match(source, /auction-watch-repository\.js\?v=20260827a/);
   }
 });

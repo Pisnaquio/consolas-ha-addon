@@ -22,6 +22,18 @@ instancia del agente fuera de Home Assistant.
 - Mantener incrementalidad, watchlist, historial y outbox en `/data`.
 - Publicar el snapshot antes de habilitar el mail.
 - Continuar ante una falla parcial de fuente y declararla en el resultado.
+- En cada corrida consultar todos los grupos activos descubiertos. Los sets
+  `processed_*` y la watchlist son sólo telemetría/contexto y no habilitan
+  scans incrementales que omitan grupos.
+- Guardar recibos por grupo y declarar `inventoryAuthoritative` sólo con
+  discovery completa, cobertura completa y recibos `complete`; un refresh
+  parcial conserva el cache previo y no elimina oportunidades omitidas.
+- La eliminación y el lifecycle son por grupo: un recibo completo puede
+  retirar omitidos de ese grupo, pero nunca de grupos parciales, fallidos u
+  omitidos. Una discovery vacía sin evidencia estructural válida es fallo,
+  no inventario vacío.
+- Mantener lifecycle de oportunidades con primera/última aparición y contar
+  nuevas, detectadas, visibles, descartadas y removidas sin alterar el score.
 
 No modificar catálogo, SQLite de colección ni estado editable de usuario. Las
 oportunidades automáticas son read-only y los descartes/seguimientos viven en

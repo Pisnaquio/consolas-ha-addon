@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 640">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ddd6fe"/>
+      <stop offset="100%" stop-color="#c4b5fd"/>
+    </linearGradient>
+  </defs>
+  <rect width="480" height="640" fill="url(#bg)"/>
+  <rect x="28" y="28" width="424" height="584" rx="28" fill="#ffffffd8" stroke="#d9ceb9"/>
+  <rect x="64" y="72" width="352" height="200" rx="16" fill="#eef2f7" stroke="#d4dde8"/>
+  <text x="240" y="136" text-anchor="middle" font-size="30" font-weight="700" fill="#334155" font-family="Arial">NINTENDO SWITCH</text>
+  <text x="240" y="178" text-anchor="middle" font-size="24" fill="#475569" font-family="Arial">COLLECTION</text>
+  <text x="240" y="216" text-anchor="middle" font-size="20" fill="#64748b" font-family="Arial">Xenoblade</text>
+  <line x1="70" y1="334" x2="410" y2="334" stroke="#c6b79f" stroke-width="2"/>
+  <text x="240" y="404" text-anchor="middle" font-size="34" font-weight="700" fill="#0f172a" font-family="Arial">Xenoblade Chronicles 2</text>
+  
+</svg>
