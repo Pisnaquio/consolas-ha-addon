@@ -1,7 +1,7 @@
 (() => {
   const fallbackImage = "./assets/photos/console-placeholder.svg";
   const generationRanks = Array.from({ length: 8 }, (_, index) => index + 2);
-  const state = { consoles: [], showUnowned: false, selectedDebugConsoleId: "" };
+  const state = { consoles: [], showUnowned: false, selectedDebugConsoleId: "", baseGames: {}, baseAccessories: {}, importManifest: null, importPrepared: null };
 
   const escapeHtml = (value = "") => String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;");
   const formatDateTime = (value) => {
@@ -195,6 +195,111 @@
     document.getElementById("copyGlobalDebugBtn").addEventListener("click", async () => {
       await copyText(JSON.stringify(buildExportPayload(), null, 2));
     });
+
+    bindAssistedImport();
+  }
+
+  function renderImportResult(target, title, lines, tone = "") {
+    target.hidden = false;
+    target.className = `import-result ${tone}`;
+    target.innerHTML = `<h3>${escapeHtml(title)}</h3>${lines.map((line) => `<p>${line}</p>`).join("")}`;
+  }
+
+  function importContext(manifest) {
+    const files = Array.from(document.getElementById("importPhotos")?.files || []);
+    return {
+      detailEdits: getDataStoreState().user?.detailEditsById || {},
+      baseGames: state.baseGames[manifest.consoleId] || [],
+      baseAccessories: state.baseAccessories[manifest.consoleId] || [],
+      filesByName: Object.fromEntries(files.map((file) => [file.name, file]))
+    };
+  }
+
+  function bindAssistedImport() {
+    const fileInput = document.getElementById("importManifestFile");
+    const textInput = document.getElementById("importManifestText");
+    const errorOutput = document.getElementById("importManifestError");
+    const preview = document.getElementById("importPreview");
+    const finalOutput = document.getElementById("importFinalResult");
+    const confirmButton = document.getElementById("confirmImportBtn");
+    const previewButton = document.getElementById("previewImportBtn");
+    const readManifest = async () => {
+      if (fileInput.files?.[0]) textInput.value = await fileInput.files[0].text();
+      try { return JSON.parse(textInput.value || ""); } catch { return null; }
+    };
+    const validate = async () => {
+      const manifest = await readManifest();
+      const result = window.CollectionImport.validateManifest(manifest);
+      errorOutput.innerHTML = result.errors.map((error) => `<span>${escapeHtml(error.path)}: ${escapeHtml(error.message)}</span>`).join("<br>");
+      previewButton.disabled = !result.valid;
+      state.importManifest = result.valid ? manifest : null;
+      state.importPrepared = null;
+      confirmButton.hidden = true;
+      preview.hidden = true;
+      return result;
+    };
+    fileInput.addEventListener("change", validate);
+    document.getElementById("validateImportBtn").addEventListener("click", validate);
+    previewButton.addEventListener("click", async () => {
+      const manifest = state.importManifest || (await readManifest());
+      const prepared = window.CollectionImport.prepareImport(manifest, importContext(manifest));
+      state.importPrepared = prepared;
+      const conflictLine = prepared.conflicts.length ? `<strong>${prepared.conflicts.length} conflictos:</strong> ${prepared.conflicts.map((item) => escapeHtml(item.path)).join(", ")}` : "No hay conflictos con estado persistido.";
+      const duplicateLine = prepared.alreadyImported ? "Este lote ya fue importado; no se crearán duplicados ni se volverán a subir fotos." : "Lote nuevo: las fotos se subirán de a una después de confirmar.";
+      renderImportResult(preview, "Vista previa de la carga", [`Consola: <strong>${escapeHtml(manifest.consoleId)}</strong>`, `Cambios: <strong>${prepared.changes.length}</strong> (${prepared.changes.filter((item) => item.type === "create").length} por crear, ${prepared.changes.filter((item) => item.type === "update").length} por actualizar).`, conflictLine, `Advertencias: ${prepared.warnings.length ? prepared.warnings.map(escapeHtml).join("; ") : "ninguna"}`, duplicateLine]);
+      confirmButton.hidden = prepared.alreadyImported === true;
+    });
+    document.getElementById("cancelImportBtn").addEventListener("click", () => {
+      state.importManifest = null; state.importPrepared = null; textInput.value = ""; fileInput.value = ""; document.getElementById("importPhotos").value = ""; errorOutput.textContent = ""; preview.hidden = true; confirmButton.hidden = true; finalOutput.hidden = true;
+    });
+    document.getElementById("downloadImportBackupBtn").addEventListener("click", async () => {
+      const backup = await (window.DataStore?.exportStateBackup?.() || buildExportPayload());
+      downloadTextFile(`consolas-import-backup-${new Date().toISOString().replaceAll(":", "-")}.json`, JSON.stringify(backup, null, 2));
+    });
+    confirmButton.addEventListener("click", async () => {
+      const prepared = state.importPrepared;
+      if (!prepared) return;
+      let confirmedPrepared = prepared;
+      if (prepared.conflicts.length) {
+        if (!window.confirm("Hay conflictos. ¿Confirmás sobrescribir solamente los campos mostrados?")) return;
+        confirmedPrepared = window.CollectionImport.prepareImport(prepared.manifest, { ...importContext(prepared.manifest), overwrite: true });
+      }
+      confirmButton.disabled = true;
+      const uploaded = [];
+      try {
+        for (const photo of confirmedPrepared.media) {
+          const file = importContext(prepared.manifest).filesByName[photo.fileName];
+          if (!file) continue;
+          const result = await window.MediaUpload.uploadImageFile(file);
+          uploaded.push({ ...photo, url: result.url });
+        }
+        const next = window.CollectionImport.applyPreparedState(confirmedPrepared, getDataStoreState());
+        const bucket = next.user.detailEditsById[prepared.consoleId];
+        const addPhoto = (target, photo, entityType) => {
+          if (!target || !photo?.url) return;
+          if (entityType === "game") {
+            target.coverImage = photo.url; target.coverUrl = photo.url; target.imageSource = "manual-upload"; target.imageStatus = "manual";
+          } else if (entityType === "accessory") {
+            target.image = photo.url; target.imageSource = "manual-upload"; target.imageStatus = "manual";
+          } else {
+            target.fotosPropias = [...(target.fotosPropias || []), photo.url];
+            target.fotosPropiasMeta = [...(target.fotosPropiasMeta || []), { url: photo.url, role: photo.role || "principal", caption: photo.caption || "" }];
+          }
+        };
+        uploaded.forEach((photo) => {
+          if (photo.entityType === "console") addPhoto(bucket, photo, "console");
+          const targetId = confirmedPrepared.changes.find((item) => item.id === photo.entityId || item.clientRef === photo.entityId || item.title === photo.entityId)?.id;
+          if (photo.entityType === "game" && targetId) addPhoto(bucket.manualGamesById[targetId] || bucket.gameEditsById[targetId], photo, "game");
+          if (photo.entityType === "accessory" && targetId) addPhoto(bucket.manualAccessoriesById[targetId] || bucket.accessoryEditsById[targetId], photo, "accessory");
+        });
+        await window.DataStore.persistAndWait(next);
+        renderImportResult(finalOutput, "Importación confirmada", [`Creadas: <strong>${confirmedPrepared.changes.filter((item) => item.type === "create").length}</strong>`, `Actualizadas: <strong>${confirmedPrepared.changes.filter((item) => item.type === "update").length}</strong>`, `Conservadas por conflicto: <strong>${confirmedPrepared.conflicts.filter((item) => item.action === "preserve").length}</strong>`, `Fotos persistidas: <strong>${uploaded.length}</strong>`, `Rechazadas o faltantes: <strong>${confirmedPrepared.media.length - uploaded.length}</strong>`, `<button type="button" class="button" id="copyImportResultBtn">Copiar resumen JSON</button>`], "success");
+        document.getElementById("copyImportResultBtn")?.addEventListener("click", () => copyText(JSON.stringify({ importId: confirmedPrepared.manifest.importId, created: confirmedPrepared.changes.filter((item) => item.type === "create"), updated: confirmedPrepared.changes.filter((item) => item.type === "update"), uploadedPhotos: uploaded.length, warnings: confirmedPrepared.warnings }, null, 2)));
+        renderPersistencePanel();
+      } catch (error) {
+        renderImportResult(finalOutput, "Importación no confirmada", [`No se escribió el estado: ${escapeHtml(error.message)}`, `Media subida antes del error: <strong>${uploaded.length}</strong>. Quedó huérfana y debe revisarse en el backend antes de repetir.`], "error");
+      } finally { confirmButton.disabled = false; }
+    });
   }
 
   function consoleIdentity(name = "") {
@@ -351,15 +456,21 @@
   async function init() {
     try {
       await Promise.resolve(window.DataStore?.ready);
-      const [baseResponse, personalResponse, guideResponse] = await Promise.all([
+      const [baseResponse, personalResponse, guideResponse, gamesResponse, accessoriesResponse] = await Promise.all([
         fetch("./data/consoles-base.json"),
         fetch("./data/consoles.json"),
-        fetch("./data/collection-guide.json").catch(() => null)
+        fetch("./data/collection-guide.json").catch(() => null),
+        fetch("./data/console-games.json"),
+        fetch("./data/console-accessories.json")
       ]);
       if (!baseResponse.ok) throw new Error("No se pudo cargar la base general de consolas.");
       const basePayload = await baseResponse.json();
       const personalPayload = personalResponse.ok ? await personalResponse.json() : { consolas: [] };
       const guidePayload = guideResponse?.ok ? await guideResponse.json() : { guides: {} };
+      const gamesPayload = gamesResponse.ok ? await gamesResponse.json() : { byConsole: {} };
+      const accessoriesPayload = accessoriesResponse.ok ? await accessoriesResponse.json() : { byConsole: {} };
+      state.baseGames = Object.fromEntries(Object.entries(gamesPayload.byConsole || {}).map(([id, value]) => [id, value.juegosCatalogo || value.games || value || []]));
+      state.baseAccessories = Object.fromEntries(Object.entries(accessoriesPayload.byConsole || {}).map(([id, value]) => [id, value.accessoriesCatalog || value.accesoriosItems || value || []]));
       state.consoles = buildControlConsoles(basePayload.consolas || [], personalPayload.consolas || [], guidePayload.guides || {});
       populateConsoleInspectorSelect();
       bindPersistenceEvents();

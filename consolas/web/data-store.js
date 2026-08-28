@@ -338,6 +338,22 @@
     return memoryState;
   }
 
+  async function persistAndWait(nextState) {
+    const normalized = normalizeState(nextState);
+    normalized.meta.updatedAt = new Date().toISOString();
+    normalized.meta.storageBackend = remoteEnabled ? "server" : dbRef ? "indexeddb" : normalized.meta.storageBackend || "local-fallback";
+    memoryState = normalized;
+    writeLocalShadow(memoryState);
+    await scheduleIndexedDbWrite(memoryState);
+    if (remoteEnabled) {
+      memoryState = await writeRemoteState(memoryState);
+      memoryState.meta.storageBackend = "server";
+      writeLocalShadow(memoryState);
+      if (dbRef) await writeIndexedDbState(dbRef, memoryState);
+    }
+    return memoryState;
+  }
+
   function readState() {
     return memoryState;
   }
@@ -357,6 +373,7 @@
     setState(nextState) {
       return persist(nextState);
     },
+    persistAndWait,
     async exportStateBackup() {
       if (remoteEnabled) {
         try {

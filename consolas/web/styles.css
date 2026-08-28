@@ -2129,3 +2129,24 @@ h2 {
     flex-wrap: wrap;
   }
 }
+.imported-console-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
+  margin-top: 0.85rem;
+}
+.imported-console-fields > div,
+.accessory-imported-meta {
+  border: 1px solid rgba(154, 193, 229, 0.2);
+  border-radius: 12px;
+  padding: 0.55rem 0.65rem;
+  background: rgba(7, 25, 45, 0.48);
+}
+.imported-console-fields small { display: block; color: #8fb8dc; font: 0.62rem/1.2 "IBM Plex Mono", monospace; text-transform: uppercase; }
+.imported-console-fields span { display: block; margin-top: 0.25rem; color: #e5f2ff; font-size: 0.82rem; line-height: 1.3; }
+.accessory-imported-meta { display: flex; flex-wrap: wrap; gap: 0.35rem 0.6rem; margin: 0.65rem 0; color: #b9d3e9; font: 0.68rem/1.35 "IBM Plex Mono", monospace; }
+.accessory-imported-meta span { max-width: 100%; }
+
+@media (max-width: 760px) {
+  .imported-console-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

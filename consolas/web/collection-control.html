@@ -94,10 +94,30 @@
         </div>
       </section>
 
+      <section class="assisted-import-panel" aria-labelledby="assistedImportTitle">
+        <header class="persistence-head">
+          <div>
+            <p class="eyebrow">Herramienta de carga</p>
+            <h2 id="assistedImportTitle">Carga asistida</h2>
+            <p class="persistence-copy">Validá un manifiesto curado, revisá coincidencias y conflictos, y confirmá una sola escritura. Cancelar no sube imágenes ni modifica el estado.</p>
+          </div>
+        </header>
+        <div class="import-grid">
+          <label class="import-field"><span>Manifiesto JSON</span><input id="importManifestFile" data-testid="assisted-import-manifest" type="file" accept="application/json,.json" /><textarea id="importManifestText" data-testid="assisted-import-manifest-text" rows="9" placeholder='{"schemaVersion":1,"importId":"lote-demo","consoleId":"ps4","games":[],"accessories":[],"photos":[]}'></textarea><small id="importManifestError" class="import-error" role="alert"></small></label>
+          <label class="import-field"><span>Fotografías</span><input id="importPhotos" data-testid="assisted-import-photos" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple /><small id="importPhotosHint">Se validan y suben una por una sólo después de confirmar.</small></label>
+        </div>
+        <div class="import-actions"><button id="validateImportBtn" data-testid="assisted-import-validate" type="button" class="button">Validar manifiesto</button><button id="previewImportBtn" data-testid="assisted-import-preview" type="button" class="button button-primary" disabled>Ver vista previa</button><button id="cancelImportBtn" data-testid="assisted-import-cancel" type="button" class="button">Cancelar</button><button id="downloadImportBackupBtn" type="button" class="button">Descargar backup actual</button></div>
+        <section id="importPreview" class="import-result" aria-live="polite" hidden></section>
+        <button id="confirmImportBtn" data-testid="assisted-import-confirm" type="button" class="button button-primary" hidden>Confirmar importación</button>
+        <section id="importFinalResult" class="import-result" aria-live="polite" hidden></section>
+      </section>
+
       <section id="generationLadder" class="generation-ladder" aria-live="polite"></section>
     </main>
     <script src="./data-store.js?v=20260710b" defer></script>
     <script src="./collection-repository.js?v=20260814a" defer></script>
+    <script src="./media-upload.js?v=20260828a" defer></script>
+    <script src="./collection-import.js?v=20260828a" defer></script>
     <script src="./collection-control.js?v=20260710a" defer></script>
   </body>
 </html>

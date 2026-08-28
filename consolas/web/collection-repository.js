@@ -138,7 +138,15 @@
       original:
         item.original === "original" || item.original === "third-party" || item.original === "mixto" ? item.original : "",
       estado: item.estado || "",
-      notas: item.notas || ""
+      notas: item.notas || "",
+      marcaModelo: item.marcaModelo || "",
+      edicion: item.edicion || "",
+      caja: item.caja || "",
+      dependencias: Array.isArray(item.dependencias) ? item.dependencias : [],
+      componentesIncluidos: Array.isArray(item.componentesIncluidos) ? item.componentesIncluidos : [],
+      componentesFaltantes: Array.isArray(item.componentesFaltantes) ? item.componentesFaltantes : [],
+      completitud: item.completitud || "unknown",
+      completeness: item.completeness || item.completitud || "unknown"
     };
   }
 
@@ -155,6 +163,14 @@
         item.original === "original" || item.original === "third-party" || item.original === "mixto" ? item.original : "",
       estado: item.estado || "",
       notas: item.notas || "",
+      marcaModelo: item.marcaModelo || "",
+      edicion: item.edicion || "",
+      caja: item.caja || "",
+      dependencias: Array.isArray(item.dependencias) ? item.dependencias : [],
+      componentesIncluidos: Array.isArray(item.componentesIncluidos) ? item.componentesIncluidos : [],
+      componentesFaltantes: Array.isArray(item.componentesFaltantes) ? item.componentesFaltantes : [],
+      completitud: item.completitud || "unknown",
+      completeness: item.completeness || item.completitud || "unknown",
       orden: Number(item.orden) || 0,
       sourceType: "manual"
     });
@@ -179,7 +195,14 @@
       variants: Array.isArray(item.variants) ? item.variants : [],
       editions: Array.isArray(item.editions) ? item.editions : [],
       priceGuide: item.priceGuide || {},
-      priceRange: item.priceRange || {}
+      priceRange: item.priceRange || {},
+      digitalOrigin: item.digitalOrigin || "unknown",
+      plataforma: item.plataforma || "",
+      discoCartucho: item.discoCartucho || "",
+      caja: item.caja || "",
+      manualInsertos: item.manualInsertos || "",
+      entitledPlatforms: Array.isArray(item.entitledPlatforms) ? item.entitledPlatforms : [],
+      classificationStatus: item.classificationStatus || "pending"
     });
   }
 
@@ -207,6 +230,13 @@
       editions: Array.isArray(item.editions) ? item.editions : [],
       priceGuide: item.priceGuide || {},
       priceRange: item.priceRange || {},
+      digitalOrigin: item.digitalOrigin || "unknown",
+      plataforma: item.plataforma || "",
+      discoCartucho: item.discoCartucho || "",
+      caja: item.caja || "",
+      manualInsertos: item.manualInsertos || "",
+      entitledPlatforms: Array.isArray(item.entitledPlatforms) ? item.entitledPlatforms : [],
+      classificationStatus: item.classificationStatus || "pending",
       orden: Number(item.orden) || 0,
       sourceType: "manual"
     });
@@ -437,7 +467,7 @@
 
   function isNonGameEntry(game = {}) {
     const text = normalizeText([game?.nombre, game?.franquicia, game?.genero, game?.notas].filter(Boolean).join(" "));
-    return /(^|[\s-])(demo|soundtrack|artbook|comic|preview disc|vr experience|family fun pack|bundle|season pass|vrv|illusionist|avatar|theme|app)([\s-]|$)/.test(text);
+    return /(^|[\s-])(soundtrack|artbook|comic|vr experience|family fun pack|bundle|season pass|vrv|illusionist|avatar|theme|app)([\s-]|$)/.test(text);
   }
 
   function gameIsOwned(game = {}) {

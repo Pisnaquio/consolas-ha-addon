@@ -175,8 +175,34 @@ function createDraftFromItem(item) {
     formaObtencion: item.formaObtencion || "",
     ubicacionMapa: item.ubicacionMapa || "",
     precioPagado: item.precioPagado ?? "",
-    accesoriosCatalogoNotas: item.accesoriosCatalogoNotas || ""
+    accesoriosCatalogoNotas: item.accesoriosCatalogoNotas || "",
+    modelo: item.modelo || "",
+    edicion: item.edicion || "",
+    capacidad: item.capacidad || "",
+    estadoFuncional: item.estadoFuncional || "",
+    estadoCosmetico: item.estadoCosmetico || "",
+    reparaciones: item.reparaciones || "",
+    adquisicion: item.adquisicion || "",
+    periodoCompra: item.periodoCompra || "",
+    caja: item.caja || "",
+    notas: item.notas || ""
   };
+}
+
+function renderImportedConsoleFields(item = {}) {
+  const fields = [
+    ["Modelo y edición", [item.modelo, item.edicion].filter(Boolean).join(" · ")],
+    ["Capacidad", item.capacidad],
+    ["Estado funcional", item.estadoFuncional || functioningLabel(item.funcionando)],
+    ["Estado cosmético", item.estadoCosmetico],
+    ["Reparaciones", item.reparaciones],
+    ["Adquisición", item.adquisicion],
+    ["Período de compra", item.periodoCompra],
+    ["Caja", item.caja],
+    ["Notas", item.notas]
+  ].filter(([, value]) => value !== undefined && value !== null && String(value).trim());
+  if (!fields.length) return "";
+  return `<div class="imported-console-fields" aria-label="Datos importados de la consola">${fields.map(([label, value]) => `<div><small>${escapeHtml(label)}</small><span>${escapeHtml(value)}</span></div>`).join("")}</div>`;
 }
 
 function markPendingSave() {
@@ -271,8 +297,8 @@ function renderEditableList(items, emptyText, removeClass) {
 function getConsoleGalleryImages(item = {}) {
   const seen = new Set();
   return [
-    ...(Array.isArray(item.fotos) ? item.fotos : []),
-    ...(Array.isArray(item.fotosPropias) ? item.fotosPropias : [])
+    ...(Array.isArray(item.fotosPropias) ? item.fotosPropias : []),
+    ...(Array.isArray(item.fotos) ? item.fotos : [])
   ].filter((src) => {
     const value = typeof src === "string" ? src.trim() : "";
     if (!value || seen.has(value)) return false;
@@ -283,6 +309,7 @@ function getConsoleGalleryImages(item = {}) {
 
 function renderPhotoGallery(item, galleryImages = getConsoleGalleryImages(item)) {
   const own = Array.isArray(item.fotosPropias) ? item.fotosPropias : [];
+  const ownMeta = Array.isArray(item.fotosPropiasMeta) ? item.fotosPropiasMeta : [];
   if (!own.length) return "<p class='muted'>Todavia no cargaste fotos propias.</p>";
   return `
     <div class="own-photo-grid">
@@ -298,6 +325,7 @@ function renderPhotoGallery(item, galleryImages = getConsoleGalleryImages(item))
             aria-label="Abrir foto propia ${idx + 1} de ${escapeHtml(item.nombre || "la consola")} en grande"
           >
             <img src="${escapeHtml(src)}" alt="Foto propia ${idx + 1} de ${escapeHtml(item.nombre || "la consola")}" loading="lazy" />
+            ${ownMeta[idx]?.role || ownMeta[idx]?.caption ? `<small>${escapeHtml([ownMeta[idx]?.role, ownMeta[idx]?.caption].filter(Boolean).join(" · "))}</small>` : ""}
             <span class="own-photo-open-label" aria-hidden="true">Ver en grande</span>
           </button>
           <button class="btn-link js-remove-photo" data-index="${idx}" type="button">Quitar</button>
@@ -1341,6 +1369,7 @@ function renderGbaGamesSection(item) {
   const physicalCount = normalizedMainGames.filter((game) => normalizeOwnershipType(game.ownershipType, game.loTengo) === "physical").length;
   const digitalCount = normalizedMainGames.filter((game) => normalizeOwnershipType(game.ownershipType, game.loTengo) === "digital").length;
   const bothCount = normalizedMainGames.filter((game) => normalizeOwnershipType(game.ownershipType, game.loTengo) === "both").length;
+  const digitalPendingCount = normalizedMainGames.filter((game) => ["digital", "both"].includes(normalizeOwnershipType(game.ownershipType, game.loTengo)) && (game.classificationStatus || "pending") === "pending").length;
   const extrasOwnedCount = normalizedExtras.filter((game) => gameIsOwned(game)).length;
 
   const franchises = [...new Set(normalizedGames.map((g) => g.franquicia).filter(Boolean))]
@@ -1375,6 +1404,7 @@ function renderGbaGamesSection(item) {
         const wantActive = game.loQuiero === true && !isStandby;
         const showKeepBadge = isOwned && keepInWishlist;
         const showOwnedOutBadge = isOwned && !keepInWishlist;
+        const entitledPlatforms = Array.isArray(game.entitledPlatforms) ? game.entitledPlatforms : [];
         const priorityValue = sanitizePriority(game.prioridad || "media");
         const priorityClass = `priority-${priorityValue}`;
         const ownedClass = isOwned ? "is-owned" : "";
@@ -1464,6 +1494,8 @@ function renderGbaGamesSection(item) {
                     ${showOwnedOutBadge ? '<span class="gba-badge keep-off">Solo registrado</span>' : ""}
                     ${sectionName === "registered" ? '<span class="gba-badge registered">Registrado</span>' : ""}
                     ${game.sourceType === "manual" ? '<span class="gba-badge manual">Manual</span>' : ""}
+                    ${entitledPlatforms.length ? `<span class="gba-badge">PSN: ${escapeHtml(entitledPlatforms.join(" + "))}</span>` : ""}
+                    ${game.classificationStatus === "pending" && ["digital", "both"].includes(ownershipType) ? '<span class="gba-badge standby">PSN pendiente</span>' : ""}
                   </div>
                 </div>
 
@@ -1767,6 +1799,10 @@ function renderGbaGamesSection(item) {
         <article class="games-stat-item">
           <small>Ambos</small>
           <strong>${bothCount}</strong>
+        </article>
+        <article class="games-stat-item">
+          <small>PSN pendientes</small>
+          <strong>${digitalPendingCount}</strong>
         </article>
         <article class="games-stat-item">
           <small>Extras tengo</small>
@@ -2156,6 +2192,16 @@ function renderAccessoriesPage(item) {
                           </div>
                           <span class="status-pill ${owned ? "ready" : "unknown"}">${owned ? "Tengo" : "No tengo"}</span>
                         </div>
+                        <div class="accessory-imported-meta">
+                          <span>Cantidad: ${escapeHtml(entry.cantidad)}</span>
+                          ${entry.marcaModelo ? `<span>Marca/modelo: ${escapeHtml(entry.marcaModelo)}</span>` : ""}
+                          <span>Funcionamiento: ${escapeHtml(getAccessoryFunctioningLabel(entry.funcionando))}</span>
+                          ${entry.estado ? `<span>Estado: ${escapeHtml(entry.estado)}</span>` : ""}
+                          ${entry.caja ? `<span>Caja: ${escapeHtml(entry.caja)}</span>` : ""}
+                          ${entry.completitud || entry.completeness ? `<span>Completitud: ${escapeHtml(entry.completitud || entry.completeness)}</span>` : ""}
+                          ${entry.componentesIncluidos?.length ? `<span>Incluidos: ${escapeHtml(entry.componentesIncluidos.join(", "))}</span>` : ""}
+                          ${entry.componentesFaltantes?.length ? `<span>Faltantes: ${escapeHtml(entry.componentesFaltantes.join(", "))}</span>` : ""}
+                        </div>
                         <div class="accessory-card-controls">
                           <label class="keep-toggle">
                             <input class="js-accessory-owned" data-index="${entry.__index}" type="checkbox" ${owned ? "checked" : ""} />
@@ -2253,8 +2299,8 @@ function isRenderableConsoleImage(value = "") {
 
 function getConsoleMainImage(item = {}) {
   const candidates = [
-    ...(Array.isArray(item.fotos) ? item.fotos : []),
-    ...(Array.isArray(item.fotosPropias) ? item.fotosPropias : [])
+    ...(Array.isArray(item.fotosPropias) ? item.fotosPropias : []),
+    ...(Array.isArray(item.fotos) ? item.fotos : [])
   ];
   return candidates.find(isRenderableConsoleImage) || fallbackImage;
 }
@@ -2351,6 +2397,7 @@ function renderDetail(item) {
           <span class="info-pill">Mapa: ${escapeHtml(draft.ubicacionMapa || "Sin dato")}</span>
           ${item.tengo ? `<span class="info-pill">Pagado: ${formatPrice(draft.precioPagado, item.monedaPago)}</span>` : ""}
         </div>
+        ${renderImportedConsoleFields(draft)}
         ${
           item.tengo
             ? `
@@ -2645,17 +2692,12 @@ function bindGbaGameEvents() {
       const idx = Number(input.dataset.index);
       const file = input.files?.[0];
       if (!file) return;
-      const encoded = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
+      const uploaded = await window.MediaUpload.uploadImageFile(file);
       const next = [...(appState.item.juegosCatalogo || [])];
       next[idx] = {
         ...next[idx],
-        coverImage: encoded,
-        coverUrl: encoded,
+        coverImage: uploaded.url,
+        coverUrl: uploaded.url,
         imageSource: "manual-upload",
         imageStatus: "manual",
         sourceType: next[idx]?.sourceType || "manual"
@@ -2797,12 +2839,7 @@ function bindGbaGameEvents() {
         runManualAutodetect();
         return;
       }
-      const encoded = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
+      const encoded = await window.MediaUpload.fileToDataUrl(file);
       if (manualNameInput && !manualNameInput.value.trim()) {
         const filename = file.name.replace(/\.[^/.]+$/, "").replace(/[_-]+/g, " ").trim();
         if (filename) manualNameInput.value = filename;
@@ -2849,12 +2886,7 @@ function bindGbaGameEvents() {
 
       let manualCover = fallbackGameImage;
       if (coverInput?.files?.[0]) {
-        manualCover = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result);
-          reader.onerror = reject;
-          reader.readAsDataURL(coverInput.files[0]);
-        });
+        manualCover = (await window.MediaUpload.uploadImageFile(coverInput.files[0])).url;
       } else if (manualCoverPreview?.src && manualCoverPreview.src !== fallbackGameImage) {
         manualCover = manualCoverPreview.src;
       }
@@ -3084,12 +3116,7 @@ function bindAccessoryEvents() {
         refreshManualAccessoryPreview();
         return;
       }
-      const encoded = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
+      const encoded = await window.MediaUpload.fileToDataUrl(file);
       previewImage.src = encoded;
       previewImage.dataset.manual = "true";
       if (manualNameInput && !manualNameInput.value.trim()) {
@@ -3115,12 +3142,7 @@ function bindAccessoryEvents() {
 
       let image = "";
       if (manualImageInput?.files?.[0]) {
-        image = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result);
-          reader.onerror = reject;
-          reader.readAsDataURL(manualImageInput.files[0]);
-        });
+        image = (await window.MediaUpload.uploadImageFile(manualImageInput.files[0])).url;
       } else if (previewImage?.src && !previewImage.src.startsWith("data:image/svg+xml")) {
         image = previewImage.src;
       }
@@ -3356,20 +3378,11 @@ function bindDetailEvents() {
       const files = Array.from(event.target.files || []);
       if (!files.length) return;
 
-      const encoded = await Promise.all(
-        files.map(
-          (file) =>
-            new Promise((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onload = () => resolve(reader.result);
-              reader.onerror = reject;
-              reader.readAsDataURL(file);
-            })
-        )
-      );
+      const uploaded = [];
+      for (const file of files) uploaded.push((await window.MediaUpload.uploadImageFile(file)).url);
 
       const current = [...(appState.item.fotosPropias || [])];
-      saveDetailEdits({ fotosPropias: [...current, ...encoded] });
+      saveDetailEdits({ fotosPropias: [...current, ...uploaded] });
       appState.item = applyDetailEdits(appState.item);
       appState.saveMessage = "Guardado";
       render();
