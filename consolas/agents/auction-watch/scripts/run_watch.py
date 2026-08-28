@@ -1709,8 +1709,8 @@ def known_group_ids_for_source(state: AgentState, source: str) -> set[str]:
     else:
         groups = {
             str(row.get("group_id") or "").strip()
-            for rows in state.active_extra_matches_by_source.get(source, [])
-            for row in rows
+            for row in state.active_extra_matches_by_source.get(source, [])
+            if isinstance(row, dict)
             if str(row.get("group_id") or "").strip()
         }
     groups.update(

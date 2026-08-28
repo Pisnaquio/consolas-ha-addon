@@ -1,5 +1,5 @@
 name: "Consolas"
-version: "0.1.15"
+version: "0.1.16"
 slug: "consolas"
 description: "Coleccion de consolas y juegos como add-on de Home Assistant con SQLite server-side."
 arch:

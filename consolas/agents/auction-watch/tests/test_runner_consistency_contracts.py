@@ -657,6 +657,24 @@ class RunnerConsistencyContractTests(unittest.TestCase):
 
         self.assertEqual(restored.active_extra_matches_by_source, state.active_extra_matches_by_source)
 
+    def test_extra_source_group_ids_read_rows_without_iterating_dict_keys(self) -> None:
+        state = run_watch.AgentState(
+            active_extra_matches_by_source={
+                "remotes": [
+                    {
+                        "source_id": "remotes",
+                        "group_id": "7564",
+                        "lot_id": "7564:258",
+                    }
+                ]
+            }
+        )
+
+        self.assertEqual(
+            run_watch.known_group_ids_for_source(state, "remotes"),
+            {"7564"},
+        )
+
     def test_scan_status_contract_normalizes_legacy_values(self) -> None:
         self.assertEqual(run_watch.canonical_scan_status("success"), "success")
         self.assertEqual(run_watch.canonical_scan_status("partial_failure"), "partial")
