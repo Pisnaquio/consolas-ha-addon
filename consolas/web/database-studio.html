@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Base General — Consolas</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css?v=20260522a" />
+    <link rel="stylesheet" href="./studio-theme.css?v=20260522a" />
+  </head>
+  <body class="studio-variant">
+    <div class="bg-pattern" aria-hidden="true"></div>
+    <main class="container db-page">
+      <header class="hero">
+        <p class="eyebrow">Base general</p>
+        <h1>Mapa vivo de consolas</h1>
+        <p class="subtitle">
+          Referencia ordenada para sumar, revisar y conectar consolas con tu colección real.
+        </p>
+        <div class="card-actions">
+          <a class="btn-link" href="./index-studio.html">Ir a panel principal</a>
+        </div>
+      </header>
+
+      <section class="summary" id="dbSummary"></section>
+
+      <section class="controls">
+        <div class="search-wrap">
+          <label for="dbSearch">Buscar</label>
+          <input id="dbSearch" type="search" placeholder="Nombre, notas o revisiones..." />
+        </div>
+        <div class="filters">
+          <div>
+            <label for="dbBrandFilter">Marca</label>
+            <select id="dbBrandFilter">
+              <option value="">Todas</option>
+            </select>
+          </div>
+          <div>
+            <label for="dbGenerationFilter">Generación</label>
+            <select id="dbGenerationFilter">
+              <option value="">Todas</option>
+            </select>
+          </div>
+          <div>
+            <label for="dbTypeFilter">Tipo</label>
+            <select id="dbTypeFilter">
+              <option value="">Todos</option>
+              <option value="hogar">Hogar</option>
+              <option value="portatil">Portátil</option>
+            </select>
+          </div>
+          <div>
+            <label for="dbViewMode">Vista</label>
+            <select id="dbViewMode">
+              <option value="chronological">Cronológica completa</option>
+              <option value="grouped">Agrupada por generación</option>
+            </select>
+          </div>
+          <div>
+            <label for="dbMineFilter">Mi estado</label>
+            <select id="dbMineFilter">
+              <option value="">Todos</option>
+              <option value="owned">Tengo</option>
+              <option value="wanted">Quiero</option>
+              <option value="unknown">No registrada</option>
+            </select>
+          </div>
+        </div>
+        <div class="brand-nav" id="brandNav"></div>
+        <div class="card-actions db-collapse-actions" id="groupActions" hidden>
+          <button class="btn-link" id="expandAllBtn" type="button">Expandir todo</button>
+          <button class="btn-link" id="collapseAllBtn" type="button">Colapsar todo</button>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-title-row">
+          <div>
+            <p class="eyebrow">Catálogo base</p>
+            <h2>Listado curado</h2>
+          </div>
+          <span id="dbCount" class="count"></span>
+        </div>
+        <div id="dbResults" class="db-results"></div>
+      </section>
+    </main>
+
+    <template id="dbCardTemplate">
+      <article class="db-card">
+        <div class="db-card-media">
+          <img loading="lazy" decoding="async" />
+        </div>
+        <div class="db-card-main">
+          <h3></h3>
+          <p class="meta"></p>
+          <p class="notes"></p>
+          <p class="revisions"></p>
+          <div class="card-actions db-actions">
+            <button class="btn-link js-mark-owned" type="button">Marcar tengo</button>
+            <button class="btn-link js-mark-wanted" type="button">Marcar quiero</button>
+            <a class="btn-link js-open-personal" href="#">Ver en catálogo</a>
+          </div>
+        </div>
+        <div class="db-card-side">
+          <span class="owner-status"></span>
+          <span class="year"></span>
+          <span class="type"></span>
+          <span class="generation"></span>
+        </div>
+      </article>
+    </template>
+
+    <script src="./data-store.js?v=20260710b" defer></script>
+    <script src="./collection-repository.js?v=20260814a" defer></script>
+    <script src="./database.js?v=20260623a" defer></script>
+    <script src="./studio-bridge.js?v=20260522a" defer></script>
+  </body>
+</html>

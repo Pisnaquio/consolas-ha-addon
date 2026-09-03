@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 640">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#e5e7eb"/>
+      <stop offset="100%" stop-color="#cbd5e1"/>
+    </linearGradient>
+  </defs>
+  <rect width="480" height="640" fill="url(#bg)"/>
+  <rect x="28" y="28" width="424" height="584" rx="28" fill="#ffffffd8" stroke="#d9ceb9"/>
+  <rect x="64" y="72" width="352" height="200" rx="16" fill="#eef2f7" stroke="#d4dde8"/>
+  <text x="240" y="132" text-anchor="middle" font-size="30" font-weight="700" fill="#334155" font-family="Arial">PLAYSTATION 4</text>
+  <text x="240" y="172" text-anchor="middle" font-size="22" fill="#475569" font-family="Arial">COLLECTION</text>
+  <text x="240" y="208" text-anchor="middle" font-size="18" fill="#64748b" font-family="Arial">Gran Turismo</text>
+  <line x1="70" y1="334" x2="410" y2="334" stroke="#c6b79f" stroke-width="2"/>
+  <text x="240" y="404" text-anchor="middle" font-size="32" font-weight="700" fill="#0f172a" font-family="Arial">Gran Turismo Sport</text>
+  
+</svg>

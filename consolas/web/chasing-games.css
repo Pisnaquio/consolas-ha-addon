@@ -1,0 +1,21 @@
+.chasing-hero { display:flex; justify-content:space-between; gap:24px; align-items:end; }
+.chasing-count { min-width:132px; text-align:right; font-family:"IBM Plex Mono",monospace; color:var(--muted); }
+.chasing-count strong { display:block; color:var(--ink); font-size:2rem; }
+.chasing-add { margin-top:18px; display:grid; grid-template-columns:minmax(0,1fr) minmax(360px,1.2fr); gap:20px; align-items:end; }
+.chasing-add h2 { margin:.2rem 0; }
+#chasingForm { display:grid; grid-template-columns:1fr 150px auto; gap:10px; }
+#chasingForm input { min-width:0; }
+.chasing-list { display:grid; gap:16px; margin-top:18px; }
+.chase-card { padding:20px; }
+.chase-card.is-paused { opacity:.72; }
+.chase-card-head { display:flex; justify-content:space-between; gap:12px; }
+.chase-card-head h2 { margin:.15rem 0; }
+.chase-card-head p { margin:.35rem 0 0; }
+.chase-status { align-self:start; border:1px solid var(--line); border-radius:999px; padding:5px 9px; font:700 .72rem "IBM Plex Mono",monospace; }
+.chase-card-meta,.chase-result-meta { display:flex; flex-wrap:wrap; gap:8px 14px; color:var(--muted); font-size:.82rem; margin:14px 0; }
+.chase-error { color:var(--danger); }.chase-actions { margin:0 0 16px; }.chase-delete { color:var(--danger); }
+.chase-results { display:grid; gap:8px; }
+.chase-result { display:grid; grid-template-columns:54px minmax(0,1fr) auto; gap:12px; align-items:center; border:1px solid var(--line); border-radius:12px; padding:10px; background:rgba(255,255,255,.46); }
+.chase-result img { width:54px; height:70px; object-fit:contain; }.chase-result h3 { margin:2px 0; font-size:.96rem; }.chase-result-meta { margin:4px 0 0; }.chase-result-price { display:grid; justify-items:end; gap:6px; white-space:nowrap; }.chase-empty-results { margin:0; padding:16px; color:var(--muted); border:1px dashed var(--line); border-radius:12px; }.chasing-feedback { margin:14px 0 0; color:var(--muted); }
+.chasing-sandbox-notice { margin:14px 0 0; max-width:760px; padding:10px 13px; border:1px solid rgba(138, 191, 255, .45); border-radius:10px; color:#c8e3ff; background:rgba(56, 126, 190, .12); font-size:.94rem; }
+@media (max-width:720px) { .chasing-hero,.chasing-add { display:grid; }.chasing-count { text-align:left; }.chasing-add { grid-template-columns:1fr; } #chasingForm { grid-template-columns:1fr; }.chase-result { grid-template-columns:42px minmax(0,1fr); }.chase-result img { width:42px;height:56px; }.chase-result-price { grid-column:2; justify-items:start; } }

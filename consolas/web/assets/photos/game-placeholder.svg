@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 640">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f8edd6"/>
+      <stop offset="100%" stop-color="#e7eef9"/>
+    </linearGradient>
+  </defs>
+  <rect width="480" height="640" fill="url(#bg)"/>
+  <rect x="28" y="28" width="424" height="584" rx="26" fill="#fffdfa" stroke="#d9ceb9" stroke-width="2"/>
+  <rect x="68" y="76" width="344" height="210" rx="16" fill="#eef2f7" stroke="#d4dde8"/>
+  <text x="240" y="142" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" fill="#334155" font-weight="700">GAME COVER</text>
+  <text x="240" y="182" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" fill="#4b5d6f">PLACEHOLDER</text>
+  <line x1="76" y1="346" x2="404" y2="346" stroke="#c6b79f" stroke-width="2"/>
+  <text x="240" y="408" text-anchor="middle" font-family="Arial, sans-serif" font-size="30" fill="#1e2b36" font-weight="700">Sin portada</text>
+  <text x="240" y="452" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" fill="#607181">aun cargada</text>
+</svg>

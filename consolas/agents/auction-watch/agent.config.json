@@ -1,0 +1,88 @@
+{
+  "name": "auction-watch",
+  "version": "1.0.0",
+  "mode": "monitor",
+  "project_root": ".",
+  "runtime": {
+    "python": ".venv/bin/python",
+    "runner": "agents/auction-watch/scripts/run_watch.py",
+    "wrapper": "agents/auction-watch/scripts/run_watch.sh"
+  },
+  "search_profile": {
+    "shared_config": "auction_search_config.py",
+    "adapter_registry": "agents/auction-watch/sources/registry.py",
+    "extra_scan_script": "agents/auction-watch/scripts/scan_extra_sources.py",
+    "bavastro_daily_discovery_mode": "active",
+    "bavastro_historical_query": "electronica"
+  },
+  "sources": [
+    {
+      "id": "bavastro-discovery",
+      "script": "buscador_bavastro.py",
+      "output": "auctions_bavastro_matches.csv"
+    },
+    {
+      "id": "bavastro-matches",
+      "script": "buscador_consolas_bavastro.py",
+      "output": "consolas_bavastro_matches.csv"
+    },
+    {
+      "id": "castells-discovery",
+      "script": "buscador_consolas_castells.py",
+      "output": "consolas_castells_auctions.csv"
+    },
+    {
+      "id": "castells-matches",
+      "script": "buscador_consolas_castells.py",
+      "output": "consolas_castells_matches.csv"
+    },
+    {
+      "id": "registry-sources",
+      "sources": [
+        "remotes",
+        "todoremates",
+        "prado"
+      ],
+      "script": "agents/auction-watch/scripts/scan_extra_sources.py",
+      "output": "consolas_extra_matches.csv",
+      "status_output": "extra_sources_status.json"
+    }
+  ],
+  "outputs": {
+    "runs_dir": "AUCTION_WATCH_RUNTIME_ROOT/runs",
+    "latest_dir": "AUCTION_WATCH_RUNTIME_ROOT/runs/latest",
+    "summary": "summary.md",
+    "metadata": "run.json"
+  },
+  "notifications": {
+    "email": {
+      "default_mode": "matches_or_failure",
+      "default_method": "smtp",
+      "configuration": "Home Assistant add-on options"
+    }
+  },
+  "incremental": {
+    "enabled": true,
+    "state_file": "AUCTION_WATCH_RUNTIME_ROOT/state.json",
+    "watchlist_file": "AUCTION_WATCH_RUNTIME_ROOT/watchlist.json",
+    "bavastro_daily_policy": "refresh_all_active_auctions",
+    "castells_daily_policy": "refresh_all_active_remates"
+  },
+  "schedule": {
+    "supported": [
+      "daily",
+      "twice"
+    ],
+    "default_daily": "17:10",
+    "default_twice": [
+      "09:15",
+      "17:10"
+    ]
+  },
+  "rules": {
+    "edit_project_files": false,
+    "continue_on_partial_failure": true,
+    "require_repo_venv": true,
+    "keep_runs": 30
+  }
+}

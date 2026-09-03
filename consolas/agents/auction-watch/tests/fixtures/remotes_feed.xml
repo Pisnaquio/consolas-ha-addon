@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<rss version="2.0">
+  <channel>
+    <title>Remates de todas las empresas</title>
+    <link>https://www.remotes.com.uy/</link>
+    <description>Lista de remates activos de todas las empresas</description>
+    <item>
+      <title>
+        Remate de Coleccionables
+        Ya se puede ofertar
+      </title>
+      <link>https://www.remotes.com.uy/participar/remate/7544</link>
+      <description>Libres 1671 Esquina Terra, Montevideo</description>
+      <fecha>1786222800</fecha>
+      <cantLotes>2</cantLotes>
+      <lotes>
+        <lote>
+          <title>Lote de cinco cartuchos de videojuegos vintage</title>
+          <link>https://www.remotes.com.uy/participar/remate/7544?lote=16</link>
+          <description>
+            Cinco cartuchos para consolas tipo Atari:
+            Spider Fighter y otros.
+          </description>
+          <foto>https://static3.remotes.com.uy/img/thumb/1000/cartuchos.jpg</foto>
+        </lote>
+        <lote>
+          <title>Consola de videojuegos vintage Soundic Programmable</title>
+          <link>https://www.remotes.com.uy/participar/remate/7544?lote=18</link>
+          <description>Con Supersportic y dos controles. No se probó.</description>
+          <foto>/media/soundic.jpg</foto>
+        </lote>
+        <!-- A duplicate feed entry must not create a duplicate opportunity. -->
+        <lote>
+          <title>Lote de cinco cartuchos de videojuegos vintage</title>
+          <link>https://www.remotes.com.uy/participar/remate/7544?lote=16</link>
+          <description>Duplicado editorial.</description>
+          <foto>/media/duplicate.jpg</foto>
+        </lote>
+      </lotes>
+    </item>
+    <item>
+      <title>Remate retro secundario</title>
+      <link>https://www.remotes.com.uy/participar/remate/7440</link>
+      <description>Montevideo</description>
+      <fecha>fecha pendiente</fecha>
+      <cantLotes>1</cantLotes>
+      <lotes>
+        <lote>
+          <title>Doce cartuchos Atari y CCE</title>
+          <link>https://www.remotes.com.uy/participar/remate/7440?lote=14A</link>
+          <description>Incluye Yars Revenge y Kaboom.</description>
+          <foto>https://static3.remotes.com.uy/cartuchos-2.jpg</foto>
+        </lote>
+      </lotes>
+    </item>
+  </channel>
+</rss>

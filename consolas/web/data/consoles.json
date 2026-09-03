@@ -1,0 +1,693 @@
+{
+  "consolas": [
+    {
+      "id": "ps1",
+      "nombre": "PlayStation 1",
+      "fabricante": "Sony",
+      "generacion": "5ta",
+      "anioLanzamiento": 1994,
+      "tengo": false,
+      "estado": "Sin registrar",
+      "funcionando": null,
+      "accesorios": [],
+      "juegos": [],
+      "notas": "",
+      "precioPagado": null,
+      "fotos": [
+        "./assets/photos/console-ps1.png"
+      ],
+      "categoria": "wishlist",
+      "precioFuente": "manual",
+      "priceChartingUrl": "https://www.pricecharting.com/game/playstation/playstation-system",
+      "oportunidades": [],
+      "fotosPropias": [],
+      "precioPriceChart": 55,
+      "precioGameStop": 90,
+      "precioEbaySold": 55,
+      "precioCIB": 80,
+      "precioObjetivoCompra": 39,
+      "precioNotas": {
+        "verificadoEn": "2026-03-23",
+        "fuentes": {
+          "precioPriceChart": "PriceCharting (match validado)",
+          "precioEbaySold": "PriceCharting loose (proxy)",
+          "precioCIB": "PriceCharting (CIB)",
+          "precioGameStop": "Manual por usuario (GameStop)",
+          "precioObjetivoCompra": "Regla interna: 70% de la referencia más baja entre PriceChart/eBaySold/GameStop"
+        },
+        "match": "PlayStation System",
+        "gamestopManual": {
+          "valor": 90,
+          "revisiones": {
+            "PS1 Slim": 80
+          }
+        }
+      }
+    },
+    {
+      "id": "ps4",
+      "nombre": "PlayStation 4",
+      "fabricante": "Sony",
+      "generacion": "8va",
+      "anioLanzamiento": 2013,
+      "tengo": false,
+      "estado": "Sin registrar",
+      "funcionando": null,
+      "accesorios": [],
+      "juegos": [],
+      "notas": "",
+      "precioPagado": null,
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e8/PlayStation_4_Slim_8504.jpg/500px-PlayStation_4_Slim_8504.jpg"
+      ],
+      "categoria": "wishlist",
+      "precioFuente": "manual",
+      "priceChartingUrl": "https://www.pricecharting.com/game/playstation-4/playstation-4-500gb-black-console",
+      "oportunidades": [],
+      "fotosPropias": [],
+      "precioPriceChart": 112,
+      "precioGameStop": null,
+      "precioEbaySold": 112,
+      "precioCIB": 115,
+      "precioObjetivoCompra": 78,
+      "precioNotas": {
+        "verificadoEn": "2026-03-23",
+        "fuentes": {
+          "precioPriceChart": "PriceCharting (match validado)",
+          "precioEbaySold": "PriceCharting loose (proxy)",
+          "precioCIB": "PriceCharting (CIB)",
+          "precioGameStop": "Pendiente verificar manual",
+          "precioObjetivoCompra": "Regla interna: 70% de la referencia más baja entre PriceChart/eBaySold/GameStop"
+        },
+        "match": "Playstation 4 500GB Black Console"
+      }
+    },
+    {
+      "id": "ps5",
+      "nombre": "PlayStation 5",
+      "fabricante": "Sony",
+      "generacion": "9na",
+      "anioLanzamiento": 2020,
+      "tengo": false,
+      "estado": "Sin registrar",
+      "funcionando": null,
+      "accesorios": [],
+      "juegos": [],
+      "notas": "",
+      "precioPagado": null,
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/7/77/Black_and_white_Playstation_5_base_edition_with_controller.png/500px-Black_and_white_Playstation_5_base_edition_with_controller.png"
+      ],
+      "categoria": "wishlist",
+      "precioFuente": "manual",
+      "priceChartingUrl": "https://www.pricecharting.com/game/playstation-5/playstation-5-console-disc-version",
+      "oportunidades": [],
+      "fotosPropias": [],
+      "precioPriceChart": 339,
+      "precioGameStop": null,
+      "precioEbaySold": 339,
+      "precioCIB": 340,
+      "precioObjetivoCompra": 237,
+      "precioNotas": {
+        "verificadoEn": "2026-03-23",
+        "fuentes": {
+          "precioPriceChart": "PriceCharting (match validado)",
+          "precioEbaySold": "PriceCharting loose (proxy)",
+          "precioCIB": "PriceCharting (CIB)",
+          "precioGameStop": "Pendiente verificar manual",
+          "precioObjetivoCompra": "Regla interna: 70% de la referencia más baja entre PriceChart/eBaySold/GameStop"
+        },
+        "match": "Playstation 5 Console [Disc Version]"
+      }
+    },
+    {
+      "id": "atari",
+      "nombre": "Atari 2600 CX-2600",
+      "fabricante": "Atari",
+      "generacion": "2da",
+      "anioLanzamiento": 1977,
+      "tengo": false,
+      "estado": "Sin registrar",
+      "funcionando": null,
+      "accesorios": [],
+      "juegos": [],
+      "notas": "",
+      "precioPagado": null,
+      "fotos": [
+        "./assets/photos/console-atari-2600.png"
+      ],
+      "categoria": "wishlist",
+      "precioFuente": "manual",
+      "priceChartingUrl": "https://www.pricecharting.com/game/atari-2600/atari-2600-system",
+      "oportunidades": [],
+      "fotosPropias": [],
+      "precioPriceChart": 56,
+      "precioGameStop": null,
+      "precioEbaySold": 56,
+      "precioCIB": 128,
+      "precioObjetivoCompra": 39,
+      "precioNotas": {
+        "verificadoEn": "2026-03-23",
+        "fuentes": {
+          "precioPriceChart": "PriceCharting (match validado)",
+          "precioEbaySold": "PriceCharting loose (proxy)",
+          "precioCIB": "PriceCharting (CIB)",
+          "precioGameStop": "Pendiente verificar manual",
+          "precioObjetivoCompra": "Regla interna: 70% de la referencia más baja entre PriceChart/eBaySold/GameStop"
+        },
+        "match": "Atari 2600 System"
+      }
+    },
+    {
+      "id": "wii",
+      "nombre": "Nintendo Wii",
+      "fabricante": "Nintendo",
+      "generacion": "7ma",
+      "anioLanzamiento": 2006,
+      "tengo": false,
+      "estado": "Sin registrar",
+      "funcionando": null,
+      "accesorios": [],
+      "juegos": [],
+      "notas": "",
+      "precioPagado": null,
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f3/Wii-Console.png/500px-Wii-Console.png"
+      ],
+      "categoria": "wishlist",
+      "precioFuente": "manual",
+      "priceChartingUrl": "https://www.pricecharting.com/game/wii/nintendo-wii-console-red-mario-25th-anniversary",
+      "oportunidades": [],
+      "fotosPropias": [],
+      "precioPriceChart": 74,
+      "precioGameStop": 140,
+      "precioEbaySold": 74,
+      "precioCIB": 476,
+      "precioObjetivoCompra": 52,
+      "precioNotas": {
+        "verificadoEn": "2026-03-23",
+        "fuentes": {
+          "precioPriceChart": "PriceCharting (match validado)",
+          "precioEbaySold": "PriceCharting loose (proxy)",
+          "precioCIB": "PriceCharting (CIB)",
+          "precioGameStop": "Manual por usuario (GameStop)",
+          "precioObjetivoCompra": "Regla interna: 70% de la referencia más baja entre PriceChart/eBaySold/GameStop"
+        },
+        "match": "Nintendo Wii Console Red [Mario 25th Anniversary]",
+        "gamestopManual": {
+          "valor": 140
+        }
+      }
+    },
+    {
+      "id": "gamecube",
+      "nombre": "Nintendo GameCube",
+      "fabricante": "Nintendo",
+      "generacion": "6ta",
+      "anioLanzamiento": 2001,
+      "tengo": false,
+      "estado": "Sin registrar",
+      "funcionando": null,
+      "accesorios": [],
+      "juegos": [],
+      "notas": "",
+      "precioPagado": null,
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2b/GameCube-Console-Set.png/500px-GameCube-Console-Set.png"
+      ],
+      "categoria": "wishlist",
+      "precioFuente": "manual",
+      "priceChartingUrl": "https://www.pricecharting.com/game/jp-gamecube/nintendo-gamecube-silver-console",
+      "oportunidades": [],
+      "fotosPropias": [],
+      "precioPriceChart": 112,
+      "precioGameStop": 150,
+      "precioEbaySold": 112,
+      "precioCIB": 172,
+      "precioObjetivoCompra": 78,
+      "precioNotas": {
+        "verificadoEn": "2026-03-23",
+        "fuentes": {
+          "precioPriceChart": "PriceCharting (match validado)",
+          "precioEbaySold": "PriceCharting loose (proxy)",
+          "precioCIB": "PriceCharting (CIB)",
+          "precioGameStop": "Manual por usuario (GameStop)",
+          "precioObjetivoCompra": "Regla interna: 70% de la referencia más baja entre PriceChart/eBaySold/GameStop"
+        },
+        "match": "Nintendo GameCube Silver Console",
+        "gamestopManual": {
+          "valor": 150
+        }
+      }
+    },
+    {
+      "id": "switch",
+      "nombre": "Nintendo Switch",
+      "fabricante": "Nintendo",
+      "generacion": "8va",
+      "anioLanzamiento": 2017,
+      "tengo": false,
+      "estado": "Sin registrar",
+      "funcionando": null,
+      "accesorios": [],
+      "juegos": [],
+      "notas": "",
+      "precioPagado": null,
+      "fotos": [
+        "./assets/photos/console-switch.png"
+      ],
+      "categoria": "wishlist",
+      "precioFuente": "manual",
+      "priceChartingUrl": "https://www.pricecharting.com/search-products?type=prices&q=Nintendo%20Switch",
+      "oportunidades": [],
+      "fotosPropias": [],
+      "precioPriceChart": null,
+      "precioGameStop": null,
+      "precioEbaySold": null,
+      "precioCIB": null,
+      "precioObjetivoCompra": null,
+      "precioNotas": {
+        "verificadoEn": "2026-03-23",
+        "fuentes": {
+          "precioPriceChart": "Pendiente (match ambiguo)",
+          "precioEbaySold": "Pendiente",
+          "precioCIB": "Pendiente",
+          "precioGameStop": "Pendiente verificar manual",
+          "precioObjetivoCompra": "Pendiente"
+        },
+        "match": "Nintendo Switch 2 Console"
+      }
+    },
+    {
+      "id": "switch2",
+      "nombre": "Nintendo Switch 2",
+      "fabricante": "Nintendo",
+      "generacion": "10ma",
+      "anioLanzamiento": null,
+      "tengo": false,
+      "estado": "Sin registrar",
+      "funcionando": null,
+      "accesorios": [],
+      "juegos": [],
+      "notas": "",
+      "precioPagado": null,
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3e/Nintendo_Switch_2_in_Handheld_Mode.png/500px-Nintendo_Switch_2_in_Handheld_Mode.png"
+      ],
+      "categoria": "wishlist",
+      "precioFuente": "manual",
+      "priceChartingUrl": "https://www.pricecharting.com/game/nintendo-switch-2/nintendo-switch-2-console",
+      "oportunidades": [],
+      "fotosPropias": [],
+      "precioPriceChart": 389,
+      "precioGameStop": null,
+      "precioEbaySold": 389,
+      "precioCIB": 406,
+      "precioObjetivoCompra": 272,
+      "precioNotas": {
+        "verificadoEn": "2026-03-23",
+        "fuentes": {
+          "precioPriceChart": "PriceCharting (match validado)",
+          "precioEbaySold": "PriceCharting loose (proxy)",
+          "precioCIB": "PriceCharting (CIB)",
+          "precioGameStop": "Pendiente verificar manual",
+          "precioObjetivoCompra": "Regla interna: 70% de la referencia más baja entre PriceChart/eBaySold/GameStop"
+        },
+        "match": "Nintendo Switch 2 Console"
+      }
+    },
+    {
+      "id": "gba-sp",
+      "nombre": "Game Boy Advance SP",
+      "fabricante": "Nintendo",
+      "generacion": "6ta",
+      "anioLanzamiento": 2003,
+      "tengo": false,
+      "estado": "Sin registrar",
+      "funcionando": null,
+      "accesorios": [],
+      "juegos": [],
+      "notas": "",
+      "precioPagado": null,
+      "fotos": [
+        "./assets/photos/console-gba-sp.png"
+      ],
+      "categoria": "wishlist",
+      "precioFuente": "manual",
+      "priceChartingUrl": "https://www.pricecharting.com/game/pal-gameboy-advance/gameboy-advance-sp-console-kingdom-hearts-edition-pak",
+      "oportunidades": [],
+      "fotosPropias": [],
+      "precioPriceChart": 264,
+      "precioGameStop": 160,
+      "precioEbaySold": 264,
+      "precioCIB": 580,
+      "precioObjetivoCompra": 112,
+      "precioNotas": {
+        "verificadoEn": "2026-03-23",
+        "fuentes": {
+          "precioPriceChart": "PriceCharting (match validado)",
+          "precioEbaySold": "PriceCharting loose (proxy)",
+          "precioCIB": "PriceCharting (CIB)",
+          "precioGameStop": "Manual por usuario (GameStop)",
+          "precioObjetivoCompra": "Regla interna: 70% de la referencia más baja entre PriceChart/eBaySold/GameStop"
+        },
+        "match": "Gameboy Advance SP Console [Kingdom Hearts Edition Pak]",
+        "gamestopManual": {
+          "valor": 160,
+          "referenciaRango": "140-160",
+          "baseGBA": "110-130"
+        }
+      }
+    },
+    {
+      "id": "nes-clonica",
+      "nombre": "NES clónica DY-636",
+      "fabricante": "Clónica",
+      "generacion": "3ra",
+      "anioLanzamiento": null,
+      "tengo": false,
+      "estado": "Sin registrar",
+      "funcionando": null,
+      "accesorios": [],
+      "juegos": [],
+      "notas": "",
+      "precioPagado": null,
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b2/NES-Console-Set.png/500px-NES-Console-Set.png"
+      ],
+      "categoria": "wishlist",
+      "precioFuente": "manual",
+      "priceChartingUrl": "https://www.pricecharting.com/game/nes/nintendo-nes-console",
+      "oportunidades": [],
+      "fotosPropias": [],
+      "precioPriceChart": 88,
+      "precioGameStop": 140,
+      "precioEbaySold": 88,
+      "precioCIB": 208,
+      "precioObjetivoCompra": 62,
+      "precioNotas": {
+        "verificadoEn": "2026-03-23",
+        "fuentes": {
+          "precioPriceChart": "PriceCharting (match validado)",
+          "precioEbaySold": "PriceCharting loose (proxy)",
+          "precioCIB": "PriceCharting (CIB)",
+          "precioGameStop": "Manual por usuario (GameStop)",
+          "precioObjetivoCompra": "Regla interna: 70% de la referencia más baja entre PriceChart/eBaySold/GameStop"
+        },
+        "match": "Nintendo NES Console",
+        "gamestopManual": {
+          "valor": 140
+        }
+      }
+    },
+    {
+      "id": "genesis",
+      "nombre": "Sega Genesis / Mega Drive",
+      "fabricante": "Sega",
+      "generacion": "4ta",
+      "anioLanzamiento": 1988,
+      "tengo": false,
+      "estado": "Sin registrar",
+      "funcionando": null,
+      "accesorios": [],
+      "juegos": [],
+      "notas": "",
+      "precioPagado": null,
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/1/17/Sega-Mega-Drive-EU-Mk1-wController-FL.jpg/500px-Sega-Mega-Drive-EU-Mk1-wController-FL.jpg"
+      ],
+      "categoria": "wishlist",
+      "precioFuente": "manual",
+      "priceChartingUrl": "https://www.pricecharting.com/game/sega-genesis/sega-genesis-model-1-console",
+      "oportunidades": [],
+      "fotosPropias": [],
+      "precioPriceChart": 77,
+      "precioGameStop": null,
+      "precioEbaySold": 77,
+      "precioCIB": 167,
+      "precioObjetivoCompra": 54,
+      "precioNotas": {
+        "verificadoEn": "2026-03-23",
+        "fuentes": {
+          "precioPriceChart": "PriceCharting (match validado)",
+          "precioEbaySold": "PriceCharting loose (proxy)",
+          "precioCIB": "PriceCharting (CIB)",
+          "precioGameStop": "Pendiente verificar manual",
+          "precioObjetivoCompra": "Regla interna: 70% de la referencia más baja entre PriceChart/eBaySold/GameStop"
+        },
+        "match": "Sega Genesis Model 1 Console"
+      }
+    },
+    {
+      "id": "dreamcast",
+      "nombre": "Sega Dreamcast",
+      "fabricante": "Sega",
+      "generacion": "6ta",
+      "anioLanzamiento": 1998,
+      "tengo": false,
+      "estado": "Sin registrar",
+      "funcionando": null,
+      "accesorios": [],
+      "juegos": [],
+      "notas": "",
+      "precioPagado": null,
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/0/07/Dreamcast-Console-Set.png/500px-Dreamcast-Console-Set.png"
+      ],
+      "categoria": "wishlist",
+      "precioFuente": "manual",
+      "priceChartingUrl": "https://www.pricecharting.com/game/sega-dreamcast/sega-dreamcast-console",
+      "oportunidades": [],
+      "fotosPropias": [],
+      "precioPriceChart": 141,
+      "precioGameStop": null,
+      "precioEbaySold": 141,
+      "precioCIB": 271,
+      "precioObjetivoCompra": 99,
+      "precioNotas": {
+        "verificadoEn": "2026-03-23",
+        "fuentes": {
+          "precioPriceChart": "PriceCharting (match validado)",
+          "precioEbaySold": "PriceCharting loose (proxy)",
+          "precioCIB": "PriceCharting (CIB)",
+          "precioGameStop": "Pendiente verificar manual",
+          "precioObjetivoCompra": "Regla interna: 70% de la referencia más baja entre PriceChart/eBaySold/GameStop"
+        },
+        "match": "Sega Dreamcast Console"
+      }
+    },
+    {
+      "id": "ds-lite",
+      "nombre": "Nintendo DS / DS Lite",
+      "fabricante": "Nintendo",
+      "generacion": "7ma",
+      "anioLanzamiento": 2004,
+      "tengo": false,
+      "estado": "Sin registrar",
+      "funcionando": null,
+      "accesorios": [],
+      "juegos": [],
+      "notas": "",
+      "precioPagado": null,
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a3/Nintendo-DS-Fat-Blue.png/500px-Nintendo-DS-Fat-Blue.png"
+      ],
+      "categoria": "wishlist",
+      "precioFuente": "manual",
+      "priceChartingUrl": "https://www.pricecharting.com/search-products?type=prices&q=Nintendo%20DS%20/%20DS%20Lite",
+      "oportunidades": [],
+      "fotosPropias": [],
+      "precioPriceChart": null,
+      "precioGameStop": 80,
+      "precioEbaySold": null,
+      "precioCIB": null,
+      "precioObjetivoCompra": 56,
+      "precioNotas": {
+        "verificadoEn": "2026-03-23",
+        "fuentes": {
+          "precioPriceChart": "Pendiente (match ambiguo)",
+          "precioEbaySold": "Pendiente",
+          "precioCIB": "Pendiente",
+          "precioGameStop": "Manual por usuario (GameStop)",
+          "precioObjetivoCompra": "Regla interna: 70% de la referencia más baja entre PriceChart/eBaySold/GameStop"
+        },
+        "match": "Nintendo 2DS Black + Blue Console [Kirby Triple Deluxe Pre-Installed]",
+        "gamestopManual": {
+          "valor": 80,
+          "revisiones": {
+            "DS Lite": 80,
+            "DSi XL": 110
+          }
+        }
+      }
+    },
+    {
+      "id": "gb-color",
+      "nombre": "Game Boy Color",
+      "fabricante": "Nintendo",
+      "generacion": "5ta",
+      "anioLanzamiento": 1998,
+      "tengo": false,
+      "estado": "Sin registrar",
+      "funcionando": null,
+      "accesorios": [],
+      "juegos": [],
+      "notas": "",
+      "precioPagado": null,
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/2/26/Nintendo_Game_Boy_Color.png/500px-Nintendo_Game_Boy_Color.png"
+      ],
+      "categoria": "wishlist",
+      "precioFuente": "manual",
+      "priceChartingUrl": "https://www.pricecharting.com/game/jp-gameboy-color/game-boy-color-teal-console",
+      "oportunidades": [],
+      "fotosPropias": [],
+      "precioPriceChart": 59,
+      "precioGameStop": 140,
+      "precioEbaySold": 59,
+      "precioCIB": 152,
+      "precioObjetivoCompra": 41,
+      "precioNotas": {
+        "verificadoEn": "2026-03-23",
+        "fuentes": {
+          "precioPriceChart": "PriceCharting (match validado)",
+          "precioEbaySold": "PriceCharting loose (proxy)",
+          "precioCIB": "PriceCharting (CIB)",
+          "precioGameStop": "Manual por usuario (GameStop)",
+          "precioObjetivoCompra": "Regla interna: 70% de la referencia más baja entre PriceChart/eBaySold/GameStop"
+        },
+        "match": "Game Boy Color Teal Console",
+        "gamestopManual": {
+          "valor": 140,
+          "referenciaRango": "110-140"
+        }
+      }
+    },
+    {
+      "id": "gb-original",
+      "nombre": "Game Boy original",
+      "fabricante": "Nintendo",
+      "generacion": "4ta",
+      "anioLanzamiento": 1989,
+      "tengo": false,
+      "estado": "Sin registrar",
+      "funcionando": null,
+      "accesorios": [],
+      "juegos": [],
+      "notas": "",
+      "precioPagado": null,
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7c/Game-Boy-FL.png/500px-Game-Boy-FL.png"
+      ],
+      "categoria": "wishlist",
+      "precioFuente": "manual",
+      "priceChartingUrl": "https://www.pricecharting.com/search-products?type=prices&q=Game%20Boy%20original",
+      "oportunidades": [],
+      "fotosPropias": [],
+      "precioPriceChart": null,
+      "precioGameStop": 120,
+      "precioEbaySold": null,
+      "precioCIB": null,
+      "precioObjetivoCompra": 84,
+      "precioNotas": {
+        "verificadoEn": "2026-03-23",
+        "fuentes": {
+          "precioPriceChart": "Pendiente (match ambiguo)",
+          "precioEbaySold": "Pendiente",
+          "precioCIB": "Pendiente",
+          "precioGameStop": "Manual por usuario (GameStop)",
+          "precioObjetivoCompra": "Regla interna: 70% de la referencia más baja entre PriceChart/eBaySold/GameStop"
+        },
+        "match": "Gameboy Advance Latios Latias Pokemon Center Console",
+        "gamestopManual": {
+          "valor": 120,
+          "revisiones": {
+            "Game Boy Pocket": "90-110"
+          }
+        }
+      }
+    },
+    {
+      "id": "snes",
+      "nombre": "Super Nintendo",
+      "fabricante": "Nintendo",
+      "generacion": "4ta",
+      "anioLanzamiento": 1990,
+      "tengo": false,
+      "estado": "Sin registrar",
+      "funcionando": null,
+      "accesorios": [],
+      "juegos": [],
+      "notas": "",
+      "precioPagado": null,
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/3/36/SNES-Mod1-Console-Set.png/500px-SNES-Mod1-Console-Set.png"
+      ],
+      "categoria": "wishlist",
+      "precioFuente": "manual",
+      "priceChartingUrl": "https://www.pricecharting.com/game/super-nintendo/super-nintendo-system",
+      "oportunidades": [],
+      "fotosPropias": [],
+      "precioPriceChart": 115,
+      "precioGameStop": 150,
+      "precioEbaySold": 115,
+      "precioCIB": 201,
+      "precioObjetivoCompra": 81,
+      "precioNotas": {
+        "verificadoEn": "2026-03-23",
+        "fuentes": {
+          "precioPriceChart": "PriceCharting (match validado)",
+          "precioEbaySold": "PriceCharting loose (proxy)",
+          "precioCIB": "PriceCharting (CIB)",
+          "precioGameStop": "Manual por usuario (GameStop)",
+          "precioObjetivoCompra": "Regla interna: 70% de la referencia más baja entre PriceChart/eBaySold/GameStop"
+        },
+        "match": "Super Nintendo System",
+        "gamestopManual": {
+          "valor": 150
+        }
+      }
+    },
+    {
+      "id": "n64",
+      "nombre": "Nintendo 64",
+      "fabricante": "Nintendo",
+      "generacion": "5ta",
+      "anioLanzamiento": 1996,
+      "tengo": false,
+      "estado": "Sin registrar",
+      "funcionando": null,
+      "accesorios": [],
+      "juegos": [],
+      "notas": "",
+      "precioPagado": null,
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/0/02/N64-Console-Set.png/500px-N64-Console-Set.png"
+      ],
+      "categoria": "wishlist",
+      "precioFuente": "manual",
+      "priceChartingUrl": "https://www.pricecharting.com/search-products?type=prices&q=Nintendo%2064",
+      "oportunidades": [],
+      "fotosPropias": [],
+      "precioPriceChart": null,
+      "precioGameStop": 110,
+      "precioEbaySold": null,
+      "precioCIB": null,
+      "precioObjetivoCompra": 77,
+      "precioNotas": {
+        "verificadoEn": "2026-03-23",
+        "fuentes": {
+          "precioPriceChart": "Pendiente (match ambiguo)",
+          "precioEbaySold": "Pendiente",
+          "precioCIB": "Pendiente",
+          "precioGameStop": "Manual por usuario (GameStop)",
+          "precioObjetivoCompra": "Regla interna: 70% de la referencia más baja entre PriceChart/eBaySold/GameStop"
+        },
+        "match": "Nintendo 64 Gold Console",
+        "gamestopManual": {
+          "valor": 110
+        }
+      }
+    }
+  ]
+}

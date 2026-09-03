@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Colección - Control de consolas</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./collection-control.css?v=20260623b" />
+  </head>
+  <body>
+    <div class="control-grid-bg" aria-hidden="true"></div>
+    <main class="control-shell">
+      <header class="control-hero">
+        <div>
+          <p class="eyebrow">Mapa de colección</p>
+          <h1>Tengo / quiero,<br />por generación.</h1>
+          <p class="subtitle">Una lectura rápida de la colección de consolas: lo registrado primero, lo pendiente con una referencia de compra después.</p>
+        </div>
+        <nav class="hero-actions" aria-label="Navegación de colección">
+          <a class="button button-primary" href="./index-studio.html">Panel de colección</a>
+          <a class="button" href="./database-studio.html">Base de consolas</a>
+        </nav>
+      </header>
+
+      <section class="control-summary" aria-label="Resumen de colección">
+        <article><small>Tengo</small><strong id="ownedTotal">0</strong><span>consolas registradas</span></article>
+        <article><small>Quiero</small><strong id="wantedTotal">0</strong><span>consolas en seguimiento</span></article>
+        <article><small>No tengo</small><strong id="unownedTotal">0</strong><span>resto del catálogo</span></article>
+      </section>
+
+      <section class="control-toolbar">
+        <div><p class="eyebrow">Control visual</p><h2>Generaciones completas</h2></div>
+        <div class="control-toolbar-actions">
+          <p>Tengo y Quiero quedan visibles. Cada consola suma costo y dificultad de compra; el resto del catálogo se abre sólo cuando lo necesitás.</p>
+          <details class="market-legend">
+            <summary>Cómo leer la escala 1-10</summary>
+            <p><strong>Costo</strong> es el presupuesto de entrada de una unidad funcional, en USD. <strong>Dificultad</strong> mide oferta, estado, accesorios, región e importación. Es una guía de mercado, no una tasación.</p>
+          </details>
+          <button id="toggleUnownedBtn" type="button" class="show-unowned-btn" aria-expanded="false">Ver no tengo</button>
+        </div>
+      </section>
+
+      <section class="persistence-panel" aria-label="Persistencia y backups">
+        <header class="persistence-head">
+          <div>
+            <p class="eyebrow">Persistencia real</p>
+            <h2>Backups e inspector</h2>
+            <p class="persistence-copy">Acá ves el estado editable real del usuario, separado del catálogo base. Sirve para respaldar y para detectar rápido si algo quedó mal persistido.</p>
+          </div>
+          <div class="persistence-actions">
+            <button id="refreshPersistenceBtn" type="button" class="button">Refrescar inspector</button>
+            <button id="downloadBackupBtn" type="button" class="button button-primary">Descargar backup</button>
+            <button id="copyBackupBtn" type="button" class="button">Copiar JSON</button>
+          </div>
+        </header>
+
+        <div class="persistence-summary">
+          <article><small>Backend activo</small><strong id="storageBackendValue">-</strong><span id="storageBackendHint">Esperando datos</span></article>
+          <article><small>Último write</small><strong id="storageUpdatedAtValue">-</strong><span id="storageUpdatedAtHint">Estado persistido</span></article>
+          <article><small>Consolas con estado</small><strong id="persistedConsoleCount">0</strong><span id="persistedConsoleHint">Overrides o ediciones</span></article>
+          <article><small>Manuales</small><strong id="manualEntityCount">0</strong><span id="manualEntityHint">Consolas, juegos o accesorios</span></article>
+        </div>
+
+        <div class="inspector-grid">
+          <section class="inspector-card">
+            <header class="inspector-card-head">
+              <div>
+                <p class="eyebrow">Inspector por consola</p>
+                <h3>Estado persistido</h3>
+              </div>
+              <button id="copyConsoleDebugBtn" type="button" class="ghost-action">Copiar bloque</button>
+            </header>
+            <label class="inspector-field">
+              <span>Consola</span>
+              <select id="consoleDebugSelect"></select>
+            </label>
+            <div class="inspector-stats" id="consoleDebugStats"></div>
+            <pre id="consoleDebugOutput" class="debug-json" aria-live="polite">Sin datos todavía.</pre>
+          </section>
+
+          <section class="inspector-card">
+            <header class="inspector-card-head">
+              <div>
+                <p class="eyebrow">Snapshot global</p>
+                <h3>Estado exportable</h3>
+              </div>
+              <button id="copyGlobalDebugBtn" type="button" class="ghost-action">Copiar snapshot</button>
+            </header>
+            <div class="inspector-stats" id="globalDebugStats"></div>
+            <pre id="globalDebugOutput" class="debug-json" aria-live="polite">Sin datos todavía.</pre>
+          </section>
+        </div>
+      </section>
+
+      <section class="assisted-import-panel" aria-labelledby="assistedImportTitle">
+        <header class="persistence-head">
+          <div>
+            <p class="eyebrow">Herramienta de carga</p>
+            <h2 id="assistedImportTitle">Carga asistida</h2>
+            <p class="persistence-copy">Validá un manifiesto curado, revisá coincidencias y conflictos, y confirmá una sola escritura. Cancelar no sube imágenes ni modifica el estado.</p>
+          </div>
+        </header>
+        <div class="import-grid">
+          <label class="import-field"><span>Manifiesto JSON</span><input id="importManifestFile" data-testid="assisted-import-manifest" type="file" accept="application/json,.json" /><textarea id="importManifestText" data-testid="assisted-import-manifest-text" rows="9" placeholder='{"schemaVersion":1,"importId":"lote-demo","consoleId":"ps4","games":[],"accessories":[],"photos":[]}'></textarea><small id="importManifestError" class="import-error" role="alert"></small></label>
+          <label class="import-field"><span>Fotografías</span><input id="importPhotos" data-testid="assisted-import-photos" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple /><small id="importPhotosHint">Se validan y suben una por una sólo después de confirmar.</small></label>
+        </div>
+        <div class="import-actions"><button id="validateImportBtn" data-testid="assisted-import-validate" type="button" class="button">Validar manifiesto</button><button id="previewImportBtn" data-testid="assisted-import-preview" type="button" class="button button-primary" disabled>Ver vista previa</button><button id="cancelImportBtn" data-testid="assisted-import-cancel" type="button" class="button">Cancelar</button><button id="downloadImportBackupBtn" type="button" class="button">Descargar backup actual</button></div>
+        <section id="importPreview" class="import-result" aria-live="polite" hidden></section>
+        <button id="confirmImportBtn" data-testid="assisted-import-confirm" type="button" class="button button-primary" hidden>Confirmar importación</button>
+        <section id="importFinalResult" class="import-result" aria-live="polite" hidden></section>
+      </section>
+
+      <section id="generationLadder" class="generation-ladder" aria-live="polite"></section>
+    </main>
+    <script src="./data-store.js?v=20260710b" defer></script>
+    <script src="./collection-repository.js?v=20260814a" defer></script>
+    <script src="./media-upload.js?v=20260828a" defer></script>
+    <script src="./collection-import.js?v=20260828a" defer></script>
+    <script src="./collection-control.js?v=20260710a" defer></script>
+  </body>
+</html>

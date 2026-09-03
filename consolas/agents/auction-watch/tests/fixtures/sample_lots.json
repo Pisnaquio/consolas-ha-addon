@@ -1,0 +1,72 @@
+[
+  {
+    "source_id": "fixture",
+    "source_label": "Fixture",
+    "group_id": "g-1",
+    "group_label": "Remate retro",
+    "group_url": "https://example.test/groups/g-1",
+    "lot_id": "soundic-1",
+    "lot_number": "18",
+    "title": "Soundic Programmable PAL con cartucho Supersportic",
+    "description": "A la vista, no se probó. Incluye controles y cable.",
+    "lot_url": "https://example.test/lots/soundic-1",
+    "commission_percent": 20,
+    "packaging_cost": 50,
+    "status": "active",
+    "extra": {"api": "feed"}
+  },
+  {
+    "source_id": "fixture",
+    "source_label": "Fixture",
+    "group_id": "g-1",
+    "group_label": "Videojuegos y Tecnología",
+    "group_url": "https://example.test/groups/g-1",
+    "lot_id": "network-1",
+    "lot_number": "19",
+    "title": "Switch para red TP-Link de 8 puertos",
+    "description": "Equipo gigabit funcionando",
+    "lot_url": "https://example.test/lots/network-1",
+    "status": "active"
+  },
+  {
+    "source_id": "fixture",
+    "source_label": "Fixture",
+    "group_id": "g-1",
+    "group_label": "Papelería",
+    "group_url": "https://example.test/groups/g-1",
+    "lot_id": "ink-1",
+    "lot_number": "20",
+    "title": "Cartuchos de tinta HP",
+    "description": "Cuatro unidades sin abrir",
+    "lot_url": "https://example.test/lots/ink-1",
+    "status": "active"
+  },
+  {
+    "source_id": "fixture",
+    "source_label": "Fixture",
+    "group_id": "g-1",
+    "group_label": "Remate retro",
+    "group_url": "https://example.test/groups/g-1",
+    "lot_id": "arcade-1",
+    "lot_number": "21",
+    "title": "Mini arcade multijuegos",
+    "description": "Funciona, no trae cargador",
+    "lot_url": "https://example.test/lots/arcade-1",
+    "base_price": 900,
+    "commission_percent": 18.3,
+    "status": "active"
+  },
+  {
+    "source_id": "fixture",
+    "source_label": "Fixture",
+    "group_id": "g-0",
+    "group_label": "Remate terminado",
+    "group_url": "https://example.test/groups/g-0",
+    "lot_id": "atari-closed",
+    "lot_number": "1",
+    "title": "Atari con controles",
+    "description": "Completo",
+    "lot_url": "https://example.test/lots/atari-closed",
+    "status": "closed"
+  }
+]

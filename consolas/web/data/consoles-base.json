@@ -1,0 +1,1552 @@
+{
+  "version": "1.0.0",
+  "updatedAt": "2026-03-23",
+  "fuente": "Base inicial curada manualmente (cronologica integrada, hogar+portatil)",
+  "consolas": [
+    {
+      "id": "magnavox-odyssey",
+      "nombre": "Magnavox Odyssey",
+      "marca": "Magnavox",
+      "generacion": "Pre-generacion",
+      "anioLanzamiento": 1972,
+      "tipo": "hogar",
+      "notas": "Primer sistema de videojuegos doméstico comercial.",
+      "revisiones": [],
+      "tracking": {
+        "tengo": null,
+        "quiero": null,
+        "completa": null,
+        "funcionando": null,
+        "accesorios": [],
+        "juegos": [],
+        "precioPriceChart": null,
+        "precioGameStop": null,
+        "precioEbaySold": null,
+        "precioCIB": null,
+        "precioObjetivoCompra": null
+      },
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/9/99/Magnavox-Odyssey-Console-Set.jpg/500px-Magnavox-Odyssey-Console-Set.jpg"
+      ]
+    },
+    {
+      "id": "atari-home-pong",
+      "nombre": "Atari Home Pong",
+      "marca": "Atari",
+      "generacion": "Pre-generacion",
+      "anioLanzamiento": 1975,
+      "tipo": "hogar",
+      "notas": "Versión doméstica dedicada de Pong.",
+      "revisiones": [],
+      "tracking": {
+        "tengo": null,
+        "quiero": null,
+        "completa": null,
+        "funcionando": null,
+        "accesorios": [],
+        "juegos": [],
+        "precioPriceChart": null,
+        "precioGameStop": null,
+        "precioEbaySold": null,
+        "precioCIB": null,
+        "precioObjetivoCompra": null
+      },
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/3/32/Signed_Pong_Cabinet.jpg/500px-Signed_Pong_Cabinet.jpg"
+      ]
+    },
+    {
+      "id": "atari-2600",
+      "nombre": "Atari 2600",
+      "marca": "Atari",
+      "generacion": "Generacion 2",
+      "anioLanzamiento": 1977,
+      "tipo": "hogar",
+      "notas": "Popularizó cartuchos intercambiables.",
+      "revisiones": [
+        "Light Sixer",
+        "Junior"
+      ],
+      "tracking": {
+        "tengo": null,
+        "quiero": null,
+        "completa": null,
+        "funcionando": null,
+        "accesorios": [],
+        "juegos": [],
+        "precioPriceChart": null,
+        "precioGameStop": null,
+        "precioEbaySold": null,
+        "precioCIB": null,
+        "precioObjetivoCompra": null
+      },
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/0/02/Atari-2600-Wood-4Sw-Set.png/500px-Atari-2600-Wood-4Sw-Set.png"
+      ]
+    },
+    {
+      "id": "fairchild-channel-f",
+      "nombre": "Fairchild Channel F",
+      "marca": "Fairchild",
+      "generacion": "Generacion 2",
+      "anioLanzamiento": 1976,
+      "tipo": "hogar",
+      "notas": "Primera consola con cartuchos ROM.",
+      "revisiones": [],
+      "tracking": {
+        "tengo": null,
+        "quiero": null,
+        "completa": null,
+        "funcionando": null,
+        "accesorios": [],
+        "juegos": [],
+        "precioPriceChart": null,
+        "precioGameStop": null,
+        "precioEbaySold": null,
+        "precioCIB": null,
+        "precioObjetivoCompra": null
+      },
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/3/34/Fairchild-Channel-F.jpg/500px-Fairchild-Channel-F.jpg"
+      ]
+    },
+    {
+      "id": "intellivision",
+      "nombre": "Intellivision",
+      "marca": "Mattel",
+      "generacion": "Generacion 2",
+      "anioLanzamiento": 1979,
+      "tipo": "hogar",
+      "notas": "Competidora directa de Atari en 2da generación.",
+      "revisiones": [
+        "Intellivision II"
+      ],
+      "tracking": {
+        "tengo": null,
+        "quiero": null,
+        "completa": null,
+        "funcionando": null,
+        "accesorios": [],
+        "juegos": [],
+        "precioPriceChart": null,
+        "precioGameStop": null,
+        "precioEbaySold": null,
+        "precioCIB": null,
+        "precioObjetivoCompra": null
+      },
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/f/fc/Intellivision-Console-Set.png/500px-Intellivision-Console-Set.png"
+      ]
+    },
+    {
+      "id": "colecovision",
+      "nombre": "ColecoVision",
+      "marca": "Coleco",
+      "generacion": "Generacion 2",
+      "anioLanzamiento": 1982,
+      "tipo": "hogar",
+      "notas": "Consola destacada por ports de arcade.",
+      "revisiones": [],
+      "tracking": {
+        "tengo": null,
+        "quiero": null,
+        "completa": null,
+        "funcionando": null,
+        "accesorios": [],
+        "juegos": [],
+        "precioPriceChart": null,
+        "precioGameStop": null,
+        "precioEbaySold": null,
+        "precioCIB": null,
+        "precioObjetivoCompra": null
+      },
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4b/ColecoVision-wController-L.jpg/500px-ColecoVision-wController-L.jpg"
+      ]
+    },
+    {
+      "id": "atari-5200",
+      "nombre": "Atari 5200",
+      "marca": "Atari",
+      "generacion": "Generacion 2",
+      "anioLanzamiento": 1982,
+      "tipo": "hogar",
+      "notas": "Basada en arquitectura Atari 8-bit.",
+      "revisiones": [],
+      "tracking": {
+        "tengo": null,
+        "quiero": null,
+        "completa": null,
+        "funcionando": null,
+        "accesorios": [],
+        "juegos": [],
+        "precioPriceChart": null,
+        "precioGameStop": null,
+        "precioEbaySold": null,
+        "precioCIB": null,
+        "precioObjetivoCompra": null
+      },
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a0/Atari-5200-4-Port-wController-L.jpg/500px-Atari-5200-4-Port-wController-L.jpg"
+      ]
+    },
+    {
+      "id": "nintendo-nes-famicom",
+      "nombre": "Nintendo NES / Famicom",
+      "marca": "Nintendo",
+      "generacion": "Generacion 3",
+      "anioLanzamiento": 1983,
+      "tipo": "hogar",
+      "notas": "Clave para la recuperación del mercado de consolas.",
+      "revisiones": [
+        "NES Top Loader",
+        "Famicom AV"
+      ],
+      "tracking": {
+        "tengo": null,
+        "quiero": null,
+        "completa": null,
+        "funcionando": null,
+        "accesorios": [],
+        "juegos": [],
+        "precioPriceChart": null,
+        "precioGameStop": 140,
+        "precioEbaySold": null,
+        "precioCIB": null,
+        "precioObjetivoCompra": null
+      },
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b2/NES-Console-Set.png/500px-NES-Console-Set.png"
+      ],
+      "precioNotas": {
+        "verificadoEn": "2026-03-23",
+        "fuentes": {
+          "precioGameStop": "Manual por usuario (GameStop)"
+        },
+        "gamestopManual": {
+          "valor": 140
+        }
+      }
+    },
+    {
+      "id": "sega-master-system",
+      "nombre": "Sega Master System",
+      "marca": "Sega",
+      "generacion": "Generacion 3",
+      "anioLanzamiento": 1985,
+      "tipo": "hogar",
+      "notas": "Competencia principal de NES en varios mercados.",
+      "revisiones": [
+        "Master System II"
+      ],
+      "tracking": {
+        "tengo": null,
+        "quiero": null,
+        "completa": null,
+        "funcionando": null,
+        "accesorios": [],
+        "juegos": [],
+        "precioPriceChart": null,
+        "precioGameStop": null,
+        "precioEbaySold": null,
+        "precioCIB": null,
+        "precioObjetivoCompra": null
+      },
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/8/88/Sega-Master-System-Set.jpg/500px-Sega-Master-System-Set.jpg"
+      ]
+    },
+    {
+      "id": "atari-7800",
+      "nombre": "Atari 7800",
+      "marca": "Atari",
+      "generacion": "Generacion 3",
+      "anioLanzamiento": 1986,
+      "tipo": "hogar",
+      "notas": "Compatible con gran parte del catálogo Atari 2600.",
+      "revisiones": [],
+      "tracking": {
+        "tengo": null,
+        "quiero": null,
+        "completa": null,
+        "funcionando": null,
+        "accesorios": [],
+        "juegos": [],
+        "precioPriceChart": null,
+        "precioGameStop": null,
+        "precioEbaySold": null,
+        "precioCIB": null,
+        "precioObjetivoCompra": null
+      },
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e8/Atari-7800-Console-Set.jpg/500px-Atari-7800-Console-Set.jpg"
+      ]
+    },
+    {
+      "id": "super-nintendo-snes",
+      "nombre": "Super Nintendo / SNES",
+      "marca": "Nintendo",
+      "generacion": "Generacion 4",
+      "anioLanzamiento": 1990,
+      "tipo": "hogar",
+      "notas": "Consola de 16 bits con catálogo histórico.",
+      "revisiones": [
+        "SNS-101"
+      ],
+      "tracking": {
+        "tengo": null,
+        "quiero": null,
+        "completa": null,
+        "funcionando": null,
+        "accesorios": [],
+        "juegos": [],
+        "precioPriceChart": null,
+        "precioGameStop": 150,
+        "precioEbaySold": null,
+        "precioCIB": null,
+        "precioObjetivoCompra": null
+      },
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/3/36/SNES-Mod1-Console-Set.png/500px-SNES-Mod1-Console-Set.png"
+      ],
+      "precioNotas": {
+        "verificadoEn": "2026-03-23",
+        "fuentes": {
+          "precioGameStop": "Manual por usuario (GameStop)"
+        },
+        "gamestopManual": {
+          "valor": 150
+        }
+      }
+    },
+    {
+      "id": "sega-genesis-mega-drive",
+      "nombre": "Sega Genesis / Mega Drive",
+      "marca": "Sega",
+      "generacion": "Generacion 4",
+      "anioLanzamiento": 1988,
+      "tipo": "hogar",
+      "notas": "Competidora icónica de SNES en la era 16 bits.",
+      "revisiones": [
+        "Model 2",
+        "Model 3"
+      ],
+      "tracking": {
+        "tengo": null,
+        "quiero": null,
+        "completa": null,
+        "funcionando": null,
+        "accesorios": [],
+        "juegos": [],
+        "precioPriceChart": null,
+        "precioGameStop": null,
+        "precioEbaySold": null,
+        "precioCIB": null,
+        "precioObjetivoCompra": null
+      },
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a1/Sega-Mega-Drive-JP-Mk1-Console-Set.jpg/500px-Sega-Mega-Drive-JP-Mk1-Console-Set.jpg"
+      ]
+    },
+    {
+      "id": "nec-pc-engine-turbografx-16",
+      "nombre": "NEC PC Engine / TurboGrafx-16",
+      "marca": "NEC",
+      "generacion": "Generacion 4",
+      "anioLanzamiento": 1987,
+      "tipo": "hogar",
+      "notas": "Consola compacta muy popular en Japón.",
+      "revisiones": [
+        "CoreGrafx",
+        "PC Engine Duo"
+      ],
+      "tracking": {
+        "tengo": null,
+        "quiero": null,
+        "completa": null,
+        "funcionando": null,
+        "accesorios": [],
+        "juegos": [],
+        "precioPriceChart": null,
+        "precioGameStop": null,
+        "precioEbaySold": null,
+        "precioCIB": null,
+        "precioObjetivoCompra": null
+      },
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d0/TurboGrafx16-Console-Set.jpg/500px-TurboGrafx16-Console-Set.jpg"
+      ]
+    },
+    {
+      "id": "neo-geo-aes",
+      "nombre": "Neo Geo AES",
+      "marca": "SNK",
+      "generacion": "Generacion 4",
+      "anioLanzamiento": 1990,
+      "tipo": "hogar",
+      "notas": "Hardware de estilo arcade en formato doméstico.",
+      "revisiones": [
+        "Neo Geo CD (linea relacionada)"
+      ],
+      "tracking": {
+        "tengo": null,
+        "quiero": null,
+        "completa": null,
+        "funcionando": null,
+        "accesorios": [],
+        "juegos": [],
+        "precioPriceChart": null,
+        "precioGameStop": null,
+        "precioEbaySold": null,
+        "precioCIB": null,
+        "precioObjetivoCompra": null
+      },
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8e/Neo-Geo-AES-Console-Set.png/500px-Neo-Geo-AES-Console-Set.png"
+      ]
+    },
+    {
+      "id": "sony-playstation",
+      "nombre": "Sony PlayStation",
+      "marca": "Sony",
+      "generacion": "Generacion 5",
+      "anioLanzamiento": 1994,
+      "tipo": "hogar",
+      "notas": "Consola clave para la masificación del CD en videojuegos.",
+      "revisiones": [
+        "PS One"
+      ],
+      "tracking": {
+        "tengo": null,
+        "quiero": null,
+        "completa": null,
+        "funcionando": null,
+        "accesorios": [],
+        "juegos": [],
+        "precioPriceChart": null,
+        "precioGameStop": 90,
+        "precioEbaySold": null,
+        "precioCIB": null,
+        "precioObjetivoCompra": null
+      },
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/en/thumb/9/9e/PlayStation-SCPH-1000-with-Controller.png/500px-PlayStation-SCPH-1000-with-Controller.png"
+      ],
+      "precioNotas": {
+        "verificadoEn": "2026-03-23",
+        "fuentes": {
+          "precioGameStop": "Manual por usuario (GameStop)"
+        },
+        "gamestopManual": {
+          "valor": 90,
+          "revisiones": {
+            "PS1 Slim": 80
+          }
+        }
+      }
+    },
+    {
+      "id": "nintendo-64",
+      "nombre": "Nintendo 64",
+      "marca": "Nintendo",
+      "generacion": "Generacion 5",
+      "anioLanzamiento": 1996,
+      "tipo": "hogar",
+      "notas": "Consola de cartuchos y fuerte foco en 3D.",
+      "revisiones": [
+        "Funtastic Colors"
+      ],
+      "tracking": {
+        "tengo": null,
+        "quiero": null,
+        "completa": null,
+        "funcionando": null,
+        "accesorios": [],
+        "juegos": [],
+        "precioPriceChart": null,
+        "precioGameStop": 110,
+        "precioEbaySold": null,
+        "precioCIB": null,
+        "precioObjetivoCompra": null
+      },
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/0/02/N64-Console-Set.png/500px-N64-Console-Set.png"
+      ],
+      "precioNotas": {
+        "verificadoEn": "2026-03-23",
+        "fuentes": {
+          "precioGameStop": "Manual por usuario (GameStop)"
+        },
+        "gamestopManual": {
+          "valor": 110
+        }
+      }
+    },
+    {
+      "id": "sega-saturn",
+      "nombre": "Sega Saturn",
+      "marca": "Sega",
+      "generacion": "Generacion 5",
+      "anioLanzamiento": 1994,
+      "tipo": "hogar",
+      "notas": "Fuerte en 2D y mercado japonés.",
+      "revisiones": [
+        "Model 2"
+      ],
+      "tracking": {
+        "tengo": null,
+        "quiero": null,
+        "completa": null,
+        "funcionando": null,
+        "accesorios": [],
+        "juegos": [],
+        "precioPriceChart": null,
+        "precioGameStop": null,
+        "precioEbaySold": null,
+        "precioCIB": null,
+        "precioObjetivoCompra": null
+      },
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/c/cb/Sega-Saturn-Console-Set-Mk2.png/500px-Sega-Saturn-Console-Set-Mk2.png"
+      ]
+    },
+    {
+      "id": "atari-jaguar",
+      "nombre": "Atari Jaguar",
+      "marca": "Atari",
+      "generacion": "Generacion 5",
+      "anioLanzamiento": 1993,
+      "tipo": "hogar",
+      "notas": "Última consola principal de Atari en el mercado doméstico.",
+      "revisiones": [],
+      "tracking": {
+        "tengo": null,
+        "quiero": null,
+        "completa": null,
+        "funcionando": null,
+        "accesorios": [],
+        "juegos": [],
+        "precioPriceChart": null,
+        "precioGameStop": null,
+        "precioEbaySold": null,
+        "precioCIB": null,
+        "precioObjetivoCompra": null
+      },
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/9/90/Atari-Jaguar-Console-Set.png/500px-Atari-Jaguar-Console-Set.png"
+      ]
+    },
+    {
+      "id": "sony-playstation-2",
+      "nombre": "Sony PlayStation 2",
+      "marca": "Sony",
+      "generacion": "Generacion 6",
+      "anioLanzamiento": 2000,
+      "tipo": "hogar",
+      "notas": "Una de las consolas más vendidas de la historia.",
+      "revisiones": [
+        "Fat",
+        "Slim"
+      ],
+      "tracking": {
+        "tengo": null,
+        "quiero": null,
+        "completa": null,
+        "funcionando": null,
+        "accesorios": [],
+        "juegos": [],
+        "precioPriceChart": null,
+        "precioGameStop": 160,
+        "precioEbaySold": null,
+        "precioCIB": null,
+        "precioObjetivoCompra": null
+      },
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/3/39/PS2-Versions.png/500px-PS2-Versions.png"
+      ],
+      "precioNotas": {
+        "verificadoEn": "2026-03-23",
+        "fuentes": {
+          "precioGameStop": "Manual por usuario (GameStop)"
+        },
+        "gamestopManual": {
+          "valor": 160,
+          "revisiones": {
+            "PS2 Slim": 130
+          }
+        }
+      }
+    },
+    {
+      "id": "nintendo-gamecube",
+      "nombre": "Nintendo GameCube",
+      "marca": "Nintendo",
+      "generacion": "Generacion 6",
+      "anioLanzamiento": 2001,
+      "tipo": "hogar",
+      "notas": "Formato miniDVD y enfoque en first-party.",
+      "revisiones": [
+        "DOL-101"
+      ],
+      "tracking": {
+        "tengo": null,
+        "quiero": null,
+        "completa": null,
+        "funcionando": null,
+        "accesorios": [],
+        "juegos": [],
+        "precioPriceChart": null,
+        "precioGameStop": 150,
+        "precioEbaySold": null,
+        "precioCIB": null,
+        "precioObjetivoCompra": null
+      },
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2b/GameCube-Console-Set.png/500px-GameCube-Console-Set.png"
+      ],
+      "precioNotas": {
+        "verificadoEn": "2026-03-23",
+        "fuentes": {
+          "precioGameStop": "Manual por usuario (GameStop)"
+        },
+        "gamestopManual": {
+          "valor": 150
+        }
+      }
+    },
+    {
+      "id": "microsoft-xbox",
+      "nombre": "Microsoft Xbox",
+      "marca": "Microsoft",
+      "generacion": "Generacion 6",
+      "anioLanzamiento": 2001,
+      "tipo": "hogar",
+      "notas": "Entrada de Microsoft al mercado de consolas.",
+      "revisiones": [
+        "Crystal"
+      ],
+      "tracking": {
+        "tengo": null,
+        "quiero": null,
+        "completa": null,
+        "funcionando": null,
+        "accesorios": [],
+        "juegos": [],
+        "precioPriceChart": null,
+        "precioGameStop": null,
+        "precioEbaySold": null,
+        "precioCIB": null,
+        "precioObjetivoCompra": null
+      },
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a7/Xbox-Console-wDuke-L.jpg/500px-Xbox-Console-wDuke-L.jpg"
+      ]
+    },
+    {
+      "id": "sega-dreamcast",
+      "nombre": "Sega Dreamcast",
+      "marca": "Sega",
+      "generacion": "Generacion 6",
+      "anioLanzamiento": 1998,
+      "tipo": "hogar",
+      "notas": "Conectividad online temprana y VMU.",
+      "revisiones": [
+        "Model VA0/VA1"
+      ],
+      "tracking": {
+        "tengo": null,
+        "quiero": null,
+        "completa": null,
+        "funcionando": null,
+        "accesorios": [],
+        "juegos": [],
+        "precioPriceChart": null,
+        "precioGameStop": null,
+        "precioEbaySold": null,
+        "precioCIB": null,
+        "precioObjetivoCompra": null
+      },
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/0/07/Dreamcast-Console-Set.png/500px-Dreamcast-Console-Set.png"
+      ]
+    },
+    {
+      "id": "sony-playstation-3",
+      "nombre": "Sony PlayStation 3",
+      "marca": "Sony",
+      "generacion": "Generacion 7",
+      "anioLanzamiento": 2006,
+      "tipo": "hogar",
+      "notas": "Consola con Blu-ray y ecosistema PSN.",
+      "revisiones": [
+        "Fat",
+        "Slim",
+        "Super Slim"
+      ],
+      "tracking": {
+        "tengo": null,
+        "quiero": null,
+        "completa": null,
+        "funcionando": null,
+        "accesorios": [],
+        "juegos": [],
+        "precioPriceChart": null,
+        "precioGameStop": 180,
+        "precioEbaySold": null,
+        "precioCIB": null,
+        "precioObjetivoCompra": null
+      },
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e9/PS3_consoles_montage.png/500px-PS3_consoles_montage.png"
+      ],
+      "precioNotas": {
+        "verificadoEn": "2026-03-23",
+        "fuentes": {
+          "precioGameStop": "Manual por usuario (GameStop)"
+        },
+        "gamestopManual": {
+          "valor": 180,
+          "revisiones": {
+            "PS3": 130,
+            "PS3 Slim": 150,
+            "PS3 Super Slim": "140-180"
+          }
+        }
+      }
+    },
+    {
+      "id": "microsoft-xbox-360",
+      "nombre": "Microsoft Xbox 360",
+      "marca": "Microsoft",
+      "generacion": "Generacion 7",
+      "anioLanzamiento": 2005,
+      "tipo": "hogar",
+      "notas": "Consola central de la era HD.",
+      "revisiones": [
+        "S",
+        "E"
+      ],
+      "tracking": {
+        "tengo": null,
+        "quiero": null,
+        "completa": null,
+        "funcionando": null,
+        "accesorios": [],
+        "juegos": [],
+        "precioPriceChart": null,
+        "precioGameStop": null,
+        "precioEbaySold": null,
+        "precioCIB": null,
+        "precioObjetivoCompra": null
+      },
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/4/40/Xbox-360-Pro-wController.jpg/500px-Xbox-360-Pro-wController.jpg"
+      ]
+    },
+    {
+      "id": "nintendo-wii",
+      "nombre": "Nintendo Wii",
+      "marca": "Nintendo",
+      "generacion": "Generacion 7",
+      "anioLanzamiento": 2006,
+      "tipo": "hogar",
+      "notas": "Popularizó control por movimiento.",
+      "revisiones": [
+        "Wii Family Edition",
+        "Wii Mini"
+      ],
+      "tracking": {
+        "tengo": null,
+        "quiero": null,
+        "completa": null,
+        "funcionando": null,
+        "accesorios": [],
+        "juegos": [],
+        "precioPriceChart": null,
+        "precioGameStop": 140,
+        "precioEbaySold": null,
+        "precioCIB": null,
+        "precioObjetivoCompra": null
+      },
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/b/bc/Wii.svg/250px-Wii.svg.png"
+      ],
+      "precioNotas": {
+        "verificadoEn": "2026-03-23",
+        "fuentes": {
+          "precioGameStop": "Manual por usuario (GameStop)"
+        },
+        "gamestopManual": {
+          "valor": 140
+        }
+      }
+    },
+    {
+      "id": "sony-playstation-4",
+      "nombre": "Sony PlayStation 4",
+      "marca": "Sony",
+      "generacion": "Generacion 8",
+      "anioLanzamiento": 2013,
+      "tipo": "hogar",
+      "notas": "Gran adopción durante la generación HD tardía.",
+      "revisiones": [
+        "Slim",
+        "Pro"
+      ],
+      "tracking": {
+        "tengo": null,
+        "quiero": null,
+        "completa": null,
+        "funcionando": null,
+        "accesorios": [],
+        "juegos": [],
+        "precioPriceChart": null,
+        "precioGameStop": null,
+        "precioEbaySold": null,
+        "precioCIB": null,
+        "precioObjetivoCompra": null
+      },
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7e/PS4-Console-wDS4.jpg/500px-PS4-Console-wDS4.jpg"
+      ]
+    },
+    {
+      "id": "microsoft-xbox-one",
+      "nombre": "Microsoft Xbox One",
+      "marca": "Microsoft",
+      "generacion": "Generacion 8",
+      "anioLanzamiento": 2013,
+      "tipo": "hogar",
+      "notas": "Ecosistema integrado con servicios Xbox.",
+      "revisiones": [
+        "S",
+        "X"
+      ],
+      "tracking": {
+        "tengo": null,
+        "quiero": null,
+        "completa": null,
+        "funcionando": null,
+        "accesorios": [],
+        "juegos": [],
+        "precioPriceChart": null,
+        "precioGameStop": null,
+        "precioEbaySold": null,
+        "precioCIB": null,
+        "precioObjetivoCompra": null
+      },
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c7/Xbox_One_consoles_montage.png/500px-Xbox_One_consoles_montage.png"
+      ]
+    },
+    {
+      "id": "nintendo-wii-u",
+      "nombre": "Nintendo Wii U",
+      "marca": "Nintendo",
+      "generacion": "Generacion 8",
+      "anioLanzamiento": 2012,
+      "tipo": "hogar",
+      "notas": "Consola híbrida entre control con pantalla y sobremesa.",
+      "revisiones": [],
+      "tracking": {
+        "tengo": null,
+        "quiero": null,
+        "completa": null,
+        "funcionando": null,
+        "accesorios": [],
+        "juegos": [],
+        "precioPriceChart": null,
+        "precioGameStop": 170,
+        "precioEbaySold": null,
+        "precioCIB": null,
+        "precioObjetivoCompra": null
+      },
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4a/Wii_U_Console_and_Gamepad.png/500px-Wii_U_Console_and_Gamepad.png"
+      ],
+      "precioNotas": {
+        "verificadoEn": "2026-03-23",
+        "fuentes": {
+          "precioGameStop": "Manual por usuario (GameStop)"
+        },
+        "gamestopManual": {
+          "valor": 170
+        }
+      }
+    },
+    {
+      "id": "nintendo-switch",
+      "nombre": "Nintendo Switch",
+      "marca": "Nintendo",
+      "generacion": "Generacion 8",
+      "anioLanzamiento": 2017,
+      "tipo": "hogar",
+      "notas": "Plataforma híbrida TV/portátil.",
+      "revisiones": [
+        "Lite",
+        "OLED"
+      ],
+      "tracking": {
+        "tengo": null,
+        "quiero": null,
+        "completa": null,
+        "funcionando": null,
+        "accesorios": [],
+        "juegos": [],
+        "precioPriceChart": null,
+        "precioGameStop": null,
+        "precioEbaySold": null,
+        "precioCIB": null,
+        "precioObjetivoCompra": null
+      },
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/8/88/Nintendo-Switch-wJoyCons-BlRd-Standing-FL.jpg/500px-Nintendo-Switch-wJoyCons-BlRd-Standing-FL.jpg"
+      ]
+    },
+    {
+      "id": "sony-playstation-5",
+      "nombre": "Sony PlayStation 5",
+      "marca": "Sony",
+      "generacion": "Generacion 9",
+      "anioLanzamiento": 2020,
+      "tipo": "hogar",
+      "notas": "Generación actual con SSD de alta velocidad.",
+      "revisiones": [
+        "Standard",
+        "Digital",
+        "Slim"
+      ],
+      "tracking": {
+        "tengo": null,
+        "quiero": null,
+        "completa": null,
+        "funcionando": null,
+        "accesorios": [],
+        "juegos": [],
+        "precioPriceChart": null,
+        "precioGameStop": null,
+        "precioEbaySold": null,
+        "precioCIB": null,
+        "precioObjetivoCompra": null
+      },
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/7/77/Black_and_white_Playstation_5_base_edition_with_controller.png/500px-Black_and_white_Playstation_5_base_edition_with_controller.png"
+      ]
+    },
+    {
+      "id": "xbox-series-xs",
+      "nombre": "Xbox Series X / S",
+      "marca": "Microsoft",
+      "generacion": "Generacion 9",
+      "anioLanzamiento": 2020,
+      "tipo": "hogar",
+      "notas": "Dos variantes de potencia y precio en la misma familia.",
+      "revisiones": [
+        "Series X",
+        "Series S"
+      ],
+      "tracking": {
+        "tengo": null,
+        "quiero": null,
+        "completa": null,
+        "funcionando": null,
+        "accesorios": [],
+        "juegos": [],
+        "precioPriceChart": null,
+        "precioGameStop": null,
+        "precioEbaySold": null,
+        "precioCIB": null,
+        "precioObjetivoCompra": null
+      },
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/9/90/Xbox_Series_X_S_color.svg/250px-Xbox_Series_X_S_color.svg.png"
+      ]
+    },
+    {
+      "id": "nintendo-switch-2",
+      "nombre": "Nintendo Switch 2",
+      "marca": "Nintendo",
+      "generacion": "Generacion 9",
+      "anioLanzamiento": 2025,
+      "tipo": "hogar",
+      "notas": "Sucesora directa de Nintendo Switch.",
+      "revisiones": [],
+      "tracking": {
+        "tengo": null,
+        "quiero": null,
+        "completa": null,
+        "funcionando": null,
+        "accesorios": [],
+        "juegos": [],
+        "precioPriceChart": null,
+        "precioGameStop": null,
+        "precioEbaySold": null,
+        "precioCIB": null,
+        "precioObjetivoCompra": null
+      },
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3e/Nintendo_Switch_2_in_Handheld_Mode.png/500px-Nintendo_Switch_2_in_Handheld_Mode.png"
+      ]
+    },
+    {
+      "id": "game-boy",
+      "nombre": "Game Boy",
+      "marca": "Nintendo",
+      "generacion": "Generacion 4",
+      "anioLanzamiento": 1989,
+      "tipo": "portatil",
+      "notas": "Portátil clásica de Nintendo.",
+      "revisiones": [
+        "Game Boy Pocket"
+      ],
+      "tracking": {
+        "tengo": null,
+        "quiero": null,
+        "completa": null,
+        "funcionando": null,
+        "accesorios": [],
+        "juegos": [],
+        "precioPriceChart": null,
+        "precioGameStop": 120,
+        "precioEbaySold": null,
+        "precioCIB": null,
+        "precioObjetivoCompra": null
+      },
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7c/Game-Boy-FL.png/500px-Game-Boy-FL.png"
+      ],
+      "precioNotas": {
+        "verificadoEn": "2026-03-23",
+        "fuentes": {
+          "precioGameStop": "Manual por usuario (GameStop)"
+        },
+        "gamestopManual": {
+          "valor": 120,
+          "revisiones": {
+            "Game Boy Pocket": "90-110"
+          }
+        }
+      }
+    },
+    {
+      "id": "game-boy-color",
+      "nombre": "Game Boy Color",
+      "marca": "Nintendo",
+      "generacion": "Generacion 5",
+      "anioLanzamiento": 1998,
+      "tipo": "portatil",
+      "notas": "Pantalla color y compatibilidad parcial hacia atrás.",
+      "revisiones": [
+        "Ediciones especiales"
+      ],
+      "tracking": {
+        "tengo": null,
+        "quiero": null,
+        "completa": null,
+        "funcionando": null,
+        "accesorios": [],
+        "juegos": [],
+        "precioPriceChart": null,
+        "precioGameStop": 140,
+        "precioEbaySold": null,
+        "precioCIB": null,
+        "precioObjetivoCompra": null
+      },
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/2/26/Nintendo_Game_Boy_Color.png/500px-Nintendo_Game_Boy_Color.png"
+      ],
+      "precioNotas": {
+        "verificadoEn": "2026-03-23",
+        "fuentes": {
+          "precioGameStop": "Manual por usuario (GameStop)"
+        },
+        "gamestopManual": {
+          "valor": 140,
+          "referenciaRango": "110-140"
+        }
+      }
+    },
+    {
+      "id": "game-boy-advance",
+      "nombre": "Game Boy Advance",
+      "marca": "Nintendo",
+      "generacion": "Generacion 6",
+      "anioLanzamiento": 2001,
+      "tipo": "portatil",
+      "notas": "Salto técnico importante en línea Game Boy.",
+      "revisiones": [
+        "Game Boy Advance SP"
+      ],
+      "tracking": {
+        "tengo": null,
+        "quiero": null,
+        "completa": null,
+        "funcionando": null,
+        "accesorios": [],
+        "juegos": [],
+        "precioPriceChart": null,
+        "precioGameStop": 130,
+        "precioEbaySold": null,
+        "precioCIB": null,
+        "precioObjetivoCompra": null
+      },
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0b/Nintendo-Game-Boy-Advance-Purple-FL.png/500px-Nintendo-Game-Boy-Advance-Purple-FL.png"
+      ],
+      "precioNotas": {
+        "verificadoEn": "2026-03-23",
+        "fuentes": {
+          "precioGameStop": "Manual por usuario (GameStop)"
+        },
+        "gamestopManual": {
+          "valor": 130,
+          "referenciaRango": "110-130"
+        }
+      }
+    },
+    {
+      "id": "nintendo-ds",
+      "nombre": "Nintendo DS",
+      "marca": "Nintendo",
+      "generacion": "Generacion 7",
+      "anioLanzamiento": 2004,
+      "tipo": "portatil",
+      "notas": "Doble pantalla y táctil.",
+      "revisiones": [
+        "Nintendo DS Lite",
+        "Nintendo DSi"
+      ],
+      "tracking": {
+        "tengo": null,
+        "quiero": null,
+        "completa": null,
+        "funcionando": null,
+        "accesorios": [],
+        "juegos": [],
+        "precioPriceChart": null,
+        "precioGameStop": 110,
+        "precioEbaySold": null,
+        "precioCIB": null,
+        "precioObjetivoCompra": null
+      },
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a3/Nintendo-DS-Fat-Blue.png/500px-Nintendo-DS-Fat-Blue.png"
+      ],
+      "precioNotas": {
+        "verificadoEn": "2026-03-23",
+        "fuentes": {
+          "precioGameStop": "Manual por usuario (GameStop)"
+        },
+        "gamestopManual": {
+          "valor": 110,
+          "revisiones": {
+            "DS Lite": 80,
+            "DSi XL": 110
+          }
+        }
+      }
+    },
+    {
+      "id": "nintendo-3ds",
+      "nombre": "Nintendo 3DS",
+      "marca": "Nintendo",
+      "generacion": "Generacion 8",
+      "anioLanzamiento": 2011,
+      "tipo": "portatil",
+      "notas": "Portátil con efecto 3D estereoscópico.",
+      "revisiones": [
+        "Nintendo 2DS",
+        "New Nintendo 3DS"
+      ],
+      "tracking": {
+        "tengo": null,
+        "quiero": null,
+        "completa": null,
+        "funcionando": null,
+        "accesorios": [],
+        "juegos": [],
+        "precioPriceChart": null,
+        "precioGameStop": 400,
+        "precioEbaySold": null,
+        "precioCIB": null,
+        "precioObjetivoCompra": null
+      },
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0a/Nintendo-3DS-AquaOpen.png/500px-Nintendo-3DS-AquaOpen.png"
+      ],
+      "precioNotas": {
+        "verificadoEn": "2026-03-23",
+        "fuentes": {
+          "precioGameStop": "Manual por usuario (GameStop)"
+        },
+        "gamestopManual": {
+          "valor": 400,
+          "revisiones": {
+            "2DS": 140,
+            "2DS XL": 303,
+            "3DS": 260,
+            "3DS XL": 310,
+            "New 3DS XL": 400
+          }
+        }
+      }
+    },
+    {
+      "id": "playstation-portable-psp",
+      "nombre": "PlayStation Portable (PSP)",
+      "marca": "Sony",
+      "generacion": "Generacion 7",
+      "anioLanzamiento": 2004,
+      "tipo": "portatil",
+      "notas": "Portátil multimedia de Sony.",
+      "revisiones": [
+        "PSP-2000",
+        "PSP-3000",
+        "PSP Go"
+      ],
+      "tracking": {
+        "tengo": null,
+        "quiero": null,
+        "completa": null,
+        "funcionando": null,
+        "accesorios": [],
+        "juegos": [],
+        "precioPriceChart": null,
+        "precioGameStop": 150,
+        "precioEbaySold": null,
+        "precioCIB": null,
+        "precioObjetivoCompra": null
+      },
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/4/46/Psp-1000.jpg/500px-Psp-1000.jpg"
+      ],
+      "precioNotas": {
+        "verificadoEn": "2026-03-23",
+        "fuentes": {
+          "precioGameStop": "Manual por usuario (GameStop)"
+        },
+        "gamestopManual": {
+          "valor": 150,
+          "revisiones": {
+            "PSP 1000": "90-110",
+            "PSP 3000": "140-150"
+          }
+        }
+      }
+    },
+    {
+      "id": "playstation-vita",
+      "nombre": "PlayStation Vita",
+      "marca": "Sony",
+      "generacion": "Generacion 8",
+      "anioLanzamiento": 2011,
+      "tipo": "portatil",
+      "notas": "Portátil con pantalla OLED en modelo inicial.",
+      "revisiones": [
+        "PCH-1000",
+        "PCH-2000"
+      ],
+      "tracking": {
+        "tengo": null,
+        "quiero": null,
+        "completa": null,
+        "funcionando": null,
+        "accesorios": [],
+        "juegos": [],
+        "precioPriceChart": null,
+        "precioGameStop": 240,
+        "precioEbaySold": null,
+        "precioCIB": null,
+        "precioObjetivoCompra": null
+      },
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b4/PlayStation-Vita-1101-FL.jpg/500px-PlayStation-Vita-1101-FL.jpg"
+      ],
+      "precioNotas": {
+        "verificadoEn": "2026-03-23",
+        "fuentes": {
+          "precioGameStop": "Manual por usuario (GameStop)"
+        },
+        "gamestopManual": {
+          "valor": 240,
+          "referenciaRango": "180-240"
+        }
+      }
+    },
+    {
+      "id": "sega-game-gear",
+      "nombre": "Sega Game Gear",
+      "marca": "Sega",
+      "generacion": "Generacion 4",
+      "anioLanzamiento": 1990,
+      "tipo": "portatil",
+      "notas": "Competidor color de la era Game Boy.",
+      "revisiones": [
+        "Majesco re-release"
+      ],
+      "tracking": {
+        "tengo": null,
+        "quiero": null,
+        "completa": null,
+        "funcionando": null,
+        "accesorios": [],
+        "juegos": [],
+        "precioPriceChart": null,
+        "precioGameStop": null,
+        "precioEbaySold": null,
+        "precioCIB": null,
+        "precioObjetivoCompra": null
+      },
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/c/cf/Sega-Game-Gear-WB.png/500px-Sega-Game-Gear-WB.png"
+      ]
+    },
+    {
+      "id": "atari-lynx",
+      "nombre": "Atari Lynx",
+      "marca": "Atari",
+      "generacion": "Generacion 4",
+      "anioLanzamiento": 1989,
+      "tipo": "portatil",
+      "notas": "Portátil color temprana con diseño ergonómico.",
+      "revisiones": [
+        "Lynx II"
+      ],
+      "tracking": {
+        "tengo": null,
+        "quiero": null,
+        "completa": null,
+        "funcionando": null,
+        "accesorios": [],
+        "juegos": [],
+        "precioPriceChart": null,
+        "precioGameStop": null,
+        "precioEbaySold": null,
+        "precioCIB": null,
+        "precioObjetivoCompra": null
+      },
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d6/Atari-Lynx-I-Handheld.jpg/500px-Atari-Lynx-I-Handheld.jpg"
+      ]
+    },
+    {
+      "id": "neo-geo-pocket",
+      "nombre": "Neo Geo Pocket / Color",
+      "marca": "SNK",
+      "generacion": "Generacion 5",
+      "anioLanzamiento": 1998,
+      "tipo": "portatil",
+      "notas": "Portátil de SNK enfocada en juegos de lucha.",
+      "revisiones": [
+        "Neo Geo Pocket",
+        "Neo Geo Pocket Color"
+      ],
+      "tracking": {
+        "tengo": null,
+        "quiero": null,
+        "completa": null,
+        "funcionando": null,
+        "accesorios": [],
+        "juegos": [],
+        "precioPriceChart": null,
+        "precioGameStop": null,
+        "precioEbaySold": null,
+        "precioCIB": null,
+        "precioObjetivoCompra": null
+      },
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/b/be/Neo-Geo-Pocket-Anthra-Left.jpg/500px-Neo-Geo-Pocket-Anthra-Left.jpg"
+      ]
+    },
+    {
+      "id": "wonderswan",
+      "nombre": "WonderSwan",
+      "marca": "Bandai",
+      "generacion": "Generacion 5",
+      "anioLanzamiento": 1999,
+      "tipo": "portatil",
+      "notas": "Portátil popular en Japón.",
+      "revisiones": [
+        "WonderSwan Color",
+        "SwanCrystal"
+      ],
+      "tracking": {
+        "tengo": null,
+        "quiero": null,
+        "completa": null,
+        "funcionando": null,
+        "accesorios": [],
+        "juegos": [],
+        "precioPriceChart": null,
+        "precioGameStop": null,
+        "precioEbaySold": null,
+        "precioCIB": null,
+        "precioObjetivoCompra": null
+      },
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/2/27/WonderSwan-Black-Left.jpg/500px-WonderSwan-Black-Left.jpg"
+      ]
+    },
+    {
+      "id": "ouya",
+      "nombre": "Ouya",
+      "marca": "Ouya",
+      "generacion": "Niche",
+      "anioLanzamiento": 2013,
+      "tipo": "hogar",
+      "notas": "Consola Android financiada por crowdfunding.",
+      "revisiones": [],
+      "tracking": {
+        "tengo": null,
+        "quiero": null,
+        "completa": null,
+        "funcionando": null,
+        "accesorios": [],
+        "juegos": [],
+        "precioPriceChart": null,
+        "precioGameStop": null,
+        "precioEbaySold": null,
+        "precioCIB": null,
+        "precioObjetivoCompra": null
+      },
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/a/af/OUYA-Console-set-h.jpg/500px-OUYA-Console-set-h.jpg"
+      ]
+    },
+    {
+      "id": "nvidia-shield-portable",
+      "nombre": "Nvidia Shield Portable",
+      "marca": "Nvidia",
+      "generacion": "Niche",
+      "anioLanzamiento": 2013,
+      "tipo": "portatil",
+      "notas": "Dispositivo portátil con foco en streaming/juegos Android.",
+      "revisiones": [],
+      "tracking": {
+        "tengo": null,
+        "quiero": null,
+        "completa": null,
+        "funcionando": null,
+        "accesorios": [],
+        "juegos": [],
+        "precioPriceChart": null,
+        "precioGameStop": null,
+        "precioEbaySold": null,
+        "precioCIB": null,
+        "precioObjetivoCompra": null
+      },
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/7/75/2788-2888_San_Tomas_Expwy.jpg/500px-2788-2888_San_Tomas_Expwy.jpg"
+      ]
+    },
+    {
+      "id": "apple-pippin",
+      "nombre": "Apple Pippin",
+      "marca": "Apple",
+      "generacion": "Niche",
+      "anioLanzamiento": 1996,
+      "tipo": "hogar",
+      "notas": "Plataforma multimedia de nicho en los 90.",
+      "revisiones": [],
+      "tracking": {
+        "tengo": null,
+        "quiero": null,
+        "completa": null,
+        "funcionando": null,
+        "accesorios": [],
+        "juegos": [],
+        "precioPriceChart": null,
+        "precioGameStop": null,
+        "precioEbaySold": null,
+        "precioCIB": null,
+        "precioObjetivoCompra": null
+      },
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/4/46/PIPPIN.svg/500px-PIPPIN.svg.png"
+      ]
+    },
+    {
+      "id": "amiga-cd32",
+      "nombre": "Amiga CD32",
+      "marca": "Commodore",
+      "generacion": "Niche",
+      "anioLanzamiento": 1993,
+      "tipo": "hogar",
+      "notas": "Consola basada en arquitectura Amiga.",
+      "revisiones": [],
+      "tracking": {
+        "tengo": null,
+        "quiero": null,
+        "completa": null,
+        "funcionando": null,
+        "accesorios": [],
+        "juegos": [],
+        "precioPriceChart": null,
+        "precioGameStop": null,
+        "precioEbaySold": null,
+        "precioCIB": null,
+        "precioObjetivoCompra": null
+      },
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2b/Amiga-CD32-wController-L-TRSP.png/500px-Amiga-CD32-wController-L-TRSP.png"
+      ]
+    },
+    {
+      "id": "philips-cdi",
+      "nombre": "Philips CD-i",
+      "marca": "Philips",
+      "generacion": "Niche",
+      "anioLanzamiento": 1991,
+      "tipo": "hogar",
+      "notas": "Plataforma multimedia interactiva.",
+      "revisiones": [
+        "Modelos 200/400/450"
+      ],
+      "tracking": {
+        "tengo": null,
+        "quiero": null,
+        "completa": null,
+        "funcionando": null,
+        "accesorios": [],
+        "juegos": [],
+        "precioPriceChart": null,
+        "precioGameStop": null,
+        "precioEbaySold": null,
+        "precioCIB": null,
+        "precioObjetivoCompra": null
+      },
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6b/CD-i-910-Console-Set.jpg/500px-CD-i-910-Console-Set.jpg"
+      ]
+    },
+    {
+      "id": "3do",
+      "nombre": "3DO",
+      "marca": "3DO",
+      "generacion": "Niche",
+      "anioLanzamiento": 1993,
+      "tipo": "hogar",
+      "notas": "Ecosistema de hardware fabricado por terceros.",
+      "revisiones": [
+        "Panasonic FZ-1",
+        "Panasonic FZ-10"
+      ],
+      "tracking": {
+        "tengo": null,
+        "quiero": null,
+        "completa": null,
+        "funcionando": null,
+        "accesorios": [],
+        "juegos": [],
+        "precioPriceChart": null,
+        "precioGameStop": null,
+        "precioEbaySold": null,
+        "precioCIB": null,
+        "precioObjetivoCompra": null
+      },
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/5/56/3DO-FZ1-Console-Set.jpg/500px-3DO-FZ1-Console-Set.jpg"
+      ]
+    }
+  ]
+}

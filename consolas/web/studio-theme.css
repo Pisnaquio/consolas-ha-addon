@@ -1,0 +1,833 @@
+body.studio-variant {
+  --bg: #071327;
+  --surface: rgba(10, 31, 54, 0.82);
+  --surface-2: rgba(13, 39, 66, 0.86);
+  --surface-3: rgba(4, 18, 35, 0.48);
+  --ink: #eef6ff;
+  --muted: #a9bfd8;
+  --line: rgba(153, 191, 230, 0.3);
+  --line-strong: rgba(172, 208, 241, 0.48);
+  --accent: #32c7ff;
+  --accent-2: #63d8aa;
+  --warn: #f1bd64;
+  --danger: #ff7b7b;
+  --radius: 24px;
+  --shadow: 0 22px 55px rgba(0, 8, 18, 0.34);
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 12% 0%, rgba(50, 199, 255, 0.18), transparent 30%),
+    radial-gradient(circle at 88% 4%, rgba(241, 189, 100, 0.1), transparent 28%),
+    linear-gradient(180deg, #060f1d, #0a1d33 48%, #102941);
+}
+
+body.studio-variant .bg-pattern {
+  background-image: linear-gradient(rgba(196, 222, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(196, 222, 255, 0.045) 1px, transparent 1px);
+  background-size: 36px 36px;
+  opacity: 1;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.78), rgba(0, 0, 0, 0.16));
+}
+
+body.studio-variant .container {
+  max-width: 1260px;
+  padding: 24px 16px 56px;
+}
+
+body.studio-variant h1,
+body.studio-variant h2,
+body.studio-variant h3,
+body.studio-variant h4 {
+  color: var(--ink);
+}
+
+body.studio-variant h1,
+body.studio-variant h2,
+body.studio-variant .detail-main h1,
+body.studio-variant .section-head h2 {
+  font-family: "Fraunces", "Space Grotesk", serif;
+  letter-spacing: 0;
+}
+
+body.studio-variant a {
+  color: #a9dcff;
+}
+
+body.studio-variant .eyebrow {
+  color: #8ec6ff;
+  font: 500 0.72rem/1 "IBM Plex Mono", monospace;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+body.studio-variant .hero,
+body.studio-variant .controls,
+body.studio-variant .dashboard,
+body.studio-variant .opportunities,
+body.studio-variant .card,
+body.studio-variant .db-card,
+body.studio-variant .detail-card,
+body.studio-variant .detail-media,
+body.studio-variant .detail-toolbar,
+body.studio-variant .detail-block,
+body.studio-variant .generation-group,
+body.studio-variant .games-filter-shell,
+body.studio-variant .games-subsection-collapsible,
+body.studio-variant .edit-panel,
+body.studio-variant .mini-card,
+body.studio-variant .manual-game-dialog,
+body.studio-variant .manual-preview-panel,
+body.studio-variant .game-edit-panel,
+body.studio-variant .dashboard-progress-wrap,
+body.studio-variant .dashboard-console-row,
+body.studio-variant .dashboard-alert-row,
+body.studio-variant .dashboard-progress-item {
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, var(--surface-2), rgba(5, 19, 36, 0.78));
+  color: var(--ink);
+  box-shadow: var(--shadow);
+}
+
+body.studio-variant #globalDashboard {
+  display: none;
+}
+
+body.studio-variant .hero {
+  min-height: 218px;
+  display: grid;
+  align-content: end;
+  border-radius: 28px;
+  padding: clamp(1.05rem, 2.4vw, 1.65rem);
+  background:
+    linear-gradient(135deg, rgba(18, 54, 87, 0.94), rgba(5, 19, 36, 0.78)),
+    linear-gradient(90deg, rgba(50, 199, 255, 0.18), rgba(241, 189, 100, 0.11));
+  overflow: hidden;
+}
+
+body.studio-variant .hero h1 {
+  margin: 0.2rem 0 0;
+  max-width: 760px;
+  font-size: clamp(2.1rem, 4.8vw, 4.2rem);
+  line-height: 0.98;
+}
+
+body.studio-variant .hero .subtitle {
+  max-width: 680px;
+  margin-top: 0.75rem;
+  color: #c7d8ea;
+  font-size: clamp(0.98rem, 1.7vw, 1.12rem);
+  line-height: 1.5;
+}
+
+body.studio-variant .hero .card-actions {
+  margin-top: 1rem;
+}
+
+body.studio-variant .subtitle,
+body.studio-variant .meta,
+body.studio-variant .state,
+body.studio-variant .notes,
+body.studio-variant .muted,
+body.studio-variant .opportunity-kicker,
+body.studio-variant .count,
+body.studio-variant .save-indicator,
+body.studio-variant .price-model-title,
+body.studio-variant .dashboard-footnote,
+body.studio-variant .dashboard-head small,
+body.studio-variant .action-queue-head span,
+body.studio-variant .dashboard-kpi span,
+body.studio-variant .dashboard-console-row p,
+body.studio-variant .dashboard-alert-row span,
+body.studio-variant .dashboard-progress-item-header span,
+body.studio-variant .dashboard-progress-wrap summary,
+body.studio-variant .games-count,
+body.studio-variant .games-subtitle-count,
+body.studio-variant .gba-game-meta,
+body.studio-variant .gba-game-note,
+body.studio-variant .gba-variants-title,
+body.studio-variant .db-card-main .meta,
+body.studio-variant .db-card-main .notes,
+body.studio-variant .db-card-main .revisions,
+body.studio-variant .manual-game-dialog-head p,
+body.studio-variant .manual-detect-hint {
+  color: var(--muted);
+}
+
+body.studio-variant .summary,
+body.studio-variant .dashboard-kpis,
+body.studio-variant .games-stats-strip {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+body.studio-variant .stat,
+body.studio-variant .dashboard-kpi,
+body.studio-variant .games-stat-item,
+body.studio-variant .detail-quick-metrics article {
+  min-height: 110px;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 0.9rem;
+  background: linear-gradient(180deg, rgba(18, 50, 82, 0.84), rgba(7, 24, 45, 0.76));
+  color: var(--ink);
+}
+
+body.studio-variant .stat::before,
+body.studio-variant .dashboard-kpi::before,
+body.studio-variant .games-stat-item::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: linear-gradient(180deg, var(--accent), var(--accent-2));
+}
+
+body.studio-variant .stat small,
+body.studio-variant .dashboard-kpi small,
+body.studio-variant .games-stat-item small,
+body.studio-variant .detail-quick-metrics small,
+body.studio-variant .price-box small,
+body.studio-variant .gba-price-item small {
+  color: #98b8d7;
+  font: 500 0.68rem/1.15 "IBM Plex Mono", monospace;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+body.studio-variant .stat strong,
+body.studio-variant .dashboard-kpi strong,
+body.studio-variant .games-stat-item strong,
+body.studio-variant .detail-quick-metrics strong,
+body.studio-variant .price-box strong,
+body.studio-variant .gba-price-item strong {
+  color: #f4f9ff;
+}
+
+body.studio-variant .stat strong,
+body.studio-variant .dashboard-kpi strong {
+  margin-top: 0.35rem;
+  font-size: clamp(1.85rem, 3vw, 2.35rem);
+  line-height: 1;
+}
+
+body.studio-variant .controls,
+body.studio-variant .dashboard,
+body.studio-variant .opportunities,
+body.studio-variant .detail-block,
+body.studio-variant .detail-toolbar,
+body.studio-variant .games-filter-shell,
+body.studio-variant .games-subsection-collapsible {
+  border-radius: var(--radius);
+}
+
+body.studio-variant .filters,
+body.studio-variant .games-filterbar,
+body.studio-variant .detail-form-grid,
+body.studio-variant .manual-step-grid,
+body.studio-variant .manual-quick-fields,
+body.studio-variant .manual-form-grid,
+body.studio-variant .manual-price-grid {
+  gap: 10px;
+}
+
+body.studio-variant label,
+body.studio-variant .search-wrap label,
+body.studio-variant .filters label,
+body.studio-variant .games-filterbar label,
+body.studio-variant .detail-form-grid label,
+body.studio-variant .manual-step-field,
+body.studio-variant .manual-quick-fields label,
+body.studio-variant .manual-form-grid label,
+body.studio-variant .manual-price-grid label,
+body.studio-variant .mini-field,
+body.studio-variant .keep-toggle {
+  color: #b9cce0;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.76rem;
+}
+
+body.studio-variant input,
+body.studio-variant select,
+body.studio-variant textarea {
+  min-height: 42px;
+  border: 1px solid rgba(120, 166, 212, 0.58);
+  border-radius: 14px;
+  background: rgba(8, 26, 48, 0.9);
+  color: var(--ink);
+  font: inherit;
+}
+
+body.studio-variant input::placeholder,
+body.studio-variant textarea::placeholder {
+  color: rgba(199, 216, 234, 0.62);
+}
+
+body.studio-variant input:focus,
+body.studio-variant select:focus,
+body.studio-variant textarea:focus {
+  border-color: rgba(50, 199, 255, 0.9);
+  box-shadow: 0 0 0 3px rgba(50, 199, 255, 0.18);
+}
+
+body.studio-variant .advanced-filters,
+body.studio-variant .detail-inline-control,
+body.studio-variant .edit-panel,
+body.studio-variant .upload-control,
+body.studio-variant .manual-advanced,
+body.studio-variant .game-edit-panel {
+  border-color: rgba(153, 191, 230, 0.24);
+  background: var(--surface-3);
+}
+
+body.studio-variant .preview-metrics article,
+body.studio-variant .preview-pill,
+body.studio-variant .accessory-card {
+  border-color: rgba(153, 191, 230, 0.24);
+  background: var(--surface-3);
+}
+
+body.studio-variant .accessory-card-media {
+  border-color: rgba(153, 191, 230, 0.24);
+  background: linear-gradient(180deg, rgba(15, 36, 60, 0.9), rgba(8, 24, 43, 0.94));
+}
+
+body.studio-variant .accessory-card.is-owned {
+  border-color: rgba(79, 191, 135, 0.42);
+  box-shadow: inset 0 0 0 1px rgba(79, 191, 135, 0.16);
+}
+
+body.studio-variant .detail-inline-control p,
+body.studio-variant .detail-inline-control label,
+body.studio-variant .accessory-card-head p,
+body.studio-variant .accessory-filterbar label,
+body.studio-variant .preview-metrics small,
+body.studio-variant .preview-pill {
+  color: #b9cce0;
+}
+
+body.studio-variant .advanced-filters summary,
+body.studio-variant .generation-group summary,
+body.studio-variant .edit-panel summary,
+body.studio-variant .manual-advanced summary,
+body.studio-variant .game-edit-panel summary {
+  color: #d8ebff;
+  font-family: "IBM Plex Mono", monospace;
+}
+
+body.studio-variant .game-edit-panel summary {
+  border-color: rgba(109, 197, 255, 0.42);
+  background: rgba(4, 19, 36, 0.72);
+  color: #dff2ff;
+}
+
+body.studio-variant .keep-toggle input[type="checkbox"],
+body.studio-variant input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  padding: 0;
+  border: 1px solid rgba(109, 197, 255, 0.55);
+  border-radius: 5px;
+  background: rgba(4, 19, 36, 0.72);
+  accent-color: #32c7ff;
+  box-shadow: none;
+}
+
+body.studio-variant .section-title-row {
+  margin-top: 32px;
+}
+
+body.studio-variant .section-title-row h2,
+body.studio-variant .dashboard-head h2,
+body.studio-variant .section-head h2,
+body.studio-variant .games-subtitle {
+  font-size: clamp(1.14rem, 2vw, 1.56rem);
+}
+
+body.studio-variant .btn-link,
+body.studio-variant button.btn-link {
+  min-height: 38px;
+  border: 1px solid rgba(109, 197, 255, 0.5);
+  border-radius: 999px;
+  background: rgba(4, 19, 36, 0.48);
+  color: #dff2ff;
+  font-family: "IBM Plex Mono", monospace;
+  font-weight: 700;
+}
+
+body.studio-variant .btn-link:hover,
+body.studio-variant button.btn-link:hover {
+  background: rgba(34, 108, 168, 0.5);
+  text-decoration: none;
+}
+
+body.studio-variant .btn-link.btn-primary,
+body.studio-variant button.btn-primary,
+body.studio-variant .btn-link.active,
+body.studio-variant .brand-pill.active {
+  border-color: rgba(109, 197, 255, 0.72);
+  background: linear-gradient(135deg, rgba(35, 118, 185, 0.94), rgba(47, 194, 255, 0.8));
+  color: #ffffff;
+}
+
+body.studio-variant .card,
+body.studio-variant .db-card,
+body.studio-variant .gba-game-card,
+body.studio-variant .mini-card,
+body.studio-variant .opportunity-card,
+body.studio-variant .own-photo-card {
+  border: 1px solid rgba(151, 188, 224, 0.3);
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(16, 45, 73, 0.84), rgba(8, 25, 45, 0.78));
+  color: var(--ink);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), var(--shadow);
+}
+
+body.studio-variant .card-body,
+body.studio-variant .card.owned .card-body,
+body.studio-variant .card.wanted .card-body,
+body.studio-variant .db-card-main {
+  background: transparent;
+  color: var(--ink);
+}
+
+body.studio-variant .card h3,
+body.studio-variant .db-card-main h3,
+body.studio-variant .gba-game-title,
+body.studio-variant .mini-card h4 {
+  color: #f4f9ff;
+}
+
+body.studio-variant .card-media,
+body.studio-variant .db-card-media,
+body.studio-variant .gba-game-cover,
+body.studio-variant .detail-media,
+body.studio-variant .own-photo-card {
+  border-color: rgba(203, 223, 242, 0.24);
+  background: rgba(3, 14, 29, 0.44);
+}
+
+body.studio-variant .card-media img,
+body.studio-variant .db-card-media img,
+body.studio-variant .gba-game-cover img,
+body.studio-variant .detail-media img {
+  object-fit: contain;
+}
+
+body.studio-variant .badge,
+body.studio-variant .chip,
+body.studio-variant .info-pill,
+body.studio-variant .gba-badge,
+body.studio-variant .gba-variant-pill,
+body.studio-variant .db-card-side span,
+body.studio-variant .brand-pill,
+body.studio-variant .price-row span {
+  border: 1px solid rgba(161, 193, 223, 0.28);
+  border-radius: 999px;
+  background: rgba(2, 13, 27, 0.32);
+  color: #dceeff;
+}
+
+body.studio-variant .badge,
+body.studio-variant .gba-badge.want,
+body.studio-variant .gba-badge.registered {
+  background: linear-gradient(135deg, rgba(35, 118, 185, 0.9), rgba(47, 194, 255, 0.72));
+  color: #ffffff;
+}
+
+body.studio-variant .gba-badge.keep-off,
+body.studio-variant .gba-badge.standby,
+body.studio-variant .db-card.db-wanted .owner-status {
+  border-color: rgba(241, 189, 100, 0.48);
+  background: rgba(241, 189, 100, 0.12);
+  color: #ffe4b4;
+}
+
+body.studio-variant .db-card.db-owned .owner-status,
+body.studio-variant .gba-badge.ownership-physical,
+body.studio-variant .gba-badge.ownership-digital,
+body.studio-variant .gba-badge.ownership-both {
+  border-color: rgba(99, 216, 170, 0.42);
+  background: rgba(99, 216, 170, 0.12);
+  color: #d6ffec;
+}
+
+body.studio-variant .db-card {
+  grid-template-columns: 180px minmax(0, 1fr) 138px;
+}
+
+body.studio-variant .db-card.db-owned {
+  border-color: rgba(99, 216, 170, 0.38);
+}
+
+body.studio-variant .db-card.db-wanted {
+  border-color: rgba(241, 189, 100, 0.38);
+}
+
+body.studio-variant .db-card-side {
+  padding-right: 12px;
+}
+
+body.studio-variant .generation-group summary {
+  border-bottom-color: rgba(153, 191, 230, 0.18);
+}
+
+body.studio-variant .price-grid,
+body.studio-variant .gba-game-price-grid {
+  gap: 8px;
+}
+
+body.studio-variant .price-box,
+body.studio-variant .gba-price-item {
+  border: 1px solid rgba(126, 170, 214, 0.36);
+  border-radius: 14px;
+  background: rgba(4, 18, 35, 0.44);
+  color: var(--ink);
+}
+
+body.studio-variant .dashboard-progress-list,
+body.studio-variant .dashboard-console-list,
+body.studio-variant .dashboard-alerts {
+  display: grid;
+  gap: 8px;
+}
+
+body.studio-variant .opportunity-card {
+  border-color: rgba(153, 191, 230, 0.24);
+  background: linear-gradient(180deg, rgba(18, 50, 82, 0.84), rgba(7, 24, 45, 0.76));
+}
+
+body.studio-variant .opportunity-card--featured {
+  border-color: rgba(241, 189, 100, 0.42);
+  box-shadow: inset 0 0 0 1px rgba(241, 189, 100, 0.12), var(--shadow);
+}
+
+body.studio-variant .opportunity-card--dismissed {
+  border-color: rgba(161, 193, 223, 0.24);
+  background: linear-gradient(180deg, rgba(13, 35, 58, 0.72), rgba(5, 18, 34, 0.7));
+}
+
+body.studio-variant .opportunity-feedback--visible {
+  border-color: rgba(109, 197, 255, 0.4);
+  background: rgba(17, 59, 94, 0.58);
+  color: #dff2ff;
+}
+
+body.studio-variant .opportunity-sync-status {
+  border-color: rgba(109, 197, 255, 0.3);
+  background: rgba(10, 38, 67, 0.52);
+}
+
+body.studio-variant .opportunity-sync-state {
+  border-color: rgba(109, 197, 255, 0.4);
+  background: rgba(17, 59, 94, 0.68);
+  color: #dff2ff;
+}
+
+body.studio-variant .opportunity-sync-meta dd {
+  color: #dceeff;
+}
+
+body.studio-variant .opportunity-sync-status--stale,
+body.studio-variant .opportunity-sync-status--degraded {
+  border-color: rgba(241, 189, 100, 0.46);
+  background: rgba(99, 65, 20, 0.36);
+}
+
+body.studio-variant .opportunity-sync-status--stale .opportunity-sync-state,
+body.studio-variant .opportunity-sync-status--degraded .opportunity-sync-state {
+  border-color: rgba(241, 189, 100, 0.58);
+  background: rgba(124, 82, 25, 0.52);
+  color: #ffe2ad;
+}
+
+body.studio-variant .opportunity-sync-status--unavailable {
+  border-color: rgba(255, 143, 132, 0.42);
+  background: rgba(101, 39, 42, 0.38);
+}
+
+body.studio-variant .opportunity-sync-status--unavailable .opportunity-sync-state {
+  border-color: rgba(255, 143, 132, 0.52);
+  background: rgba(124, 47, 50, 0.5);
+  color: #ffd8d3;
+}
+
+body.studio-variant .opportunity-run-control {
+  border-color: rgba(109, 197, 255, 0.32);
+  background: rgba(17, 59, 94, 0.44);
+}
+
+body.studio-variant .opportunity-run-control[data-run-status="completed"] {
+  border-color: rgba(114, 220, 170, 0.42);
+  background: rgba(24, 87, 68, 0.38);
+}
+
+body.studio-variant .opportunity-run-control[data-run-status="failed"] {
+  border-color: rgba(255, 143, 132, 0.42);
+  background: rgba(101, 39, 42, 0.38);
+}
+
+body.studio-variant .opportunity-run-control[data-run-status="syncing"] {
+  border-color: rgba(241, 189, 100, 0.46);
+  background: rgba(99, 65, 20, 0.36);
+}
+
+body.studio-variant .opportunity-run-issues {
+  border-color: rgba(241, 189, 100, 0.46);
+  background: rgba(99, 65, 20, 0.36);
+  color: #ffe2ad;
+}
+
+body.studio-variant .opportunity-run-issues__head span,
+body.studio-variant .opportunity-run-issues li span {
+  color: #f3d9aa;
+}
+
+body.studio-variant .opportunity-badge,
+body.studio-variant .opportunity-timer,
+body.studio-variant .opportunity-meta span {
+  border-color: rgba(161, 193, 223, 0.28);
+  background: rgba(2, 13, 27, 0.32);
+  color: #dceeff;
+}
+
+body.studio-variant .opportunity-copy {
+  color: #c7d8ea;
+}
+
+body.studio-variant .dashboard-progress-bar {
+  background: rgba(171, 202, 234, 0.16);
+}
+
+body.studio-variant .dashboard-progress-bar span {
+  background: linear-gradient(90deg, var(--accent-2), var(--accent));
+}
+
+body.studio-variant .detail-page {
+  max-width: 1320px;
+}
+
+body.studio-variant .back-link {
+  margin-bottom: 12px;
+}
+
+body.studio-variant .detail-hero {
+  grid-template-columns: minmax(320px, 440px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: stretch;
+}
+
+body.studio-variant .detail-media,
+body.studio-variant .detail-card {
+  border-radius: 28px;
+}
+
+body.studio-variant .detail-main h1 {
+  font-size: clamp(2.1rem, 4vw, 3.8rem);
+  line-height: 1;
+}
+
+body.studio-variant .detail-status-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+body.studio-variant .detail-status-line span,
+body.studio-variant .status-pill {
+  border: 1px solid rgba(172, 208, 241, 0.25);
+  border-radius: 999px;
+  padding: 0.38rem 0.58rem;
+  color: #dbeeff;
+  background: rgba(4, 19, 36, 0.46);
+  font: 500 0.7rem/1 "IBM Plex Mono", monospace;
+}
+
+body.studio-variant .status-pill.ready {
+  border-color: rgba(99, 216, 170, 0.38);
+  color: #eafff5;
+  background: rgb(24, 91, 73);
+}
+
+body.studio-variant .status-pill.critical {
+  border-color: rgba(255, 123, 123, 0.46);
+  color: #ffe8e8;
+  background: rgb(101, 42, 48);
+}
+
+body.studio-variant .status-pill.unknown {
+  border-color: rgba(241, 189, 100, 0.44);
+  color: #fff0d2;
+  background: rgb(92, 65, 28);
+}
+
+body.studio-variant .detail-quick-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+body.studio-variant .detail-quick-metrics article {
+  min-height: 78px;
+  padding: 0.62rem;
+}
+
+body.studio-variant .detail-quick-metrics strong {
+  display: block;
+  margin-top: 0.28rem;
+  font-size: 1.12rem;
+}
+
+body.studio-variant .detail-sections {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+}
+
+body.studio-variant .detail-block--games,
+body.studio-variant .detail-block--wide {
+  grid-column: 1 / -1;
+}
+
+body.studio-variant .games-filterbar {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+body.studio-variant .games-filterbar .filter-search {
+  grid-column: span 2;
+}
+
+body.studio-variant .gba-game-card {
+  box-shadow: none;
+}
+
+body.studio-variant .manual-game-dialog::backdrop {
+  background: rgba(2, 8, 18, 0.68);
+  backdrop-filter: blur(4px);
+}
+
+body.studio-variant .manual-game-dialog-shell {
+  background: transparent;
+}
+
+body.studio-variant .empty {
+  border-color: rgba(153, 191, 230, 0.28);
+  background: rgba(4, 18, 35, 0.42);
+  color: var(--muted);
+}
+
+@media (max-width: 1020px) {
+  body.studio-variant .summary,
+  body.studio-variant .dashboard-kpis,
+  body.studio-variant .games-stats-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  body.studio-variant .detail-hero,
+  body.studio-variant .detail-sections {
+    grid-template-columns: 1fr;
+  }
+
+  body.studio-variant .db-card {
+    grid-template-columns: 1fr;
+  }
+
+  body.studio-variant .db-card-side {
+    align-items: flex-start;
+    flex-direction: row;
+    flex-wrap: wrap;
+    padding: 0 12px 12px;
+  }
+
+  body.studio-variant .games-filterbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  body.studio-variant .container {
+    padding: 8px 8px 42px;
+  }
+
+  body.studio-variant .hero,
+  body.studio-variant .controls,
+  body.studio-variant .dashboard,
+  body.studio-variant .opportunities,
+  body.studio-variant .detail-card,
+  body.studio-variant .detail-media,
+  body.studio-variant .detail-block,
+  body.studio-variant .detail-toolbar,
+  body.studio-variant .card,
+  body.studio-variant .db-card,
+  body.studio-variant .gba-game-card {
+    border-radius: 20px;
+  }
+
+  body.studio-variant .hero h1,
+  body.studio-variant .detail-main h1 {
+    font-size: clamp(2rem, 11vw, 3.05rem);
+  }
+
+  body.studio-variant .card-actions,
+  body.studio-variant .btn-link,
+  body.studio-variant button.btn-link {
+    width: 100%;
+  }
+
+  body.studio-variant .detail-media {
+    min-height: 0;
+    height: min(58vw, 260px);
+  }
+
+  body.studio-variant .detail-media img {
+    padding: 12px;
+  }
+
+  body.studio-variant .detail-main {
+    padding: 14px;
+    gap: 10px;
+  }
+
+  body.studio-variant .detail-main .chips {
+    gap: 5px;
+  }
+
+  body.studio-variant .price-model--large .price-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  body.studio-variant .price-model--large .price-box {
+    min-height: 68px;
+    padding: 8px;
+  }
+
+  body.studio-variant .price-model--large .price-box.target {
+    grid-column: 1 / -1;
+  }
+
+  body.studio-variant .detail-toolbar {
+    align-items: stretch;
+  }
+
+  body.studio-variant .games-filterbar,
+  body.studio-variant .manual-step-grid,
+  body.studio-variant .manual-quick-fields,
+  body.studio-variant .manual-form-grid,
+  body.studio-variant .manual-price-grid {
+    grid-template-columns: 1fr;
+  }
+
+  body.studio-variant .detail-quick-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  body.studio-variant .games-filterbar .filter-search {
+    grid-column: auto;
+  }
+
+  body.studio-variant .manual-game-dialog-head,
+  body.studio-variant .games-subtitle-row {
+    display: grid;
+  }
+}
