@@ -334,6 +334,15 @@
     return [...(baseGames || []).map((item) => ({ ...item, ...(patches[item.id] || {}) })), ...Object.values(manuals || {})];
   }
 
+  function mergeEntityState(legacyState = {}, persistedState = {}) {
+    return {
+      accessoryEditsById: { ...(legacyState.accessoryEditsById || {}), ...(persistedState.accessoryEditsById || {}) },
+      manualAccessoriesById: { ...(legacyState.manualAccessoriesById || {}), ...(persistedState.manualAccessoriesById || {}) },
+      gameEditsById: { ...(legacyState.gameEditsById || {}), ...(persistedState.gameEditsById || {}) },
+      manualGamesById: { ...(legacyState.manualGamesById || {}), ...(persistedState.manualGamesById || {}) }
+    };
+  }
+
   function migrateConsoleEntityState(consoleId, options = {}) {
     if (!consoleId) return false;
     const bucket = getConsoleEditBucket(consoleId);
@@ -355,26 +364,17 @@
         ? bucket.accesorios
         : [];
 
-    const existingEntityState = getConsoleEntityState(consoleId);
-    const nextSlice = {};
-    let changed = false;
+    const hasLegacySnapshots = Array.isArray(bucket.juegosCatalogo) || Array.isArray(bucket.accesoriosItems);
+    if (!hasLegacySnapshots) return false;
 
-    if (!hasAccessoryEntityState(existingEntityState) && (legacyAccessories.length > 0 || legacyAccessoryText.length > 0)) {
-      const accessoryState = buildAccessoryEntityState(legacyAccessories, baseAccessories);
-      nextSlice.accessoryEditsById = accessoryState.accessoryEditsById;
-      nextSlice.manualAccessoriesById = accessoryState.manualAccessoriesById;
-      changed = true;
-    }
-
-    if (!hasGameEntityState(existingEntityState) && legacyGames.length > 0) {
-      const gameState = buildGameEntityState(legacyGames, baseGames);
-      nextSlice.gameEditsById = gameState.gameEditsById;
-      nextSlice.manualGamesById = gameState.manualGamesById;
-      changed = true;
-    }
-
-    if (!changed) return false;
-    replaceConsoleEntitySlice(consoleId, nextSlice);
+    // Convertir el snapshot sólo una vez. Si ya había patches normalizados,
+    // éstos ganan sobre el snapshot heredado para no perder cambios recientes.
+    const legacyEntityState = {
+      ...buildAccessoryEntityState(legacyAccessories, baseAccessories),
+      ...buildGameEntityState(legacyGames, baseGames)
+    };
+    const nextState = mergeEntityState(legacyEntityState, getConsoleEntityState(consoleId));
+    replaceConsoleEntitySlice(consoleId, nextState);
     return true;
   }
 
@@ -460,9 +460,7 @@
     const baseGames = gamesByConsole?.[consoleId] || [];
     const entityState = getConsoleEntityState(consoleId);
     if (hasGameEntityState(entityState)) return composeGamesFromEntity(baseGames, entityState);
-    const edits = readDetailEdits();
-    const editedGames = edits?.[consoleId]?.juegosCatalogo;
-    return Array.isArray(editedGames) ? editedGames : baseGames;
+    return baseGames;
   }
 
   function isNonGameEntry(game = {}) {
@@ -512,6 +510,7 @@
     persistGameEntityState,
     composeAccessoriesFromEntity,
     composeGamesFromEntity,
+    mergeEntityState,
     migrateConsoleEntityState,
     migrateAllEntityState,
     mergeWithAdditions,

@@ -18,10 +18,11 @@ ni Mail.app como alternativa de producción.
 
 ## Publicación
 
-El código se prepara desde `console-collection` con:
+Cada versión sale desde `console-collection` con un único comando, que
+empaqueta, audita, publica en este repositorio y actualiza el add-on:
 
 ```bash
-./scripts/package-ha-addon.sh
+./scripts/release-ha-addon.sh <version>
 ```
 
 El paquete publicado debe contener sólo código y recursos base: nunca `/data`,

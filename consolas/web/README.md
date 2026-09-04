@@ -101,20 +101,12 @@ Catálogo base versionado:
   "fabricante": "Nintendo|Sony|Sega|...",
   "generacion": "5ta",
   "anioLanzamiento": 1996,
-  "tengo": false,
-  "estado": "Buscando",
-  "funcionando": null,
-  "accesorios": [],
-  "juegos": [],
-  "notas": "",
   "precioPriceChart": null,
   "precioGameStop": null,
   "precioEbaySold": null,
   "precioCIB": null,
   "precioObjetivoCompra": null,
-  "precioPagado": null,
-  "fotos": [],
-  "categoria": "wishlist"
+  "fotos": []
 }
 ```
 
@@ -125,14 +117,11 @@ Importante:
 - esto agrega o edita catálogo base
 - no es el flujo correcto para estado personal del usuario cuando la app corre en HA
 - el estado personal debe entrar por UI y persistirse en `/api/state`
+- antes de commitear, corré `node scripts/validate-catalog-boundaries.mjs`; el catálogo no admite campos editables del usuario
 
 ## Campos sugeridos
 
-- `categoria`: `coleccion` o `wishlist`.
-- `funcionando`: `true`, `false` o `null` (si no aplica / no se sabe).
-- `precioPagado`: opcional (`null` si no lo querés cargar).
 - `fotos`: array de rutas (ejemplo: `["assets/photos/ps1-front.jpg"]`).
-- `fotosPropias`: array para priorizar fotos tuyas (si existe, se muestra antes que `fotos`).
 - `precioPriceChart`: referencia general de mercado desde PriceCharting.
 - `precioEbaySold`: referencia de mercado real por ventas concretadas.
 - `precioGameStop`: referencia retail alta / techo razonable.
@@ -160,13 +149,6 @@ Regla actual del proyecto:
   "nombre": "Pokemon Emerald",
   "franquicia": "Pokemon",
   "genero": "RPG",
-  "prioridad": "alta",
-  "loQuiero": true,
-  "loTengo": false,
-  "ownershipType": "none",
-  "keepInWishlist": true,
-  "condicion": "",
-  "notas": "",
   "coverImage": "./assets/game-covers/gba/pokemon-emerald.png",
   "coverUrl": "./assets/game-covers/gba/pokemon-emerald.png",
   "imageSource": "steamgriddb",
@@ -181,12 +163,8 @@ Regla actual del proyecto:
 }
 ```
 
-Notas de gestión:
-
-- `ownershipType`: `none | physical | digital | both`.
-- `keepInWishlist`: si ya lo tenés, define si sigue visible en deseados.
-- `standby`: pausa temporal para sacarlo de “Lo quiero” sin perderlo del catálogo.
-- `prioridad`: editable desde UI (`alta`, `media-alta`, `media`, `baja`).
+Los campos de pertenencia, condición, notas y prioridad se cargan por UI en el
+estado persistido; no se agregan al catálogo versionado.
 
 ### Cadena automática de fuentes de portada
 

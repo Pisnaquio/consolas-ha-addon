@@ -43,8 +43,19 @@ echo "[consolas] Static directory: ${CONSOLAS_STATIC_DIR}"
 
 python3 /app/server/app.py &
 server_pid=$!
+worker_pid=""
+backup_pid=""
 
-trap 'kill "$server_pid" "$worker_pid" "$backup_pid" 2>/dev/null || true; exit 0' TERM INT
+stop_children() {
+  for pid in "$server_pid" "$worker_pid" "$backup_pid"; do
+    if [ -n "$pid" ]; then
+      kill "$pid" 2>/dev/null || true
+    fi
+  done
+  return 0
+}
+
+trap 'stop_children; exit 0' TERM INT
 
 /app/agents/auction-watch/scripts/run_watch_scheduler_loop.sh --mode twice &
 worker_pid=$!
@@ -53,4 +64,4 @@ worker_pid=$!
 backup_pid=$!
 
 wait "$server_pid"
-kill "$worker_pid" "$backup_pid" 2>/dev/null || true
+stop_children

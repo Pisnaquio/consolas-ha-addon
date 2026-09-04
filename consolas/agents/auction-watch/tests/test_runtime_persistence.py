@@ -70,6 +70,8 @@ class AuctionWatchRuntimePersistenceTests(unittest.TestCase):
     def test_two_processes_share_runtime_state_schedule_outbox_runs_locks_and_watchlist(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             runtime_root = Path(temp_dir) / "auction-watch-runtime"
+            local_state_path = AGENT_DIR / "state.json"
+            local_state_before = local_state_path.read_bytes() if local_state_path.exists() else None
             first_process = r'''
 import json
 from pathlib import Path
@@ -135,7 +137,10 @@ assert runner.RUNS_DIR != runner.AGENT_DIR / "runs"
                 "persisted-run",
             )
             self.assertFalse((AGENT_DIR / "runs" / "persisted-run").exists())
-            self.assertFalse((AGENT_DIR / "state.json").exists())
+            if local_state_before is None:
+                self.assertFalse(local_state_path.exists())
+            else:
+                self.assertEqual(local_state_path.read_bytes(), local_state_before)
 
 
 if __name__ == "__main__":

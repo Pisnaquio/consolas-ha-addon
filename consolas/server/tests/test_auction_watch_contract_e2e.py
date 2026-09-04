@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import closing
 import json
 import sqlite3
 import sys
@@ -172,7 +173,7 @@ class AuctionWatchContractE2ETests(unittest.TestCase):
             request = claim_auction_watch_run(config)["request"]
             missing_run_id = "manual-e2e-missing"
             missing_hash = "a" * 64
-            with sqlite3.connect(config.db_path) as connection:
+            with closing(sqlite3.connect(config.db_path)) as connection:
                 connection.execute(
                     """
                     UPDATE auction_watch_run_requests
@@ -182,6 +183,7 @@ class AuctionWatchContractE2ETests(unittest.TestCase):
                     """,
                     (datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"), missing_run_id, missing_hash, request["id"]),
                 )
+                connection.commit()
 
             result = latest_auction_watch_run_request(config)["request"]
             self.assertEqual(result["publicationState"], "missing")
@@ -226,11 +228,12 @@ class AuctionWatchContractE2ETests(unittest.TestCase):
                 expected_hash=canonical_auction_watch_snapshot_hash(automatic_payload),
             )
 
-            with sqlite3.connect(config.db_path) as connection:
+            with closing(sqlite3.connect(config.db_path)) as connection:
                 connection.execute(
                     "UPDATE auction_watch_publications SET accepted_at = ? WHERE run_id = ?",
                     ("2099-01-01T00:00:00Z", manual_payload["runId"]),
                 )
+                connection.commit()
             receipt_path = config.auction_watch_dir / "export" / "publication-receipt.json"
             receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
             receipt["acceptedAt"] = "2000-01-01T00:00:00Z"

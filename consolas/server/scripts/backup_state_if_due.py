@@ -62,25 +62,28 @@ def is_due(state: dict, interval_hours: float) -> bool:
 def backup_sqlite(db_path: Path, dest_path: Path) -> bool:
     if not db_path.exists():
         return False
-    source = sqlite3.connect(str(db_path))
     try:
-        dest = sqlite3.connect(str(dest_path))
+        source = sqlite3.connect(str(db_path))
         try:
-            source.backup(dest)
+            dest = sqlite3.connect(str(dest_path))
+            try:
+                source.backup(dest)
+            finally:
+                dest.close()
         finally:
-            dest.close()
-    finally:
-        source.close()
-    return True
+            source.close()
+        return True
+    except (OSError, sqlite3.Error):
+        return False
 
 
 def export_state_json(base_url: str, dest_path: Path) -> bool:
     try:
         with urllib.request.urlopen(f"{base_url}/api/state/export", timeout=30) as response:
             payload = response.read()
-    except (urllib.error.URLError, TimeoutError, ConnectionError):
+        dest_path.write_bytes(payload)
+    except (OSError, urllib.error.URLError, TimeoutError, ConnectionError):
         return False
-    dest_path.write_bytes(payload)
     return True
 
 
@@ -123,7 +126,25 @@ def main() -> int:
     backup_dir.mkdir(parents=True, exist_ok=True)
 
     db_ok = backup_sqlite(db_path, backup_dir / DATABASE_NAME)
-    export_ok = export_state_json(base_url, backup_dir / "state-export.json")
+    export_ok = db_ok and export_state_json(base_url, backup_dir / "state-export.json")
+
+    # A backup is only complete when the SQLite snapshot and its matching
+    # state export exist together. Do not advance lastBackupAt after a partial
+    # attempt: the loop must retry it, especially during server startup.
+    if not (db_ok and export_ok):
+        shutil.rmtree(backup_dir, ignore_errors=True)
+        print(
+            json.dumps(
+                {
+                    "status": "degraded",
+                    "dbBackedUp": db_ok,
+                    "stateExportBackedUp": export_ok,
+                    "reason": "backup_incomplete_will_retry",
+                }
+            )
+        )
+        return 1
+
     removed = rotate_backups(backups_dir, retention)
 
     state = {
@@ -137,7 +158,7 @@ def main() -> int:
     print(
         json.dumps(
             {
-                "status": "ok" if db_ok else "degraded",
+                "status": "ok",
                 "backupDir": str(backup_dir),
                 "dbBackedUp": db_ok,
                 "stateExportBackedUp": export_ok,
@@ -145,7 +166,7 @@ def main() -> int:
             }
         )
     )
-    return 0 if db_ok else 1
+    return 0
 
 
 if __name__ == "__main__":

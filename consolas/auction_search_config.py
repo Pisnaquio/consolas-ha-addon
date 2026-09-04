@@ -9,106 +9,6 @@ from typing import Iterable
 
 HISTORICAL_BAVASTRO_QUERY = "electronica"
 
-SHARED_KEYWORDS = [
-    "nintendo",
-    "playstation",
-    "ps1",
-    "ps one",
-    "psx",
-    "xbox",
-    "sega",
-    "atari",
-    "game boy",
-    "game boy advance",
-    "game boy advance sp",
-    "game boy color",
-    "game boy pocket",
-    "game boy micro",
-    "game & watch",
-    "gba",
-    "gbc",
-    "gamecube",
-    "n64",
-    "nintendo 64",
-    "super nintendo",
-    "family",
-    "family computer",
-    "famicom",
-    "famiclone",
-    "family game",
-    "polystation",
-    "poly station",
-    "dynacom",
-    "terminator",
-    "mega drive",
-    "sega genesis",
-    "sega cd",
-    "mega cd",
-    "32x",
-    "dreamcast",
-    "master system",
-    "saturn",
-    "game gear",
-    "psp",
-    "ps vita",
-    "ps2",
-    "ps3",
-    "ps4",
-    "ps5",
-    "switch",
-    "wii",
-    "wii u",
-    "3ds",
-    "2ds",
-    "ds",
-    "ds lite",
-    "dsi",
-    "nes",
-    "snes",
-    "joystick",
-    "joysticks",
-    "joistick",
-    "joisticks",
-    "gamepad",
-    "control",
-    "controles",
-    "dualshock",
-    "dualsense",
-    "joy-con",
-    "wiimote",
-    "mario",
-    "pokemon",
-    "zelda",
-    "kirby",
-    "sonic",
-    "donkey kong",
-    "metroid",
-    "videojuego",
-    "videojuegos",
-    "cartucho",
-    "cartuchos",
-    "arcade",
-    "pong",
-    "tele-sports",
-    "telesports",
-    "soundic",
-    "radofin",
-    "neo geo",
-    "pc engine",
-    "turbografx",
-    "colecovision",
-    "intellivision",
-    "odyssey",
-    "vectrex",
-    "nintento",
-    "nitendo",
-    "nintendoo",
-    "playsation",
-    "playstaton",
-    "pley station",
-    "gamevoi",
-]
-
 STRONG_SIGNAL_TERMS = [
     "nintendo",
     "playstation",
@@ -213,6 +113,42 @@ GENERIC_SIGNAL_TERMS = [
     "cartucho",
     "cartuchos",
 ]
+
+# Terms only relevant for the broad scraper/watcher match list below, not for
+# per-listing signal scoring (STRONG/FRANCHISE/GENERIC above). Keep their
+# position explicit so scraper output and notification hit ordering stay
+# stable while the list remains derived from the signal term lists.
+_SHARED_ONLY_TERMS_AFTER = {
+    "dynacom": ["terminator"],
+}
+
+
+def build_shared_keywords() -> list[str]:
+    # Preserve the historic broad-search order too. It is observable in CLI
+    # output and notification summaries, even though it does not affect the
+    # matching score.
+    strong_before_catalog_terms = STRONG_SIGNAL_TERMS[: STRONG_SIGNAL_TERMS.index("videojuego")]
+    catalog_terms = STRONG_SIGNAL_TERMS[STRONG_SIGNAL_TERMS.index("videojuego") :]
+    generic_before_franchises = GENERIC_SIGNAL_TERMS[: GENERIC_SIGNAL_TERMS.index("cartucho")]
+    cartridge_terms = GENERIC_SIGNAL_TERMS[GENERIC_SIGNAL_TERMS.index("cartucho") :]
+
+    keywords = []
+    for term in strong_before_catalog_terms:
+        keywords.append(term)
+        keywords.extend(_SHARED_ONLY_TERMS_AFTER.get(term, []))
+    keywords.extend(generic_before_franchises)
+    keywords.extend(FRANCHISE_SIGNAL_TERMS)
+    keywords.extend(catalog_terms[:2])
+    keywords.extend(cartridge_terms)
+    keywords.extend(catalog_terms[2:])
+    return keywords
+
+# Broad match list used by source scrapers and the watch scheduler
+# (buscador_consolas_*.py, run_watch.py, scan_extra_sources.py). Derived from
+# the signal term lists instead of hand-copied so the two can't quietly
+# diverge — SHARED_KEYWORDS was 76 of its 97 terms duplicated verbatim from
+# STRONG_SIGNAL_TERMS before this.
+SHARED_KEYWORDS = build_shared_keywords()
 
 RISK_TERMS = [
     "no prende",
