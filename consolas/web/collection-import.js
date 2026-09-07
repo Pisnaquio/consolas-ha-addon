@@ -131,5 +131,33 @@
     return next;
   }
 
-  window.CollectionImport = { PHOTO_ROLES, DIGITAL_ORIGINS, CLASSIFICATION_STATUS, validateManifest, prepareImport, applyPreparedState, stableId };
+  // Writes each uploaded photo's URL into the entity it belongs to, in the state already
+  // produced by applyPreparedState. Shared by the browser's "Carga asistida" tool
+  // (collection-control.js) and scripts/ai-collection-import.mjs so an AI-assisted import
+  // attaches photos exactly the way a manual browser confirmation does — one implementation,
+  // not two that could drift apart.
+  function attachUploadedPhotos(state, prepared, uploaded) {
+    const bucket = state.user.detailEditsById[prepared.consoleId];
+    if (!bucket) return state;
+    const addPhoto = (target, photo, entityType) => {
+      if (!target || !photo?.url) return;
+      if (entityType === "game") {
+        target.coverImage = photo.url; target.coverUrl = photo.url; target.imageSource = "manual-upload"; target.imageStatus = "manual";
+      } else if (entityType === "accessory") {
+        target.image = photo.url; target.imageSource = "manual-upload"; target.imageStatus = "manual";
+      } else {
+        target.fotosPropias = [...(target.fotosPropias || []), photo.url];
+        target.fotosPropiasMeta = [...(target.fotosPropiasMeta || []), { url: photo.url, role: photo.role || "principal", caption: photo.caption || "" }];
+      }
+    };
+    (uploaded || []).forEach((photo) => {
+      if (photo.entityType === "console") addPhoto(bucket, photo, "console");
+      const targetId = prepared.changes.find((item) => item.id === photo.entityId || item.clientRef === photo.entityId || item.title === photo.entityId)?.id;
+      if (photo.entityType === "game" && targetId) addPhoto(bucket.manualGamesById[targetId] || bucket.gameEditsById[targetId], photo, "game");
+      if (photo.entityType === "accessory" && targetId) addPhoto(bucket.manualAccessoriesById[targetId] || bucket.accessoryEditsById[targetId], photo, "accessory");
+    });
+    return state;
+  }
+
+  window.CollectionImport = { PHOTO_ROLES, DIGITAL_ORIGINS, CLASSIFICATION_STATUS, validateManifest, prepareImport, applyPreparedState, attachUploadedPhotos, stableId };
 })();

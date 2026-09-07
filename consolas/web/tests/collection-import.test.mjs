@@ -31,6 +31,37 @@ test("IDs estables permiten reimportar sin duplicar", () => {
   assert.equal(importer.stableId("manual-game", "batch", "ref"), importer.stableId("manual-game", "batch", "ref"));
 });
 
+test("attachUploadedPhotos escribe cada foto subida en la entidad correcta (consola, juego, accesorio)", () => {
+  const manifest = { schemaVersion: 1, importId: "lote-fotos", consoleId: "ps4", games: [{ clientRef: "g1", title: "Juego Uno", ownershipType: "physical" }], accessories: [{ clientRef: "a1", name: "Control" }], photos: [{ clientRef: "p1", fileName: "console.jpg", entityType: "console", entityId: "ps4" }, { clientRef: "p2", fileName: "game.jpg", entityType: "game", entityId: "g1" }, { clientRef: "p3", fileName: "acc.jpg", entityType: "accessory", entityId: "a1" }] };
+  currentEntity = {};
+  const prepared = importer.prepareImport(manifest, { baseGames: [], baseAccessories: [], detailEdits: {} });
+  let state = { version: 3, user: { overridesById: {}, additionsById: {}, detailEditsById: {} }, meta: {} };
+  state = importer.applyPreparedState(prepared, state);
+  const uploaded = [
+    { ...manifest.photos[0], url: "./media/console.jpg" },
+    { ...manifest.photos[1], url: "./media/game.jpg" },
+    { ...manifest.photos[2], url: "./media/acc.jpg" },
+  ];
+  const next = importer.attachUploadedPhotos(state, prepared, uploaded);
+  const bucket = next.user.detailEditsById.ps4;
+  // fotosPropias is an array built inside the vm context; compare contents rather than using
+  // deepEqual against an outer-realm array literal, which Node's assert treats as non-equal
+  // across realms even when the values match.
+  assert.equal(bucket.fotosPropias.length, 1);
+  assert.equal(bucket.fotosPropias[0], "./media/console.jpg");
+  const gameId = prepared.changes.find((item) => item.entity === "game").id;
+  assert.equal(bucket.manualGamesById[gameId].coverImage, "./media/game.jpg");
+  assert.equal(bucket.manualGamesById[gameId].imageStatus, "manual");
+  const accessoryId = prepared.changes.find((item) => item.entity === "accessory").id;
+  assert.equal(bucket.manualAccessoriesById[accessoryId].image, "./media/acc.jpg");
+});
+
+test("attachUploadedPhotos no revienta si falta el bucket de la consola", () => {
+  const state = { user: { detailEditsById: {} } };
+  const result = importer.attachUploadedPhotos(state, { consoleId: "sin-bucket", changes: [] }, [{ entityType: "console", url: "./media/x.jpg" }]);
+  assert.equal(result, state);
+});
+
 test("fixture de aceptación: 20 físicos registrados y reimportación idempotente", () => {
   const fixture = JSON.parse(fs.readFileSync(new URL("../../fixtures/collection-import-synthetic.json", import.meta.url), "utf8"));
   let state = { version: 3, user: { overridesById: {}, additionsById: {}, detailEditsById: {} }, meta: {} };

@@ -270,6 +270,33 @@
       }
     },
     {
+      "id": "xbox-360-e",
+      "nombre": "Xbox 360 E",
+      "fabricante": "Microsoft",
+      "generacion": "7ma",
+      "anioLanzamiento": 2013,
+      "fotos": [
+        "./assets/photos/console-xbox-360-e.jpg"
+      ],
+      "precioFuente": "manual",
+      "priceChartingUrl": "https://www.pricecharting.com/search-products?type=prices&q=Xbox%20360%20E",
+      "precioPriceChart": null,
+      "precioGameStop": null,
+      "precioEbaySold": null,
+      "precioCIB": null,
+      "precioObjetivoCompra": null,
+      "precioNotas": {
+        "verificadoEn": null,
+        "fuentes": {
+          "precioPriceChart": "Pendiente",
+          "precioEbaySold": "Pendiente",
+          "precioCIB": "Pendiente",
+          "precioGameStop": "Pendiente",
+          "precioObjetivoCompra": "Pendiente"
+        }
+      }
+    },
+    {
       "id": "nes-clonica",
       "nombre": "NES clónica DY-636",
       "fabricante": "Clónica",

@@ -274,24 +274,7 @@
           uploaded.push({ ...photo, url: result.url });
         }
         const next = window.CollectionImport.applyPreparedState(confirmedPrepared, getDataStoreState());
-        const bucket = next.user.detailEditsById[prepared.consoleId];
-        const addPhoto = (target, photo, entityType) => {
-          if (!target || !photo?.url) return;
-          if (entityType === "game") {
-            target.coverImage = photo.url; target.coverUrl = photo.url; target.imageSource = "manual-upload"; target.imageStatus = "manual";
-          } else if (entityType === "accessory") {
-            target.image = photo.url; target.imageSource = "manual-upload"; target.imageStatus = "manual";
-          } else {
-            target.fotosPropias = [...(target.fotosPropias || []), photo.url];
-            target.fotosPropiasMeta = [...(target.fotosPropiasMeta || []), { url: photo.url, role: photo.role || "principal", caption: photo.caption || "" }];
-          }
-        };
-        uploaded.forEach((photo) => {
-          if (photo.entityType === "console") addPhoto(bucket, photo, "console");
-          const targetId = confirmedPrepared.changes.find((item) => item.id === photo.entityId || item.clientRef === photo.entityId || item.title === photo.entityId)?.id;
-          if (photo.entityType === "game" && targetId) addPhoto(bucket.manualGamesById[targetId] || bucket.gameEditsById[targetId], photo, "game");
-          if (photo.entityType === "accessory" && targetId) addPhoto(bucket.manualAccessoriesById[targetId] || bucket.accessoryEditsById[targetId], photo, "accessory");
-        });
+        window.CollectionImport.attachUploadedPhotos(next, confirmedPrepared, uploaded);
         await window.DataStore.persistAndWait(next);
         renderImportResult(finalOutput, "Importación confirmada", [`Creadas: <strong>${confirmedPrepared.changes.filter((item) => item.type === "create").length}</strong>`, `Actualizadas: <strong>${confirmedPrepared.changes.filter((item) => item.type === "update").length}</strong>`, `Conservadas por conflicto: <strong>${confirmedPrepared.conflicts.filter((item) => item.action === "preserve").length}</strong>`, `Fotos persistidas: <strong>${uploaded.length}</strong>`, `Rechazadas o faltantes: <strong>${confirmedPrepared.media.length - uploaded.length}</strong>`, `<button type="button" class="button" id="copyImportResultBtn">Copiar resumen JSON</button>`], "success");
         document.getElementById("copyImportResultBtn")?.addEventListener("click", () => copyText(JSON.stringify({ importId: confirmedPrepared.manifest.importId, created: confirmedPrepared.changes.filter((item) => item.type === "create"), updated: confirmedPrepared.changes.filter((item) => item.type === "update"), uploadedPhotos: uploaded.length, warnings: confirmedPrepared.warnings }, null, 2)));
