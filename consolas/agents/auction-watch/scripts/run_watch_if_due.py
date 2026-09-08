@@ -331,7 +331,10 @@ def queue_manual_completion(
 
     completions = state.setdefault("manualCompletions", {})
     existing = completions.get(request_id)
-    if isinstance(existing, dict) and existing.get("status") == "completed":
+    # "dead_letter" es terminal igual que "completed": la solicitud ya no acepta completions
+    # (el backend responde 404/409). Sin este corte, cada tick vuelve a marcarla "pending" y el
+    # worker reintenta para siempre, llenando el log de 409 y sin avanzar nunca.
+    if isinstance(existing, dict) and existing.get("status") in {"completed", "dead_letter"}:
         return False
     if isinstance(existing, dict) and str(existing.get("runId") or "") not in {"", run_id}:
         print(

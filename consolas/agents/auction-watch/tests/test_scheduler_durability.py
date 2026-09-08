@@ -530,6 +530,66 @@ class SchedulerDurabilityTests(unittest.TestCase):
         self.assertEqual(item["status"], "dead_letter")
         self.assertEqual(scheduler.pending_manual_completion_ids(state), [])
 
+    def test_dead_lettered_completion_is_not_requeued_on_a_later_tick(self) -> None:
+        """Una completion terminal no debe resucitar.
+
+        Reproduce el bucle observado el 2026-09-08 en la instancia real: la solicitud ya estaba
+        en estado terminal, el backend respondia 409, la completion quedaba en dead_letter y el
+        tick siguiente la volvia a marcar "pending". El worker reintentaba unas cuatro veces por
+        minuto indefinidamente, sin avanzar y llenando el log.
+        """
+        state = {
+            "version": 2,
+            "days": {},
+            "manualCompletions": {
+                "run_request_terminal": {
+                    "requestId": "run_request_terminal",
+                    "runId": "manual-run_request_terminal",
+                    "exitCode": 1,
+                    "status": "dead_letter",
+                    "attempts": 1,
+                }
+            },
+        }
+        now = datetime(2026, 8, 24, 12, 5, tzinfo=ZoneInfo("America/Montevideo"))
+
+        requeued = scheduler.queue_manual_completion(
+            state,
+            request_id="run_request_terminal",
+            run_id="manual-run_request_terminal",
+            exit_code=1,
+            observed_at=now,
+        )
+
+        self.assertFalse(requeued)
+        self.assertEqual(state["manualCompletions"]["run_request_terminal"]["status"], "dead_letter")
+        self.assertEqual(scheduler.pending_manual_completion_ids(state), [])
+
+    def test_completed_completion_is_still_not_requeued(self) -> None:
+        state = {
+            "version": 2,
+            "days": {},
+            "manualCompletions": {
+                "run_request_done": {
+                    "requestId": "run_request_done",
+                    "runId": "manual-run_request_done",
+                    "exitCode": 0,
+                    "status": "completed",
+                    "attempts": 1,
+                }
+            },
+        }
+        now = datetime(2026, 8, 24, 12, 5, tzinfo=ZoneInfo("America/Montevideo"))
+        self.assertFalse(
+            scheduler.queue_manual_completion(
+                state,
+                request_id="run_request_done",
+                run_id="manual-run_request_done",
+                exit_code=0,
+                observed_at=now,
+            )
+        )
+
     def test_crash_before_outbox_is_synthesized_as_terminal_before_manual_ack(self) -> None:
         now = datetime(2026, 8, 24, 12, 0, tzinfo=ZoneInfo("America/Montevideo"))
         run_id = "manual-run_crashed"
