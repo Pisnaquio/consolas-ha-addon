@@ -33,7 +33,7 @@ from typing import Any
 
 
 SERVICE_NAME = "consolas-server"
-SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.20")
+SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.21")
 DEFAULT_DATA_DIR = "/data"
 DEFAULT_STATIC_DIR = "/app/web"
 DATABASE_NAME = "consolas.sqlite"
@@ -589,15 +589,15 @@ def normalize_auction_watch_identity(source_id: Any, lot_id: Any) -> tuple[str, 
     return source, lot
 
 
-def normalize_public_http_url(value: Any) -> str:
+def normalize_public_http_url(value: Any, field: str = "lotUrl") -> str:
     raw = str(value or "").strip()
     if not raw:
         return ""
     parsed = urllib.parse.urlsplit(raw)
     if parsed.scheme.lower() not in {"http", "https"} or not parsed.hostname:
-        raise ApiError(HTTPStatus.BAD_REQUEST, "lotUrl must be an http(s) URL")
+        raise ApiError(HTTPStatus.BAD_REQUEST, f"{field} must be an http(s) URL")
     if parsed.username or parsed.password:
-        raise ApiError(HTTPStatus.BAD_REQUEST, "lotUrl must not include credentials")
+        raise ApiError(HTTPStatus.BAD_REQUEST, f"{field} must not include credentials")
     return raw
 
 
@@ -738,7 +738,15 @@ def normalize_active_match_metadata(payload: dict[str, Any]) -> dict[tuple[str, 
         if not isinstance(raw_item, dict):
             raise ApiError(HTTPStatus.BAD_REQUEST, "Auction Watch active match metadata item is invalid")
         key = normalize_auction_watch_identity(raw_item.get("sourceId"), raw_item.get("lotId"))
-        image_url = normalize_public_http_url(raw_item.get("imageUrl") or raw_item.get("image_url"))[:2048]
+        # imageUrl es metadata opcional y decorativa. Una sola invalida (por ejemplo una ruta
+        # relativa que devuelve la fuente) no debe rechazar el snapshot completo y dejar al
+        # usuario sin oportunidades: se descarta esa imagen y se publica el resto.
+        try:
+            image_url = normalize_public_http_url(
+                raw_item.get("imageUrl") or raw_item.get("image_url"), "imageUrl"
+            )[:2048]
+        except ApiError:
+            image_url = ""
         if image_url:
             metadata[key] = image_url
     return metadata

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { supervisorRequest, ingressFetch, websocketUrl, DEFAULT_ADDON_SLUG } from "../../scripts/lib/ha-connection.mjs";
+import { supervisorRequest, ingressFetch, websocketUrl, DEFAULT_ADDON_SLUG, unwrap } from "../../scripts/lib/ha-connection.mjs";
 
 // Mocks the Supervisor WebSocket handshake (auth_required -> auth -> auth_ok -> supervisor/api
 // request -> id:1 response) so this file can run without a real Home Assistant instance or
@@ -94,4 +94,10 @@ test("ingressFetch chains addon info -> session -> same-origin fetch with the se
       globalThis.fetch = originalFetch;
     }
   });
+});
+
+test("unwrap acepta tanto {data:...} como la respuesta pelada del Supervisor", () => {
+  assert.deepEqual(unwrap({ data: { slug: "x" } }), { slug: "x" });
+  assert.deepEqual(unwrap({ slug: "y" }), { slug: "y" });
+  assert.deepEqual(unwrap(null), {});
 });

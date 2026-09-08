@@ -24,6 +24,21 @@ from auction_search_config import (
 )
 
 WEB_BASE = "https://subastascastells.com/"
+
+
+def _absolute_media_url(value: object) -> str:
+    """Resuelve una imagen de Castells a URL absoluta.
+
+    El sitio devuelve rutas relativas para el placeholder generico (por ejemplo
+    "Resources/Castells.jpg"). El backend exige http(s) absoluto en
+    activeMatchMetadata.imageUrl y rechaza la publicacion entera con 400 si
+    recibe una relativa, asi que resolverla aca evita tumbar todo el snapshot.
+    """
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    return urljoin(WEB_BASE, raw)
+
 HOME_URL = urljoin(WEB_BASE, "frontend.home.aspx")
 LOTES_API = urljoin(WEB_BASE, "rest/API/Remate/lotes")
 DEFAULT_OUTPUT_CSV = "consolas_castells_matches.csv"
@@ -134,7 +149,7 @@ def discover_auctions(timeout: int) -> list[Auction]:
                 range_text=(item.get("RemateRangoTexto") or "").strip(),
                 items_text=re.sub(r"<[^>]+>", "", html.unescape(item.get("RemateItems") or "")).strip(),
                 url=urljoin(WEB_BASE, link),
-                image_url=(item.get("RemateImagen") or "").strip(),
+                image_url=_absolute_media_url(item.get("RemateImagen")),
                 remate_tipo=int(item.get("RemateTipo") or 1),
             )
         )
@@ -264,7 +279,7 @@ def build_matches(
                     lot_number=str(lot.get("LoteNumero") or ""),
                     lot_description=description,
                     lot_url=detail_url,
-                    image_url=(lot.get("LoteImageUrl") or "").strip(),
+                    image_url=_absolute_media_url(lot.get("LoteImageUrl")),
                     closing_at=(lot.get("LoteComienzoCierre") or "").strip(),
                     currency=currency,
                     starting_price=starting_price,
