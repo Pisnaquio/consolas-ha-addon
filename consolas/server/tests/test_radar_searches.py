@@ -840,3 +840,70 @@ class SearchQueryDerivationTests(RadarSearchTestCase):
         )["search"]
         self.assertEqual(search["searchQuery"], "ps2 game lot")
 
+
+class DerivedQueryRegenerationTests(RadarSearchTestCase):
+    """Una consulta derivada se regenera; una escrita a mano no se toca.
+
+    La distinción no puede salir de comparar strings: cuando cambia la lógica de
+    derivación, toda consulta vieja parece escrita a mano y queda congelada. Eso
+    dejó dos búsquedas mandándole `joyas baratas` a eBay después de arreglar el
+    generador.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        init_db(self.config)
+
+    def test_a_derived_query_follows_a_change_of_criteria(self) -> None:
+        search = create_radar_search(
+            self.config, {"name": "PS2 joyas baratas", "platform": "PS2", "criteria": {"includeTerms": "ps2"}}
+        )["search"]
+        # El generador deduplica: «ps2» y la plataforma «PS2» son el mismo token.
+        self.assertEqual(search["searchQuery"], "ps2")
+
+        updated = update_radar_search(
+            self.config, search["id"], {"criteria": {"includeTerms": "playstation 2"}}
+        )["search"]
+        self.assertEqual(updated["searchQuery"], "playstation 2 PS2")
+
+    def test_a_derived_query_survives_a_change_in_the_derivation_logic(self) -> None:
+        search = create_radar_search(
+            self.config, {"name": "PS2 joyas baratas", "platform": "PS2", "criteria": {"includeTerms": "ps2"}}
+        )["search"]
+        # Simula una consulta guardada por una versión anterior del generador.
+        with connect_db(self.config) as conn:
+            conn.execute(
+                "UPDATE radar_searches SET search_query = 'PS2 joyas baratas PS2 ps2' WHERE id = ?",
+                (search["id"],),
+            )
+
+        updated = update_radar_search(self.config, search["id"], {"criteria": {"includeTerms": "ps2"}})["search"]
+
+        self.assertEqual(updated["searchQuery"], "ps2")
+        self.assertNotIn("joyas", updated["searchQuery"])
+
+    def test_a_handwritten_query_is_never_regenerated(self) -> None:
+        search = create_radar_search(
+            self.config,
+            {"name": "PS2", "platform": "PS2", "searchQuery": "ps2 slim scph-79001",
+             "criteria": {"includeTerms": "ps2"}},
+        )["search"]
+        self.assertEqual(search["searchQuery"], "ps2 slim scph-79001")
+
+        renamed = update_radar_search(self.config, search["id"], {"name": "PS2 Slim"})["search"]
+        self.assertEqual(renamed["searchQuery"], "ps2 slim scph-79001")
+
+        recriteria = update_radar_search(
+            self.config, search["id"], {"criteria": {"includeTerms": "playstation 2"}}
+        )["search"]
+        self.assertEqual(recriteria["searchQuery"], "ps2 slim scph-79001")
+
+    def test_clearing_a_handwritten_query_hands_it_back_to_the_generator(self) -> None:
+        search = create_radar_search(
+            self.config, {"name": "Mappy", "platform": "NES", "searchQuery": "mappy namco"}
+        )["search"]
+        self.assertEqual(search["searchQuery"], "mappy namco")
+
+        cleared = update_radar_search(self.config, search["id"], {"searchQuery": ""})["search"]
+        self.assertEqual(cleared["searchQuery"], "Mappy NES")
+

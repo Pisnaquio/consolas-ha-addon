@@ -51,7 +51,7 @@ from radar.sources import registry as radar_registry  # noqa: E402
 
 
 SERVICE_NAME = "consolas-server"
-SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.29")
+SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.30")
 DEFAULT_DATA_DIR = "/data"
 DEFAULT_STATIC_DIR = "/app/web"
 DATABASE_NAME = "consolas.sqlite"
@@ -512,6 +512,11 @@ def init_db(config: AppConfig) -> None:
         }
         # Vacío significa "todos los slots": una búsqueda existente no cambia de
         # frecuencia por el hecho de actualizar el add-on.
+        # Distinguir una consulta escrita a mano de una derivada no puede depender
+        # de comparar strings: cuando cambia la lógica de derivación, toda consulta
+        # vieja parece escrita a mano y queda congelada. Se marca explícitamente.
+        if "query_custom" not in radar_search_columns:
+            conn.execute("ALTER TABLE radar_searches ADD COLUMN query_custom INTEGER NOT NULL DEFAULT 0")
         if "slots_json" not in radar_search_columns:
             conn.execute("ALTER TABLE radar_searches ADD COLUMN slots_json TEXT NOT NULL DEFAULT ''")
         match_columns = {
@@ -2784,6 +2789,7 @@ def create_radar_search(config: AppConfig, payload: Any) -> dict[str, Any]:
     criteria = normalize_radar_criteria(payload.get("criteria"))
     sources = normalize_radar_sources(payload.get("sources"))
     slots = normalize_radar_slots(payload.get("slots"))
+    custom_query = bool(" ".join(str(payload.get("searchQuery") or "").split()).strip())
     search_query = build_radar_search_query(name, platform, criteria, payload.get("searchQuery"))
     now = utc_now()
     search_id = f"radar-{uuid.uuid4().hex[:16]}"
@@ -2792,11 +2798,12 @@ def create_radar_search(config: AppConfig, payload: Any) -> dict[str, Any]:
         conn.execute(
             """INSERT INTO radar_searches (
                  id, name, search_type, status, origin, priority, platform, entity_type, entity_id,
-                 search_query, criteria_json, sources_json, slots_json, notes, created_at, updated_at, archived_at
-               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                 search_query, query_custom, criteria_json, sources_json, slots_json, notes, created_at,
+                 updated_at, archived_at
+               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 search_id, name, search_type, status, origin, priority, platform, entity_type, entity_id,
-                search_query,
+                search_query, int(custom_query),
                 json.dumps(criteria, ensure_ascii=False, separators=(",", ":")),
                 json.dumps(sources, ensure_ascii=False, separators=(",", ":")),
                 json.dumps(slots, ensure_ascii=False, separators=(",", ":")),
@@ -2859,26 +2866,27 @@ def update_radar_search(config: AppConfig, search_id: Any, payload: Any) -> dict
             else normalize_radar_sources(radar_json_field(row["sources_json"], []))
         )
         slots = normalize_radar_slots(payload.get("slots")) if "slots" in payload else radar_json_field(row["slots_json"], [])
+        was_custom = bool(row["query_custom"]) if "query_custom" in row.keys() else False
         if "searchQuery" in payload:
-            search_query = build_radar_search_query(name, platform, criteria, payload.get("searchQuery"))
+            explicit = " ".join(str(payload.get("searchQuery") or "").split()).strip()
+            search_query = build_radar_search_query(name, platform, criteria, explicit)
+            was_custom = bool(explicit)
+        elif was_custom:
+            # Escrita a mano: se respeta aunque cambien nombre o criterios.
+            search_query = str(row["search_query"])
         elif "criteria" in payload or "name" in payload or "title" in payload or "platform" in payload:
-            # Sólo se regenera una consulta derivada; una consulta escrita a mano se respeta.
-            derived_before = build_radar_search_query(str(row["name"]), str(row["platform"]), stored_criteria)
-            search_query = (
-                build_radar_search_query(name, platform, criteria)
-                if derived_before == str(row["search_query"])
-                else str(row["search_query"])
-            )
+            search_query = build_radar_search_query(name, platform, criteria)
         else:
             search_query = str(row["search_query"])
         assert_radar_name_is_free(conn, name, platform, target_id)
         conn.execute(
             """UPDATE radar_searches SET
                  name = ?, search_type = ?, priority = ?, platform = ?, entity_type = ?, entity_id = ?,
-                 search_query = ?, criteria_json = ?, sources_json = ?, slots_json = ?, notes = ?, updated_at = ?
+                 search_query = ?, query_custom = ?, criteria_json = ?, sources_json = ?, slots_json = ?,
+                 notes = ?, updated_at = ?
                WHERE id = ?""",
             (
-                name, search_type, priority, platform, entity_type, entity_id, search_query,
+                name, search_type, priority, platform, entity_type, entity_id, search_query, int(was_custom),
                 json.dumps(criteria, ensure_ascii=False, separators=(",", ":")),
                 json.dumps(sources, ensure_ascii=False, separators=(",", ":")),
                 json.dumps(slots, ensure_ascii=False, separators=(",", ":")),
