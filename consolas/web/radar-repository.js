@@ -295,6 +295,24 @@
     return write("/radar/master/regenerate", {});
   }
 
+  /** El feed «Para mí»: hasta diez oportunidades accionables. */
+  async function loadFeed(limit = 10) {
+    return request(`/radar/feed?limit=${encodeURIComponent(limit)}`);
+  }
+
+  /** Qué decidiste sobre una publicación. Nunca escribe estado de colección. */
+  async function decide(listingId, decision) {
+    return write("/radar/decisions", { listingId, ...decision });
+  }
+
+  async function clearDecision(listingId) {
+    return request(`/radar/decisions/${encodeURIComponent(listingId)}`, { method: "DELETE", body: "{}" });
+  }
+
+  async function loadDecisions() {
+    return request("/radar/decisions");
+  }
+
   /** Inventario deduplicado: una publicación, una fila, todas sus búsquedas. */
   async function loadListings(limit = 100) {
     listings = await request(`/radar/listings?limit=${encodeURIComponent(limit)}`);
@@ -366,6 +384,10 @@
     getBandLabel,
     describeBenchmark,
     describeCriteria,
+    loadFeed,
+    decide,
+    clearDecision,
+    loadDecisions,
     loadListings,
     getListings,
     loadRuns,

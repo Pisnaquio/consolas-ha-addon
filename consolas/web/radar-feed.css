@@ -1,0 +1,45 @@
+/* Collection Radar · Para mí. Extiende el lenguaje de la página de búsquedas. */
+.feed-hero { display:flex; justify-content:space-between; gap:24px; align-items:end; }
+.feed-counts { display:flex; gap:18px; font-family:"IBM Plex Mono",monospace; color:var(--muted); text-align:right; }
+.feed-counts div { display:grid; gap:2px; }
+.feed-counts strong { color:var(--ink); font-size:1.6rem; line-height:1; }
+.feed-counts span { font-size:.72rem; }
+
+.feed-list { display:grid; gap:14px; margin-top:20px; }
+.feed-card { padding:18px 20px; display:grid; gap:12px; }
+/* Una baja de precio es la novedad: se marca en el borde, no con otra card. */
+.feed-card.has-drop { border-left:3px solid var(--accent-2, #63d8aa); }
+.feed-card-head { display:flex; justify-content:space-between; gap:14px; align-items:start; }
+.feed-card-head > div { min-width:0; }
+.feed-card h2 { margin:.1rem 0; font-size:1.05rem; overflow-wrap:anywhere; }
+.feed-price { display:grid; justify-items:end; gap:3px; white-space:nowrap; }
+.feed-price strong { font-size:1.1rem; }
+.feed-price span { font:400 .76rem "IBM Plex Mono",monospace; color:var(--muted); }
+
+.drop { display:inline-flex; align-items:baseline; gap:7px; padding:5px 11px; border-radius:999px;
+        background:rgba(99,216,170,.13); border:1px solid rgba(99,216,170,.4); color:#63d8aa;
+        font:500 .8rem "IBM Plex Mono",monospace; }
+.drop s { color:var(--muted); text-decoration-thickness:1px; }
+
+.feed-why { margin:0; padding-left:16px; display:grid; gap:2px; font-size:.82rem; color:var(--muted); }
+.feed-why li.u { color:#ffd68c; }
+.feed-match { font:500 .74rem "IBM Plex Mono",monospace; color:var(--muted); }
+
+.feed-actions { display:flex; flex-wrap:wrap; gap:8px; margin:0; }
+.feed-actions .btn-link.is-on { border-color:var(--accent); color:var(--accent); }
+.feed-decision { font:500 .76rem "IBM Plex Mono",monospace; color:var(--muted); }
+.feed-decision.is-following { color:#63d8aa; }
+
+.dismiss-form { display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:11px 13px;
+                border:1px solid var(--line); border-radius:10px; background:rgba(255,255,255,.03); }
+.dismiss-form select,.dismiss-form input { min-width:0; }
+.dismiss-form input { flex:1 1 190px; }
+
+.feed-empty { padding:28px; text-align:center; border:1px dashed var(--line); border-radius:12px; color:var(--muted); }
+.feed-section-title { margin:26px 0 0; }
+@media (max-width:720px) {
+  .feed-hero { display:grid; }
+  .feed-counts { text-align:left; flex-wrap:wrap; }
+  .feed-card-head { flex-wrap:wrap; }
+  .feed-price { justify-items:start; }
+}
