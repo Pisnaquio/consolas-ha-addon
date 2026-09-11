@@ -762,3 +762,51 @@ class ContentTtlTests(RadarSearchTestCase):
         purge_expired_radar_content(self.config)
         self.assertEqual(purge_expired_radar_content(self.config)["purged"], 0)
 
+
+class ListingFeedValuationTests(RadarSearchTestCase):
+    """El feed deduplicado es el que va a consumir la vista «Para mí»."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        init_db(self.config)
+
+    def test_the_deduplicated_feed_carries_band_and_score(self) -> None:
+        summaries = [
+            ebay_summary(itemId=f"v1|{i}|0", title=f"Aladdin SNES cartridge {i}",
+                         price={"value": str(price), "currency": "USD"})
+            for i, price in enumerate([14.99, 16.99, 19.95, 20.99, 24.99])
+        ]
+        search = create_radar_search(self.config, {"name": "Aladdin", "platform": "SNES"})["search"]
+        with patch("radar.sources.ebay.EbayBrowseSource.fetch_item_summaries", return_value=summaries):
+            run_radar_search(self.config, search["id"])
+
+        items = list_radar_listings(self.config)["items"]
+        self.assertEqual(len(items), 5)
+        for item in items:
+            with self.subTest(title=item["title"]):
+                self.assertIsNotNone(item["band"], "sin banda el feed no puede ordenar decisiones")
+                self.assertIsNotNone(item["score"])
+                self.assertIn("cost", item["valuation"])
+
+    def test_without_a_catalog_price_the_run_still_produces_a_benchmark(self) -> None:
+        """Un juego no tiene precio de catálogo: sus pares son la referencia."""
+        summaries = [
+            ebay_summary(itemId=f"v1|{i}|0", title=f"Aladdin SNES cartridge {i}",
+                         price={"value": str(price), "currency": "USD"})
+            for i, price in enumerate([14.99, 16.99, 19.95, 20.99, 24.99])
+        ]
+        search = create_radar_search(self.config, {"name": "Aladdin"})["search"]
+        with patch("radar.sources.ebay.EbayBrowseSource.fetch_item_summaries", return_value=summaries):
+            run_radar_search(self.config, search["id"])
+
+        cheapest = min(list_radar_listings(self.config)["items"], key=lambda item: item["priceAmount"])
+        self.assertEqual(cheapest["valuation"]["benchmark"]["source"], "peer-listings")
+        self.assertNotEqual(cheapest["band"], "sin-referencia")
+
+    def test_a_single_listing_gets_no_invented_benchmark(self) -> None:
+        search = create_radar_search(self.config, {"name": "Rareza"})["search"]
+        with patch_ebay():
+            run_radar_search(self.config, search["id"])
+        item = list_radar_listings(self.config)["items"][0]
+        self.assertEqual(item["band"], "sin-referencia", "una sola publicación no es una mediana")
+

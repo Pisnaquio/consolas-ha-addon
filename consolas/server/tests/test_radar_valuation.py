@@ -10,6 +10,7 @@ from radar.valuation import (
     billable_weight_kg,
     courier_cost,
     estimate_weight_kg,
+    peer_listing_benchmark,
     cost_breakdown,
     decision_band,
     pick_benchmark,
@@ -390,6 +391,47 @@ class ImportedCostTests(unittest.TestCase):
             price_amount=100.0, shipping_amount=10.0, benchmark=None, entity_type="manual", today=TODAY
         )
         self.assertTrue(any("sin peso estimable" in caveat.lower() for caveat in card.caveats))
+
+
+class PeerListingBenchmarkTests(unittest.TestCase):
+    """La única referencia disponible para juegos: el catálogo sólo tiene consolas."""
+
+    def test_the_median_of_comparable_listings_becomes_a_reference(self) -> None:
+        # Precios reales de una corrida de Aladdin SNES.
+        ref = peer_listing_benchmark([14.99, 20.99, 19.95, 19.95, 16.99, 14.99], entity_id="aladdin")
+        self.assertEqual(ref.value, 18.47)
+        self.assertEqual(ref.source, "peer-listings")
+
+    def test_too_few_listings_produce_no_reference(self) -> None:
+        # Con tres publicaciones, una rara arrastra la mediana entera.
+        self.assertIsNone(peer_listing_benchmark([15.0, 20.0, 400.0]))
+
+    def test_asking_prices_are_independent_evidence_but_weak(self) -> None:
+        ref = peer_listing_benchmark([10.0, 12.0, 14.0, 16.0])
+        self.assertTrue(ref.independent, "son precios reales que alguien está pidiendo")
+        self.assertLessEqual(ref.confidence, 0.5, "pero pedidos no es vendidos")
+        self.assertIn("no vendidos", ref.notes)
+
+    def test_a_curated_reference_always_wins(self) -> None:
+        peers = peer_listing_benchmark([10.0, 12.0, 14.0, 16.0], entity_id="ps1")
+        for stronger in ("pricecharting", "retail", "ebay-sold"):
+            with self.subTest(source=stronger):
+                curated = PriceReference("ps1", stronger, 55.0)
+                self.assertEqual(pick_benchmark([peers, curated], today=TODAY).source, stronger)
+
+    def test_it_is_used_when_nothing_else_exists(self) -> None:
+        peers = peer_listing_benchmark([10.0, 12.0, 14.0, 16.0], entity_id="aladdin")
+        self.assertEqual(pick_benchmark([peers], today=TODAY).source, "peer-listings")
+
+    def test_the_card_says_the_reference_came_from_asking_prices(self) -> None:
+        peers = peer_listing_benchmark([14.99, 16.99, 19.95, 20.99], entity_id="aladdin")
+        card = score_listing(price_amount=14.99, shipping_amount=0.0, benchmark=peers, today=TODAY)
+        self.assertEqual(card.band, "buena")
+        self.assertTrue(any("no vendidos" in caveat for caveat in card.caveats))
+
+    def test_zero_and_negative_prices_are_ignored(self) -> None:
+        ref = peer_listing_benchmark([0, -5, 10.0, 12.0, 14.0, 16.0])
+        self.assertEqual(ref.value, 13.0)
 
 
 if __name__ == "__main__":

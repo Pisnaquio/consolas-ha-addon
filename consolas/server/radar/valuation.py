@@ -34,13 +34,14 @@ DECISION_BANDS = (
 EXPENSIVE_BAND = ("caro", "Caro")
 
 # Orden de preferencia de evidencia (PRD §10.2). Menor es mejor.
-SOURCE_RANK = {"ebay-sold": 0, "pricecharting": 1, "retail": 2, "manual": 3, "editorial": 4}
+SOURCE_RANK = {"ebay-sold": 0, "pricecharting": 1, "retail": 2, "manual": 3, "peer-listings": 4, "editorial": 5}
 
 SOURCE_LABELS = {
     "ebay-sold": "ventas cerradas en eBay",
     "pricecharting": "PriceCharting",
     "retail": "retail observado",
     "manual": "referencia manual",
+    "peer-listings": "publicaciones activas comparables",
     "editorial": "rango editorial",
 }
 
@@ -173,6 +174,43 @@ def references_from_console_entry(entry: dict[str, Any]) -> list[PriceReference]
         )
 
     return references
+
+
+# Mínimo de publicaciones para que una mediana signifique algo. Con menos, el
+# precio de una sola publicación rara arrastra la referencia entera.
+PEER_BENCHMARK_MINIMUM = 4
+
+
+def peer_listing_benchmark(
+    prices: list[float], entity_id: str = "", completeness: str = "loose", observed_at: str = ""
+) -> PriceReference | None:
+    """Mediana de las publicaciones activas que trajo la misma búsqueda.
+
+    Es la única referencia disponible para juegos: el catálogo tiene precios de
+    consolas y `priceGuide` vacío en los 574 registros de juegos. Sin esto, cada
+    búsqueda de un juego queda sin benchmark y su precio no se puede juzgar.
+
+    Es evidencia real y propia —son precios que alguien está pidiendo hoy— pero
+    **pedidos, no vendidos**, así que entra con confianza baja y por debajo de
+    PriceCharting y del retail observado en el orden de preferencia. Lo que un
+    vendedor pide no es lo que el mercado paga.
+    """
+
+    usable = sorted(price for price in prices if isinstance(price, (int, float)) and price > 0)
+    if len(usable) < PEER_BENCHMARK_MINIMUM:
+        return None
+    middle = len(usable) // 2
+    median = usable[middle] if len(usable) % 2 else (usable[middle - 1] + usable[middle]) / 2
+    return PriceReference(
+        entity_id=entity_id,
+        source="peer-listings",
+        value=round(median, 2),
+        completeness=completeness if completeness in {"loose", "cib", "boxed", "sealed"} else "loose",
+        observed_at=observed_at,
+        confidence=0.5,
+        independent=True,
+        notes=f"Mediana de {len(usable)} publicaciones activas de esta búsqueda; son precios pedidos, no vendidos.",
+    )
 
 
 def pick_benchmark(
@@ -404,6 +442,8 @@ def score_listing(
         if not benchmark.independent:
             penalize(6, "El benchmark no es evidencia independiente: copia otra fuente")
             card.caveats.append("La referencia de precio repite otra fuente; no la trates como corroboración.")
+        if benchmark.source == "peer-listings":
+            card.caveats.append(benchmark.notes)
         if benchmark.is_stale(today):
             age = benchmark.age_days(today)
             penalize(5, f"El benchmark tiene {age} días")
@@ -470,6 +510,7 @@ __all__ = [
     "PriceReference",
     "ScoreCard",
     "cost_breakdown",
+    "peer_listing_benchmark",
     "decision_band",
     "pick_benchmark",
     "references_from_console_entry",

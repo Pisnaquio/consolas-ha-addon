@@ -39,14 +39,19 @@ if str(_SERVER_DIR) not in sys.path:
     sys.path.insert(0, str(_SERVER_DIR))
 
 from radar.master import propose_master_searches  # noqa: E402
-from radar.valuation import pick_benchmark, references_from_console_entry, score_listing  # noqa: E402
+from radar.valuation import (  # noqa: E402
+    peer_listing_benchmark,
+    pick_benchmark,
+    references_from_console_entry,
+    score_listing,
+)
 from radar.matching import evaluate_match  # noqa: E402
 from radar.model import MarketplaceListing  # noqa: E402
 from radar.sources import registry as radar_registry  # noqa: E402
 
 
 SERVICE_NAME = "consolas-server"
-SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.27")
+SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.28")
 DEFAULT_DATA_DIR = "/data"
 DEFAULT_STATIC_DIR = "/app/web"
 DATABASE_NAME = "consolas.sqlite"
@@ -2616,12 +2621,15 @@ def list_radar_listings(config: AppConfig, limit: int = 100) -> dict[str, Any]:
         listing_rows = conn.execute(
             """
             SELECT l.*, MAX(m.confidence) AS best_confidence, COUNT(*) AS match_count,
-                   MAX(m.last_seen_at) AS match_last_seen_at
+                   MAX(m.last_seen_at) AS match_last_seen_at,
+                   MAX(COALESCE(m.score, -1)) AS best_score,
+                   -- SQLite deja leer las demás columnas de la fila que ganó el MAX.
+                   m.band AS best_band, m.valuation_json AS best_valuation_json
               FROM radar_listings l
               JOIN radar_search_matches m ON m.listing_id = l.id AND m.is_active = 1
               JOIN radar_searches s ON s.id = m.search_id AND s.deleted_at IS NULL
              GROUP BY l.id
-             ORDER BY best_confidence DESC, match_last_seen_at DESC
+             ORDER BY best_score DESC, best_confidence DESC, match_last_seen_at DESC
              LIMIT ?
             """,
             (capped,),
@@ -2662,6 +2670,11 @@ def list_radar_listings(config: AppConfig, limit: int = 100) -> dict[str, Any]:
                     "availability": row["availability"],
                     "closesAt": row["closes_at"],
                     "confidence": row["best_confidence"],
+                    # La banda y el score salen de la coincidencia mejor puntuada:
+                    # una misma publicación puede valer distinto según la búsqueda.
+                    "score": row["best_score"] if row["best_score"] is not None and row["best_score"] >= 0 else None,
+                    "band": row["best_band"],
+                    "valuation": radar_json_field(row["best_valuation_json"], {}),
                     "firstSeenAt": row["first_seen_at"],
                     "lastSeenAt": row["last_seen_at"],
                     "matchCount": row["match_count"],
@@ -3137,6 +3150,17 @@ def execute_radar_search(config: AppConfig, target_id: str, run_id: str = "") ->
 
     capabilities_by_source = {source_id: radar_source_capabilities(source_id) for source_id in sources}
     references = radar_entity_references(config, str(row["entity_type"]), str(row["entity_id"]))
+    # Sin catálogo de precios para esta entidad, las publicaciones de esta misma
+    # corrida son la única referencia disponible. Entra al final de la lista: la
+    # preferencia de fuentes ya la deja por debajo de cualquier curada.
+    peers = peer_listing_benchmark(
+        [listing.price_amount for page in pages for listing in page.listings if listing.price_amount],
+        entity_id=str(row["entity_id"]) or str(row["id"]),
+        completeness=str(criteria.get("completeness") or "loose"),
+        observed_at=now,
+    )
+    if peers is not None:
+        references = [*references, peers]
     matched_ids: list[str] = []
     rejected = 0
 
