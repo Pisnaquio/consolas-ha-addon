@@ -430,7 +430,7 @@ def score_listing(
 
     # --- Vendedor y devolución ------------------------------------------------
     add("seller", WEIGHTS["seller"] * (0.7 if seller_known else 0.3),
-        "Vendedor identificado" if seller_known else "Vendedor sin reputación conocida")
+        "Reputación del vendedor conocida" if seller_known else "Vendedor sin reputación conocida")
 
     # --- Logística ------------------------------------------------------------
     if card.cost["shippingKnown"]:

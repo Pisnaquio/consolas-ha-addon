@@ -582,7 +582,7 @@ class ListingDedupeTests(RadarSearchTestCase):
         self.assertEqual(item["shippingAmount"], 12.0)
         self.assertEqual(item["totalAmount"], 161.99)
         self.assertEqual(item["listingType"], "Compra directa")
-        self.assertEqual(item["sellerLabel"], "retrogames · 99.4%")
+        self.assertEqual(item["sellerLabel"], "99.4% de feedback")
 
     def test_a_deleted_search_drops_out_of_the_listing_feed(self) -> None:
         search = create_radar_search(self.config, {"name": "PS2"})["search"]
@@ -629,3 +629,58 @@ class ChasingGamesCompatibilityTests(RadarSearchTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SellerIdentityMigrationTests(RadarSearchTestCase):
+    """Lo que se le declara a eBay tiene que ser cierto también de lo ya guardado."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        init_db(self.config)
+
+    def stored_labels(self) -> list[str]:
+        with connect_db(self.config) as conn:
+            return [str(row["seller_label"]) for row in conn.execute("SELECT seller_label FROM radar_listings")]
+
+    def seed_legacy_listing(self, label: str) -> None:
+        """Deja una fila como la habría dejado una versión anterior del add-on.
+
+        Se borra el marcador para que el próximo `init_db` sea el arranque que
+        estrena la migración, que es el orden real de una actualización.
+        """
+        with connect_db(self.config) as conn:
+            conn.execute(
+                """INSERT INTO radar_listings (id, source_id, external_id, title, listing_url, seller_label,
+                     first_seen_at, last_seen_at)
+                   VALUES (?, 'ebay-us', ?, 'PS2', 'https://www.ebay.com/itm/1', ?, '2026-01-01T00:00:00Z',
+                     '2026-01-01T00:00:00Z')""",
+                (f"ebay-us-{abs(hash(label))}", label, label),
+            )
+            conn.execute("DELETE FROM radar_migrations WHERE id = 'drop_seller_identity_v1'")
+
+    def test_a_stored_username_is_scrubbed_and_the_reputation_kept(self) -> None:
+        self.seed_legacy_listing("retrogames · 99.4%")
+        init_db(self.config)
+
+        labels = self.stored_labels()
+        self.assertEqual(labels, ["99.4% de feedback"])
+        self.assertNotIn("retrogames", " ".join(labels))
+
+    def test_a_label_without_identity_is_left_alone(self) -> None:
+        self.seed_legacy_listing("99.4% de feedback")
+        init_db(self.config)
+        self.assertEqual(self.stored_labels(), ["99.4% de feedback"])
+
+    def test_the_scrub_runs_once(self) -> None:
+        self.seed_legacy_listing("retrogames · 99.4%")
+        init_db(self.config)
+        first = self.stored_labels()
+        # Un reinicio posterior no vuelve a tocar nada.
+        init_db(self.config)
+        self.assertEqual(self.stored_labels(), first)
+        with connect_db(self.config) as conn:
+            marks = conn.execute(
+                "SELECT COUNT(*) AS total FROM radar_migrations WHERE id = 'drop_seller_identity_v1'"
+            ).fetchone()
+        self.assertEqual(marks["total"], 1)
+

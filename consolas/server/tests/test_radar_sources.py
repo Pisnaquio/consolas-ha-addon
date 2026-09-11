@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import unittest
 from unittest.mock import patch
 
@@ -128,7 +129,8 @@ class EbayParsingTests(unittest.TestCase):
         self.assertEqual(listing.shipping_amount, 12.0)
         self.assertEqual(listing.total_amount, 161.99)
         self.assertEqual(listing.listing_kind, "fixed_price")
-        self.assertEqual(listing.seller_label, "retrogames · 99.4%")
+        self.assertEqual(listing.seller_label, "99.4% de feedback")
+        self.assertNotIn("retrogames", listing.seller_label, "la identidad del vendedor no se guarda")
         self.assertEqual(listing.availability, "unknown")
 
     def test_an_auction_is_recognized_as_such(self) -> None:
@@ -220,6 +222,36 @@ class ListingModelTests(unittest.TestCase):
     def test_a_receipt_with_errors_is_never_authoritative(self) -> None:
         receipt = SourceReceipt(source_id="ebay-us", status="complete", query="q", errors=["algo falló"])
         self.assertFalse(receipt.is_authoritative)
+
+
+class SellerPrivacyTests(unittest.TestCase):
+    """La reputación sirve para decidir; la identidad del vendedor no se guarda.
+
+    Es lo que sostiene la declaración de exención ante eBay: la aplicación no
+    almacena datos de sus usuarios. Ver docs/EBAY_PRODUCTION_ACCESS.md.
+    """
+
+    def test_the_username_never_reaches_the_listing(self) -> None:
+        listing = parse_item_summary(summary(seller={"username": "retrogames", "feedbackPercentage": "99.4"}))
+        serialized = json.dumps(listing.to_dict(), ensure_ascii=False)
+        self.assertNotIn("retrogames", serialized)
+
+    def test_the_reputation_survives_because_the_score_needs_it(self) -> None:
+        listing = parse_item_summary(summary(seller={"username": "retrogames", "feedbackPercentage": "99.4"}))
+        self.assertIn("99.4", listing.seller_label)
+
+    def test_a_seller_without_feedback_leaves_the_field_empty(self) -> None:
+        listing = parse_item_summary(summary(seller={"username": "retrogames"}))
+        self.assertEqual(listing.seller_label, "")
+
+    def test_no_other_seller_field_leaks_into_the_listing(self) -> None:
+        listing = parse_item_summary(
+            summary(seller={"username": "retrogames", "feedbackPercentage": "99.4", "sellerAccountType": "BUSINESS"})
+        )
+        serialized = json.dumps(listing.to_dict(), ensure_ascii=False)
+        for leaked in ("retrogames", "BUSINESS", "sellerAccountType"):
+            with self.subTest(value=leaked):
+                self.assertNotIn(leaked, serialized)
 
 
 if __name__ == "__main__":

@@ -143,10 +143,12 @@ def parse_item_summary(raw: Any) -> MarketplaceListing | None:
     shipping_amount = to_amount(shipping_cost.get("value"))
     shipping_cost_type = clean_text(shipping.get("shippingCostType")).upper()
 
-    seller_label = clean_text(seller.get("username"))
+    # Se conserva la reputación y se descarta la identidad. El nombre de usuario
+    # de un vendedor es un dato de una persona con cuenta en eBay; el porcentaje
+    # de feedback es la señal que el score necesita y no identifica a nadie.
+    # Ver docs/EBAY_PRODUCTION_ACCESS.md.
     feedback = clean_text(seller.get("feedbackPercentage"))
-    if seller_label and feedback:
-        seller_label = f"{seller_label} · {feedback}%"
+    seller_label = f"{feedback}% de feedback" if feedback else ""
 
     shipping_currency = clean_text(shipping_cost.get("currency")).upper() or price_currency
     shipping_label = ""

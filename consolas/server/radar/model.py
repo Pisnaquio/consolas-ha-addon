@@ -38,6 +38,8 @@ class MarketplaceListing:
     shipping_label: str = ""
     condition_label: str = ""
     location_label: str = ""
+    # Reputación del vendedor, nunca su identidad: acá no entra un nombre de
+    # usuario ni nada que permita reconocer a la persona detrás de la cuenta.
     seller_label: str = ""
     region_label: str = ""
     availability: str = "unknown"

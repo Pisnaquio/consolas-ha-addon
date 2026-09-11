@@ -46,7 +46,7 @@ from radar.sources import registry as radar_registry  # noqa: E402
 
 
 SERVICE_NAME = "consolas-server"
-SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.25")
+SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.26")
 DEFAULT_DATA_DIR = "/data"
 DEFAULT_STATIC_DIR = "/app/web"
 DATABASE_NAME = "consolas.sqlite"
@@ -90,6 +90,7 @@ RADAR_MAX_RESULT_LIMIT = 50
 RADAR_MIGRATION_CHASING_GAMES = "chasing_games_v1"
 RADAR_MIGRATION_LISTINGS = "radar_listings_v1"
 RADAR_MIGRATION_SEED = "seed_iss_deluxe_v1"
+RADAR_MIGRATION_SELLER_IDENTITY = "drop_seller_identity_v1"
 
 # Scheduler durable. Los horarios están cerrados en el PRD §16: tres corridas
 # diarias en la zona del usuario. Un slot genera como máximo un scan.
@@ -520,6 +521,7 @@ def init_db(config: AppConfig) -> None:
                 conn.execute(f"ALTER TABLE radar_search_matches ADD COLUMN {column_name} {column_definition}")
         migrate_chasing_games_to_radar(conn)
         migrate_radar_results_to_listings(conn)
+        migrate_drop_seller_identity(conn)
         seed_radar_searches(conn)
 
 
@@ -2204,6 +2206,33 @@ def migrate_radar_results_to_listings(conn: sqlite3.Connection) -> None:
             ),
         )
     mark_radar_migration(conn, RADAR_MIGRATION_LISTINGS)
+
+
+def migrate_drop_seller_identity(conn: sqlite3.Connection) -> None:
+    """Borra los nombres de usuario de vendedores que se hayan guardado antes.
+
+    Cambiar el adapter evita guardarlos de ahora en más, pero la declaración que
+    se le firma a eBay —que la aplicación no almacena datos de sus usuarios—
+    tiene que ser cierta también de lo que ya está en disco.
+
+    El formato viejo era `usuario · 99.4%`. Se conserva la reputación, que es lo
+    que el score necesita, y se descarta la identidad.
+    """
+
+    if radar_migration_applied(conn, RADAR_MIGRATION_SELLER_IDENTITY):
+        return
+    for row in conn.execute(
+        "SELECT id, seller_label FROM radar_listings WHERE seller_label != ''"
+    ).fetchall():
+        label = str(row["seller_label"])
+        if "·" not in label:
+            continue
+        percentage = label.rsplit("·", 1)[-1].strip().rstrip("%").strip()
+        replacement = f"{percentage}% de feedback" if percentage else ""
+        conn.execute(
+            "UPDATE radar_listings SET seller_label = ? WHERE id = ?", (replacement, str(row["id"]))
+        )
+    mark_radar_migration(conn, RADAR_MIGRATION_SELLER_IDENTITY)
 
 
 def seed_radar_searches(conn: sqlite3.Connection) -> None:
