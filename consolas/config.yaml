@@ -1,5 +1,5 @@
 name: "Consolas"
-version: "0.1.31"
+version: "0.1.32"
 slug: "consolas"
 description: "Coleccion de consolas y juegos como add-on de Home Assistant con SQLite server-side."
 arch:
@@ -44,6 +44,13 @@ options:
   auction_watch_smtp_password: ""
   auction_watch_email_from: ""
   auction_watch_email_to: ""
+  radar_email_mode: disabled
+  radar_email_from: ""
+  radar_email_to: ""
+  radar_smtp_host: ""
+  radar_smtp_port: 587
+  radar_smtp_username: ""
+  radar_smtp_password: ""
 schema:
   log_level: list(trace|debug|info|notice|warning|error|fatal)
   ebay_environment: list(sandbox|production)
@@ -57,6 +64,13 @@ schema:
   auction_watch_smtp_password: password?
   auction_watch_email_from: str?
   auction_watch_email_to: str?
+  radar_email_mode: list(disabled|digest|digest_and_alerts)
+  radar_email_from: str?
+  radar_email_to: str?
+  radar_smtp_host: str?
+  radar_smtp_port: port?
+  radar_smtp_username: str?
+  radar_smtp_password: password?
 
 environment:
   CONSOLAS_HOST: "0.0.0.0"

@@ -29,6 +29,15 @@ if command -v bashio::config >/dev/null 2>&1; then
   export AUCTION_WATCH_SMTP_PASSWORD="${AUCTION_WATCH_SMTP_PASSWORD:-$(bashio::config 'auction_watch_smtp_password' 2>/dev/null || true)}"
   export AUCTION_WATCH_EMAIL_FROM="${AUCTION_WATCH_EMAIL_FROM:-$(bashio::config 'auction_watch_email_from' 2>/dev/null || true)}"
   export AUCTION_WATCH_EMAIL_TO="${AUCTION_WATCH_EMAIL_TO:-$(bashio::config 'auction_watch_email_to' 2>/dev/null || true)}"
+  # Collection Radar entrega por su cuenta: asunto y destinatarios propios, con
+  # el transporte SMTP de Auction Watch como respaldo (ver server/app.py).
+  export RADAR_EMAIL_MODE="${RADAR_EMAIL_MODE:-$(bashio::config 'radar_email_mode' 2>/dev/null || true)}"
+  export RADAR_EMAIL_FROM="${RADAR_EMAIL_FROM:-$(bashio::config 'radar_email_from' 2>/dev/null || true)}"
+  export RADAR_EMAIL_TO="${RADAR_EMAIL_TO:-$(bashio::config 'radar_email_to' 2>/dev/null || true)}"
+  export RADAR_SMTP_HOST="${RADAR_SMTP_HOST:-$(bashio::config 'radar_smtp_host' 2>/dev/null || true)}"
+  export RADAR_SMTP_PORT="${RADAR_SMTP_PORT:-$(bashio::config 'radar_smtp_port' 2>/dev/null || true)}"
+  export RADAR_SMTP_USERNAME="${RADAR_SMTP_USERNAME:-$(bashio::config 'radar_smtp_username' 2>/dev/null || true)}"
+  export RADAR_SMTP_PASSWORD="${RADAR_SMTP_PASSWORD:-$(bashio::config 'radar_smtp_password' 2>/dev/null || true)}"
 fi
 export EBAY_ENVIRONMENT="${EBAY_ENVIRONMENT:-sandbox}"
 export AUCTION_WATCH_EMAIL_MODE="${AUCTION_WATCH_EMAIL_MODE:-matches_or_failure}"
