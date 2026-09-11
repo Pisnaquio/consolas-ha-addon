@@ -51,7 +51,7 @@ from radar.sources import registry as radar_registry  # noqa: E402
 
 
 SERVICE_NAME = "consolas-server"
-SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.28")
+SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.29")
 DEFAULT_DATA_DIR = "/data"
 DEFAULT_STATIC_DIR = "/app/web"
 DATABASE_NAME = "consolas.sqlite"
@@ -2469,13 +2469,22 @@ def normalize_radar_sources(value: Any) -> list[str]:
 
 
 def build_radar_search_query(name: str, platform: str, criteria: dict[str, Any], explicit: Any = None) -> str:
-    """Explicit query wins; otherwise derive a predictable one from identity and terms."""
+    """Arma la consulta que se le manda a la fuente.
+
+    Una consulta escrita a mano gana siempre. Si no hay, se deriva — pero el
+    nombre de la búsqueda sólo entra **cuando no hay términos requeridos**.
+
+    El nombre es una etiqueta para el usuario, no términos de búsqueda: una
+    búsqueda llamada «PS2 joyas baratas» mandaba literalmente `joyas baratas` a
+    eBay y volvía vacía. Cuando la búsqueda declara qué términos exige, esos
+    términos son la consulta.
+    """
+
     explicit_query = " ".join(str(explicit or "").split()).strip()
     if explicit_query:
         return explicit_query[:300]
-    parts = [name, platform]
-    for term in criteria.get("includeTerms") or []:
-        parts.append(term)
+    include_terms = list(criteria.get("includeTerms") or [])
+    parts = [*include_terms, platform] if include_terms else [name, platform]
     seen: set[str] = set()
     words: list[str] = []
     for part in parts:

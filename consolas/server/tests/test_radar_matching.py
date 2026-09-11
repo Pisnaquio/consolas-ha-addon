@@ -153,6 +153,21 @@ class ConditionTests(unittest.TestCase):
         self.assertFalse(verdict.matched)
         self.assertIn("Declara piezas no originales («aftermarket») y la búsqueda exige originales", verdict.blockers)
 
+    def test_silence_about_originality_is_not_proof_of_a_reproduction(self) -> None:
+        """Quien vende un cartucho auténtico rara vez escribe «original»."""
+        verdict = evaluate_match(
+            listing("Aladdin (Super Nintendo SNES, 1993) Cartridge Only. TESTED"),
+            criteria(originalParts="required"),
+        )
+        self.assertTrue(verdict.matched, "exigir prueba positiva descartaba el mercado entero")
+        self.assertIn("Originalidad sin declarar: verificar antes de comprar", verdict.unverified)
+
+    def test_a_declared_reproduction_is_still_blocked(self) -> None:
+        verdict = evaluate_match(
+            listing("Aladdin SNES reproduction cartridge"), criteria(originalParts="required")
+        )
+        self.assertFalse(verdict.matched)
+
 
 class CompletenessTests(unittest.TestCase):
     def test_complete_in_box_reads_as_cib_not_merely_boxed(self) -> None:

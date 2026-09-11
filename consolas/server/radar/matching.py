@@ -190,6 +190,13 @@ def evaluate_match(
     elif untested_signal:
         verdict.reasons.append(f"Se declara «{untested_signal}»: riesgo explícito")
 
+    # La originalidad se trata al revés que el testeo, y el mercado explica por
+    # qué: quien vende un cartucho auténtico rara vez escribe «original», porque
+    # se da por sentado; el que sí lo aclara suele ser quien vende una copia.
+    # Exigir prueba positiva descartaba el mercado entero — 25 de 25 en la
+    # primera calibración real. Así que `required` bloquea ante evidencia de
+    # NO originalidad, y la ausencia de declaración queda sin verificar, que es
+    # la misma regla que rige al resto del módulo.
     original_requirement = str(criteria.get("originalParts") or "any")
     aftermarket_signal = any_signal(haystack, AFTERMARKET_SIGNALS)
     if original_requirement != "any":
@@ -203,10 +210,8 @@ def evaluate_match(
         elif any_signal(haystack, OEM_SIGNALS):
             signals_hit += 1
             verdict.reasons.append("Declara piezas originales/OEM")
-        elif original_requirement == "required":
-            verdict.blockers.append("No declara piezas originales y la búsqueda lo exige")
         else:
-            verdict.unverified.append("Originalidad de las piezas sin confirmar")
+            verdict.unverified.append("Originalidad sin declarar: verificar antes de comprar")
 
     completeness = str(criteria.get("completeness") or "any")
     if completeness != "any":

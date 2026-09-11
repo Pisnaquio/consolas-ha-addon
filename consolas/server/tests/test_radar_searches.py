@@ -208,7 +208,10 @@ class RadarSearchLifecycleTests(RadarSearchTestCase):
         self.assertEqual(created["criteria"]["tested"], "required")
         self.assertEqual(created["criteria"]["maxItemPrice"], 300.0)
         self.assertEqual(created["criteria"]["resultLimit"], 8)
-        self.assertEqual(created["searchQuery"], "PlayStation 2 lista para usar PS2 tested OEM controller")
+        # El nombre de la búsqueda no viaja a la fuente: una etiqueta en castellano
+        # no es un término de búsqueda. Mandan los términos requeridos.
+        self.assertEqual(created["searchQuery"], "tested OEM controller PS2")
+        self.assertNotIn("lista para usar", created["searchQuery"])
 
         reloaded = self.find(created["id"])
         self.assertEqual(reloaded["criteria"], created["criteria"])
@@ -809,4 +812,31 @@ class ListingFeedValuationTests(RadarSearchTestCase):
             run_radar_search(self.config, search["id"])
         item = list_radar_listings(self.config)["items"][0]
         self.assertEqual(item["band"], "sin-referencia", "una sola publicación no es una mediana")
+
+
+class SearchQueryDerivationTests(RadarSearchTestCase):
+    """El nombre es una etiqueta para el usuario; los términos son la consulta."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        init_db(self.config)
+
+    def test_a_descriptive_name_never_reaches_the_source(self) -> None:
+        search = create_radar_search(
+            self.config,
+            {"name": "PS2 joyas baratas", "platform": "PS2", "criteria": {"includeTerms": "playstation 2"}},
+        )["search"]
+        self.assertEqual(search["searchQuery"], "playstation 2 PS2")
+        self.assertNotIn("joyas", search["searchQuery"])
+
+    def test_without_required_terms_the_name_is_the_best_available_query(self) -> None:
+        search = create_radar_search(self.config, {"name": "Mappy", "platform": "NES"})["search"]
+        self.assertEqual(search["searchQuery"], "Mappy NES")
+
+    def test_a_handwritten_query_still_wins(self) -> None:
+        search = create_radar_search(
+            self.config,
+            {"name": "PS2 joyas baratas", "searchQuery": "ps2 game lot", "criteria": {"includeTerms": "ps2"}},
+        )["search"]
+        self.assertEqual(search["searchQuery"], "ps2 game lot")
 
