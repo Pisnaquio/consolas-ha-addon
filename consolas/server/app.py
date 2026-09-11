@@ -46,7 +46,7 @@ from radar.sources import registry as radar_registry  # noqa: E402
 
 
 SERVICE_NAME = "consolas-server"
-SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.26")
+SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.27")
 DEFAULT_DATA_DIR = "/data"
 DEFAULT_STATIC_DIR = "/app/web"
 DATABASE_NAME = "consolas.sqlite"
@@ -3613,6 +3613,34 @@ def list_radar_runs(config: AppConfig, limit: int = RADAR_RUN_HISTORY_LIMIT) -> 
     }
 
 
+def purge_expired_radar_content(config: AppConfig) -> dict[str, Any]:
+    """Borra el contenido de publicaciones cuyo TTL de licencia venció.
+
+    Cada fuente declara `contentTtlSeconds` y cada publicación guarda su
+    `content_expires_at`. Hasta acá eso se escribía y nunca se leía: el contenido
+    quedaba para siempre.
+
+    Una publicación que sigue apareciendo renueva su vencimiento en cada corrida,
+    así que lo que se borra es lo que dejó de aparecer y ya no se refresca. Las
+    coincidencias caen por `ON DELETE CASCADE` — `PRAGMA foreign_keys` está
+    encendido en `connect_db`.
+    """
+
+    now = utc_now()
+    with _RADAR_LOCK, connect_db(config) as conn:
+        cursor = conn.execute(
+            """DELETE FROM radar_listings
+                WHERE content_expires_at IS NOT NULL
+                  AND content_expires_at != ''
+                  AND content_expires_at < ?""",
+            (now,),
+        )
+        purged = cursor.rowcount
+    if purged:
+        print(f"[consolas] Collection Radar: {purged} publicaciones vencidas purgadas")
+    return {"ok": True, "purged": max(0, purged), "purgedAt": now}
+
+
 def run_active_radar_searches(config: AppConfig) -> dict[str, Any]:
     """Corre todas las búsquedas aprobadas y activas, sin ligarlas a un slot.
 
@@ -3815,6 +3843,8 @@ class RadarSearchScheduler(threading.Thread):
     def run(self) -> None:
         while True:
             try:
+                # El TTL de licencia no espera a que haya una corrida pendiente.
+                purge_expired_radar_content(self.config)
                 for outcome in run_due_radar_slots(self.config):
                     print(f"[consolas] Collection Radar slot {outcome['slotKey']}: {outcome['state']}")
             except Exception as error:  # el scheduler no puede morirse por una corrida
@@ -4199,6 +4229,7 @@ def main() -> int:
     config = AppConfig()
     init_db(config)
     ensure_state_media_migrated(config)
+    purge_expired_radar_content(config)
     RadarSearchScheduler(config).start()
     print(f"[consolas] Starting on {config.host}:{config.port}")
     print(f"[consolas] Persistent data: {config.data_dir}")

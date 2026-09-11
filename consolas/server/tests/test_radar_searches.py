@@ -19,6 +19,7 @@ from server.app import (
     list_chasing_games,
     list_radar_listings,
     list_radar_searches,
+    purge_expired_radar_content,
     radar_search_payload,
     read_state,
     run_active_radar_searches,
@@ -683,4 +684,81 @@ class SellerIdentityMigrationTests(RadarSearchTestCase):
                 "SELECT COUNT(*) AS total FROM radar_migrations WHERE id = 'drop_seller_identity_v1'"
             ).fetchone()
         self.assertEqual(marks["total"], 1)
+
+
+class ContentTtlTests(RadarSearchTestCase):
+    """El TTL de licencia se aplica; no alcanza con guardarlo."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        init_db(self.config)
+
+    def listing_count(self) -> int:
+        with connect_db(self.config) as conn:
+            return conn.execute("SELECT COUNT(*) AS total FROM radar_listings").fetchone()["total"]
+
+    def match_count(self) -> int:
+        with connect_db(self.config) as conn:
+            return conn.execute("SELECT COUNT(*) AS total FROM radar_search_matches").fetchone()["total"]
+
+    def store_listing(self, external_id: str, expires_at: str | None) -> None:
+        with connect_db(self.config) as conn:
+            conn.execute(
+                """INSERT INTO radar_listings (id, source_id, external_id, title, listing_url,
+                     content_expires_at, first_seen_at, last_seen_at)
+                   VALUES (?, 'ebay-us', ?, 'PS2', 'https://www.ebay.com/itm/1', ?,
+                     '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')""",
+                (f"ebay-us-{external_id}", external_id, expires_at),
+            )
+
+    def test_expired_content_is_deleted(self) -> None:
+        self.store_listing("vieja", "2020-01-01T00:00:00Z")
+        self.assertEqual(self.listing_count(), 1)
+
+        result = purge_expired_radar_content(self.config)
+
+        self.assertEqual(result["purged"], 1)
+        self.assertEqual(self.listing_count(), 0)
+
+    def test_content_still_within_its_ttl_survives(self) -> None:
+        self.store_listing("fresca", "2099-01-01T00:00:00Z")
+        purge_expired_radar_content(self.config)
+        self.assertEqual(self.listing_count(), 1)
+
+    def test_content_without_a_ttl_is_left_alone(self) -> None:
+        # Filas migradas desde el modelo viejo no declaran vencimiento.
+        self.store_listing("sin-ttl", None)
+        purge_expired_radar_content(self.config)
+        self.assertEqual(self.listing_count(), 1)
+
+    def test_purging_a_listing_takes_its_matches_with_it(self) -> None:
+        search = create_radar_search(self.config, {"name": "PS2"})["search"]
+        self.store_listing("vieja", "2020-01-01T00:00:00Z")
+        with connect_db(self.config) as conn:
+            conn.execute(
+                """INSERT INTO radar_search_matches (search_id, listing_id, first_seen_at, last_seen_at)
+                   VALUES (?, 'ebay-us-vieja', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')""",
+                (search["id"],),
+            )
+        self.assertEqual(self.match_count(), 1)
+
+        purge_expired_radar_content(self.config)
+
+        self.assertEqual(self.match_count(), 0, "una coincidencia no puede apuntar a contenido borrado")
+
+    def test_a_listing_that_keeps_appearing_renews_its_ttl(self) -> None:
+        search = create_radar_search(self.config, {"name": "PS2"})["search"]
+        with patch_ebay():
+            run_radar_search(self.config, search["id"])
+        with connect_db(self.config) as conn:
+            expires = conn.execute("SELECT content_expires_at FROM radar_listings").fetchone()[0]
+
+        self.assertIsNotNone(expires, "la fuente declara contentTtlSeconds y la fila lo guarda")
+        purge_expired_radar_content(self.config)
+        self.assertEqual(self.listing_count(), 1, "lo que se acaba de ver no está vencido")
+
+    def test_purging_is_safe_to_repeat(self) -> None:
+        self.store_listing("vieja", "2020-01-01T00:00:00Z")
+        purge_expired_radar_content(self.config)
+        self.assertEqual(purge_expired_radar_content(self.config)["purged"], 0)
 
