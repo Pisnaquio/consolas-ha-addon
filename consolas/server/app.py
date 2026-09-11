@@ -17,6 +17,7 @@ import os
 import posixpath
 import shutil
 import sqlite3
+import sys
 import threading
 import uuid
 import urllib.parse
@@ -25,15 +26,25 @@ import urllib.request
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
-from html.parser import HTMLParser
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
+# El add-on arranca `python3 /app/server/app.py` y los tests importan `server.app`.
+# Poner este directorio en el path deja un único nombre `radar.*` en los dos modos,
+# igual que hace `agents/auction-watch/scripts/run_watch.py` con su propio paquete.
+_SERVER_DIR = Path(__file__).resolve().parent
+if str(_SERVER_DIR) not in sys.path:
+    sys.path.insert(0, str(_SERVER_DIR))
+
+from radar.matching import evaluate_match  # noqa: E402
+from radar.model import MarketplaceListing  # noqa: E402
+from radar.sources import registry as radar_registry  # noqa: E402
+
 
 SERVICE_NAME = "consolas-server"
-SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.22")
+SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.23")
 DEFAULT_DATA_DIR = "/data"
 DEFAULT_STATIC_DIR = "/app/web"
 DATABASE_NAME = "consolas.sqlite"
@@ -56,10 +67,57 @@ CHASING_GAMES_VERSION = 1
 CHASING_GAMES_SOURCE = "ebay-us"
 CHASING_GAMES_INTERVAL_SECONDS = int(os.getenv("CHASING_GAMES_INTERVAL_SECONDS", "86400"))
 EBAY_ENVIRONMENTS = {"sandbox", "production"}
+
+# Collection Radar: modelo general de busqueda persistente. Ver
+# docs/COLLECTION_RADAR_IMPLEMENTATION_PLAN.md
+RADAR_SEARCHES_VERSION = 1
+RADAR_DEFAULT_SOURCE = "ebay-us"
+RADAR_WRITE_HEADER = "X-Consolas-Radar"
+RADAR_SEARCH_STATUSES = ("draft", "active", "paused", "archived")
+RADAR_SEARCH_TYPES = ("chase", "console", "lot", "upgrade", "discovery", "master")
+RADAR_SEARCH_ORIGINS = ("user", "master", "suggestion")
+RADAR_PRIORITIES = ("alta", "media-alta", "media", "baja")
+RADAR_ENTITY_TYPES = ("", "console", "game", "accessory", "manual")
+RADAR_CONDITIONS = ("any", "new", "used", "refurbished")
+RADAR_COMPLETENESS = ("any", "loose", "boxed", "cib", "sealed")
+RADAR_REQUIREMENT_LEVELS = ("any", "preferred", "required")
+RADAR_MAX_TERMS = 24
+RADAR_MAX_TERM_LENGTH = 80
+RADAR_DEFAULT_RESULT_LIMIT = 12
+RADAR_MAX_RESULT_LIMIT = 50
+RADAR_MIGRATION_CHASING_GAMES = "chasing_games_v1"
+RADAR_MIGRATION_LISTINGS = "radar_listings_v1"
+RADAR_MIGRATION_SEED = "seed_iss_deluxe_v1"
+
+# Scheduler durable. Los horarios están cerrados en el PRD §16: tres corridas
+# diarias en la zona del usuario. Un slot genera como máximo un scan.
+RADAR_TIMEZONE_NAME = os.getenv("CONSOLAS_RADAR_TIMEZONE", "America/Montevideo")
+RADAR_SLOTS: tuple[tuple[str, int, int], ...] = (
+    ("morning", 9, 0),
+    ("afternoon", 16, 0),
+    ("night", 22, 30),
+)
+RADAR_SLOT_KEYS = tuple(slot[0] for slot in RADAR_SLOTS)
+RADAR_SLOT_LABELS = {"morning": "09:00", "afternoon": "16:00", "night": "22:30"}
+RADAR_SCHEDULER_INTERVAL_SECONDS = max(5, int(os.getenv("CONSOLAS_RADAR_SCHEDULER_INTERVAL_SECONDS", "60")))
+# Una corrida manual reciente y exitosa satisface el slot siguiente, igual que en
+# Auction Watch: no se vuelve a escanear lo mismo minutos después.
+RADAR_MANUAL_FRESHNESS_MINUTES = max(0, int(os.getenv("CONSOLAS_RADAR_MANUAL_FRESHNESS_MINUTES", "30")))
+RADAR_RUN_KINDS = ("scheduled", "manual")
+RADAR_RUN_STATUSES = ("running", "completed", "degraded", "failed")
+RADAR_SLOT_STATES = ("fulfilled", "skipped")
+RADAR_RUN_HISTORY_LIMIT = 20
+
 _AUCTION_WATCH_DISMISSALS_LOCK = threading.RLock()
 _AUCTION_WATCH_SNAPSHOT_LOCK = threading.RLock()
 _AUCTION_WATCH_RUN_LOCK = threading.RLock()
-_CHASING_GAMES_LOCK = threading.RLock()
+_RADAR_LOCK = threading.RLock()
+_RADAR_RUN_LOCK = threading.RLock()
+# Un lock por búsqueda: el scheduler y un "Buscar ahora" no pueden escanear la
+# misma búsqueda a la vez, ni siquiera durante la llamada de red.
+_RADAR_SEARCH_LOCKS: dict[str, threading.Lock] = {}
+# Alias historico: Chasing Games y Collection Radar comparten dominio y lock.
+_CHASING_GAMES_LOCK = _RADAR_LOCK
 
 
 class ApiError(Exception):
@@ -267,6 +325,153 @@ def init_db(config: AppConfig) -> None:
               UNIQUE(chase_id, external_id),
               FOREIGN KEY(chase_id) REFERENCES chasing_games(id) ON DELETE CASCADE
             );
+
+            CREATE TABLE IF NOT EXISTS radar_migrations (
+              id TEXT PRIMARY KEY,
+              applied_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS radar_searches (
+              id TEXT PRIMARY KEY,
+              name TEXT NOT NULL,
+              search_type TEXT NOT NULL DEFAULT 'chase',
+              status TEXT NOT NULL DEFAULT 'active',
+              origin TEXT NOT NULL DEFAULT 'user',
+              priority TEXT NOT NULL DEFAULT 'media',
+              platform TEXT NOT NULL DEFAULT '',
+              entity_type TEXT NOT NULL DEFAULT '',
+              entity_id TEXT NOT NULL DEFAULT '',
+              search_query TEXT NOT NULL,
+              criteria_json TEXT NOT NULL DEFAULT '{}',
+              sources_json TEXT NOT NULL DEFAULT '[]',
+              notes TEXT NOT NULL DEFAULT '',
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL,
+              last_checked_at TEXT,
+              last_error TEXT NOT NULL DEFAULT '',
+              archived_at TEXT,
+              deleted_at TEXT,
+              legacy_chase_id TEXT NOT NULL DEFAULT ''
+            );
+
+            CREATE TABLE IF NOT EXISTS radar_search_results (
+              id TEXT PRIMARY KEY,
+              search_id TEXT NOT NULL,
+              source_id TEXT NOT NULL DEFAULT 'ebay-us',
+              external_id TEXT NOT NULL,
+              title TEXT NOT NULL,
+              price_label TEXT NOT NULL DEFAULT '',
+              price_amount REAL,
+              price_currency TEXT NOT NULL DEFAULT '',
+              condition_label TEXT NOT NULL DEFAULT '',
+              shipping_label TEXT NOT NULL DEFAULT '',
+              location_label TEXT NOT NULL DEFAULT '',
+              listing_type TEXT NOT NULL DEFAULT '',
+              listing_url TEXT NOT NULL,
+              image_url TEXT NOT NULL DEFAULT '',
+              is_active INTEGER NOT NULL DEFAULT 1,
+              first_seen_at TEXT NOT NULL,
+              last_seen_at TEXT NOT NULL,
+              UNIQUE(search_id, source_id, external_id),
+              FOREIGN KEY(search_id) REFERENCES radar_searches(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS radar_listings (
+              id TEXT PRIMARY KEY,
+              source_id TEXT NOT NULL,
+              external_id TEXT NOT NULL,
+              title TEXT NOT NULL,
+              description TEXT NOT NULL DEFAULT '',
+              listing_url TEXT NOT NULL,
+              image_url TEXT NOT NULL DEFAULT '',
+              listing_kind TEXT NOT NULL DEFAULT 'unknown',
+              price_amount REAL,
+              price_currency TEXT NOT NULL DEFAULT '',
+              shipping_amount REAL,
+              shipping_currency TEXT NOT NULL DEFAULT '',
+              total_amount REAL,
+              price_label TEXT NOT NULL DEFAULT '',
+              shipping_label TEXT NOT NULL DEFAULT '',
+              condition_label TEXT NOT NULL DEFAULT '',
+              location_label TEXT NOT NULL DEFAULT '',
+              seller_label TEXT NOT NULL DEFAULT '',
+              availability TEXT NOT NULL DEFAULT 'unknown',
+              closes_at TEXT NOT NULL DEFAULT '',
+              verified_at TEXT,
+              content_expires_at TEXT,
+              first_seen_at TEXT NOT NULL,
+              last_seen_at TEXT NOT NULL,
+              UNIQUE(source_id, external_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS radar_search_matches (
+              search_id TEXT NOT NULL,
+              listing_id TEXT NOT NULL,
+              confidence REAL NOT NULL DEFAULT 0,
+              reasons_json TEXT NOT NULL DEFAULT '[]',
+              blockers_json TEXT NOT NULL DEFAULT '[]',
+              unverified_json TEXT NOT NULL DEFAULT '[]',
+              matched_terms_json TEXT NOT NULL DEFAULT '[]',
+              is_active INTEGER NOT NULL DEFAULT 1,
+              first_seen_at TEXT NOT NULL,
+              last_seen_at TEXT NOT NULL,
+              PRIMARY KEY (search_id, listing_id),
+              FOREIGN KEY(search_id) REFERENCES radar_searches(id) ON DELETE CASCADE,
+              FOREIGN KEY(listing_id) REFERENCES radar_listings(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS radar_runs (
+              id TEXT PRIMARY KEY,
+              kind TEXT NOT NULL,
+              slot_key TEXT NOT NULL DEFAULT '',
+              schedule_date TEXT NOT NULL DEFAULT '',
+              status TEXT NOT NULL,
+              started_at TEXT NOT NULL,
+              finished_at TEXT,
+              searches_total INTEGER NOT NULL DEFAULT 0,
+              searches_ok INTEGER NOT NULL DEFAULT 0,
+              searches_failed INTEGER NOT NULL DEFAULT 0,
+              listings_matched INTEGER NOT NULL DEFAULT 0,
+              listings_rejected INTEGER NOT NULL DEFAULT 0,
+              detail TEXT NOT NULL DEFAULT ''
+            );
+
+            CREATE TABLE IF NOT EXISTS radar_run_receipts (
+              run_id TEXT NOT NULL,
+              search_id TEXT NOT NULL,
+              source_id TEXT NOT NULL,
+              status TEXT NOT NULL,
+              listing_count INTEGER NOT NULL DEFAULT 0,
+              matched_count INTEGER NOT NULL DEFAULT 0,
+              rejected_count INTEGER NOT NULL DEFAULT 0,
+              error_count INTEGER NOT NULL DEFAULT 0,
+              errors_json TEXT NOT NULL DEFAULT '[]',
+              started_at TEXT NOT NULL,
+              finished_at TEXT NOT NULL,
+              PRIMARY KEY (run_id, search_id, source_id),
+              FOREIGN KEY(run_id) REFERENCES radar_runs(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS radar_schedule_slots (
+              schedule_date TEXT NOT NULL,
+              slot_key TEXT NOT NULL,
+              state TEXT NOT NULL DEFAULT 'fulfilled',
+              fulfilled_by_run_id TEXT NOT NULL DEFAULT '',
+              detail TEXT NOT NULL DEFAULT '',
+              claimed_at TEXT NOT NULL,
+              PRIMARY KEY (schedule_date, slot_key)
+            );
+
+            CREATE INDEX IF NOT EXISTS radar_runs_started_idx
+              ON radar_runs (started_at DESC);
+            CREATE INDEX IF NOT EXISTS radar_searches_status_idx
+              ON radar_searches (status, deleted_at);
+            CREATE INDEX IF NOT EXISTS radar_search_results_active_idx
+              ON radar_search_results (search_id, is_active);
+            CREATE INDEX IF NOT EXISTS radar_search_matches_active_idx
+              ON radar_search_matches (search_id, is_active);
+            CREATE INDEX IF NOT EXISTS radar_search_matches_listing_idx
+              ON radar_search_matches (listing_id, is_active);
             """
         )
         dismissal_columns = {
@@ -294,7 +499,16 @@ def init_db(config: AppConfig) -> None:
                 conn.execute(
                     f"ALTER TABLE auction_watch_run_requests ADD COLUMN {column_name} {column_definition}"
                 )
-        seed_chasing_games(conn)
+        radar_search_columns = {
+            str(row["name"]) for row in conn.execute("PRAGMA table_info(radar_searches)").fetchall()
+        }
+        # Vacío significa "todos los slots": una búsqueda existente no cambia de
+        # frecuencia por el hecho de actualizar el add-on.
+        if "slots_json" not in radar_search_columns:
+            conn.execute("ALTER TABLE radar_searches ADD COLUMN slots_json TEXT NOT NULL DEFAULT ''")
+        migrate_chasing_games_to_radar(conn)
+        migrate_radar_results_to_listings(conn)
+        seed_radar_searches(conn)
 
 
 def read_state(config: AppConfig) -> dict[str, Any]:
@@ -1847,345 +2061,1611 @@ def complete_auction_watch_run(config: AppConfig, payload: Any) -> dict[str, Any
     return {"ok": True, "request": auction_watch_run_request_row(row)}
 
 
-def seed_chasing_games(conn: sqlite3.Connection) -> None:
+def radar_migration_applied(conn: sqlite3.Connection, migration_id: str) -> bool:
+    return conn.execute("SELECT 1 FROM radar_migrations WHERE id = ?", (migration_id,)).fetchone() is not None
+
+
+def mark_radar_migration(conn: sqlite3.Connection, migration_id: str) -> None:
+    conn.execute(
+        "INSERT OR IGNORE INTO radar_migrations (id, applied_at) VALUES (?, ?)",
+        (migration_id, utc_now()),
+    )
+
+
+def migrate_chasing_games_to_radar(conn: sqlite3.Connection) -> None:
+    """Copy legacy Chasing Games searches into the general radar model, once.
+
+    The marker is written even when there was nothing to copy. Guarding on "the
+    radar table is empty" instead would resurrect every deleted search on the
+    next restart.
+    """
+
+    if radar_migration_applied(conn, RADAR_MIGRATION_CHASING_GAMES):
+        return
+    for row in conn.execute("SELECT * FROM chasing_games ORDER BY created_at").fetchall():
+        search_id = str(row["id"])
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO radar_searches (
+              id, name, search_type, status, origin, priority, platform, entity_type, entity_id,
+              search_query, criteria_json, sources_json, notes, created_at, updated_at,
+              last_checked_at, last_error, legacy_chase_id
+            ) VALUES (?, ?, 'chase', ?, 'user', 'media', ?, '', '', ?, ?, ?, '', ?, ?, ?, ?, ?)
+            """,
+            (
+                search_id,
+                str(row["title"]),
+                "active" if row["enabled"] else "paused",
+                str(row["platform"] or ""),
+                str(row["search_query"]),
+                json.dumps(default_radar_criteria(), ensure_ascii=False, separators=(",", ":")),
+                json.dumps([str(row["source"] or RADAR_DEFAULT_SOURCE)], ensure_ascii=False, separators=(",", ":")),
+                str(row["created_at"]),
+                str(row["updated_at"]),
+                row["last_checked_at"],
+                str(row["last_error"] or ""),
+                search_id,
+            ),
+        )
+        for result in conn.execute(
+            "SELECT * FROM chasing_game_results WHERE chase_id = ?", (search_id,)
+        ).fetchall():
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO radar_search_results (
+                  id, search_id, source_id, external_id, title, price_label, price_amount, price_currency,
+                  condition_label, shipping_label, location_label, listing_type, listing_url, image_url,
+                  is_active, first_seen_at, last_seen_at
+                ) VALUES (?, ?, ?, ?, ?, ?, NULL, '', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    str(result["id"]),
+                    search_id,
+                    str(row["source"] or RADAR_DEFAULT_SOURCE),
+                    str(result["external_id"]),
+                    str(result["title"]),
+                    str(result["price_label"] or ""),
+                    str(result["condition_label"] or ""),
+                    str(result["shipping_label"] or ""),
+                    str(result["location_label"] or ""),
+                    str(result["listing_type"] or ""),
+                    str(result["listing_url"]),
+                    str(result["image_url"] or ""),
+                    int(result["is_active"]),
+                    str(result["first_seen_at"]),
+                    str(result["last_seen_at"]),
+                ),
+            )
+    mark_radar_migration(conn, RADAR_MIGRATION_CHASING_GAMES)
+
+
+def migrate_radar_results_to_listings(conn: sqlite3.Connection) -> None:
+    """Divide los resultados por búsqueda en publicaciones y coincidencias.
+
+    `radar_search_results` guardaba una fila por (búsqueda, publicación): la misma
+    publicación se duplicaba en cada búsqueda que la encontrara. El modelo del PRD
+    separa identidad (`radar_listings`) de intención (`radar_search_matches`), así
+    una publicación existe una vez y se muestra una vez, con varias razones.
+
+    Corre una sola vez, con marcador propio: la tabla vieja queda intacta como vía
+    de rollback y deja de leerse.
+    """
+
+    if radar_migration_applied(conn, RADAR_MIGRATION_LISTINGS):
+        return
+    for row in conn.execute("SELECT * FROM radar_search_results ORDER BY first_seen_at").fetchall():
+        source_id = str(row["source_id"] or RADAR_DEFAULT_SOURCE)
+        external_id = str(row["external_id"])
+        listing_id = radar_listing_id(source_id, external_id)
+        price_amount = row["price_amount"]
+        conn.execute(
+            """
+            INSERT INTO radar_listings (
+              id, source_id, external_id, title, description, listing_url, image_url, listing_kind,
+              price_amount, price_currency, shipping_amount, shipping_currency, total_amount,
+              price_label, shipping_label, condition_label, location_label, seller_label,
+              availability, closes_at, content_expires_at, first_seen_at, last_seen_at
+            ) VALUES (?, ?, ?, ?, '', ?, ?, ?, ?, ?, NULL, '', ?, ?, ?, ?, ?, '', 'unknown', '', NULL, ?, ?)
+            ON CONFLICT(source_id, external_id) DO UPDATE SET
+              last_seen_at = MAX(radar_listings.last_seen_at, excluded.last_seen_at)
+            """,
+            (
+                listing_id, source_id, external_id, str(row["title"]), str(row["listing_url"]),
+                str(row["image_url"] or ""), radar_listing_kind_from_label(str(row["listing_type"] or "")),
+                price_amount, str(row["price_currency"] or ""), price_amount,
+                str(row["price_label"] or ""), str(row["shipping_label"] or ""),
+                str(row["condition_label"] or ""), str(row["location_label"] or ""),
+                str(row["first_seen_at"]), str(row["last_seen_at"]),
+            ),
+        )
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO radar_search_matches (
+              search_id, listing_id, confidence, reasons_json, blockers_json, unverified_json,
+              matched_terms_json, is_active, first_seen_at, last_seen_at
+            ) VALUES (?, ?, ?, ?, '[]', '[]', '[]', ?, ?, ?)
+            """,
+            (
+                str(row["search_id"]), listing_id, 0.5,
+                json.dumps(["Resultado guardado antes del modelo de coincidencias"], ensure_ascii=False),
+                int(row["is_active"]), str(row["first_seen_at"]), str(row["last_seen_at"]),
+            ),
+        )
+    mark_radar_migration(conn, RADAR_MIGRATION_LISTINGS)
+
+
+def seed_radar_searches(conn: sqlite3.Connection) -> None:
     """Create the first explicit chase once, without touching collection state."""
-    if conn.execute("SELECT 1 FROM chasing_games LIMIT 1").fetchone():
+    if radar_migration_applied(conn, RADAR_MIGRATION_SEED):
+        return
+    mark_radar_migration(conn, RADAR_MIGRATION_SEED)
+    if conn.execute("SELECT 1 FROM radar_searches LIMIT 1").fetchone():
         return
     now = utc_now()
     conn.execute(
         """
-        INSERT INTO chasing_games (id, title, platform, search_query, source, enabled, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, 1, ?, ?)
+        INSERT INTO radar_searches (
+          id, name, search_type, status, origin, priority, platform, entity_type, entity_id,
+          search_query, criteria_json, sources_json, notes, created_at, updated_at
+        ) VALUES (?, ?, 'chase', 'active', 'user', 'alta', ?, '', '', ?, ?, ?, '', ?, ?)
         """,
         (
             "iss-deluxe-snes",
             "International Superstar Soccer Deluxe",
             "SNES",
             "International Superstar Soccer Deluxe SNES",
-            CHASING_GAMES_SOURCE,
+            json.dumps(default_radar_criteria(), ensure_ascii=False, separators=(",", ":")),
+            json.dumps([RADAR_DEFAULT_SOURCE], ensure_ascii=False, separators=(",", ":")),
             now,
             now,
         ),
     )
 
 
-def normalize_chase_id(value: Any) -> str:
+def require_chasing_games_write_request(handler: BaseHTTPRequestHandler) -> None:
+    content_type = str(handler.headers.get("Content-Type") or "").split(";", 1)[0].strip().lower()
+    if content_type != "application/json":
+        raise ApiError(HTTPStatus.UNSUPPORTED_MEDIA_TYPE, "Content-Type application/json is required")
+    if handler.headers.get("X-Consolas-Chasing-Games") != "1" and handler.headers.get(RADAR_WRITE_HEADER) != "1":
+        raise ApiError(HTTPStatus.FORBIDDEN, "Chasing Games action header is required")
+
+
+def require_radar_write_request(handler: BaseHTTPRequestHandler) -> None:
+    content_type = str(handler.headers.get("Content-Type") or "").split(";", 1)[0].strip().lower()
+    if content_type != "application/json":
+        raise ApiError(HTTPStatus.UNSUPPORTED_MEDIA_TYPE, "Content-Type application/json is required")
+    if handler.headers.get(RADAR_WRITE_HEADER) != "1":
+        raise ApiError(HTTPStatus.FORBIDDEN, "Collection Radar action header is required")
+
+
+def radar_sources_payload() -> list[dict[str, Any]]:
+    """Descripción pública de cada fuente registrada y sus capabilities."""
+    return radar_registry.sources_payload()
+
+
+def executable_radar_sources(source_ids: list[str]) -> list[str]:
+    return radar_registry.executable_source_ids(source_ids)
+
+
+def radar_source_capabilities(source_id: str) -> dict[str, Any]:
+    spec = radar_registry.get_source(source_id)
+    return dict(spec.capabilities) if spec else {}
+
+
+def radar_source_label(source_id: str) -> str:
+    spec = radar_registry.get_source(source_id)
+    return spec.label if spec else str(source_id or "")
+
+
+def default_radar_criteria() -> dict[str, Any]:
+    return {
+        "includeTerms": [],
+        "anyTerms": [],
+        "excludeTerms": [],
+        "region": "",
+        "condition": "any",
+        "completeness": "any",
+        "tested": "any",
+        "originalParts": "any",
+        "returnsRequired": False,
+        "freeShippingOnly": False,
+        "currency": "USD",
+        "maxItemPrice": None,
+        "maxTotalUsa": None,
+        "minLotSize": None,
+        "resultLimit": RADAR_DEFAULT_RESULT_LIMIT,
+    }
+
+
+def normalize_radar_id(value: Any) -> str:
     candidate = str(value or "").strip().lower()
     if not candidate or len(candidate) > 100 or not all(char.isalnum() or char in {"-", "_"} for char in candidate):
-        raise ApiError(HTTPStatus.BAD_REQUEST, "Invalid chase id")
+        raise ApiError(HTTPStatus.BAD_REQUEST, "Invalid radar search id")
     return candidate
 
 
-def normalize_chase_text(value: Any, field: str, limit: int) -> str:
+def normalize_radar_text(value: Any, field: str, limit: int, *, required: bool = True) -> str:
     text = " ".join(str(value or "").split()).strip()
-    if not text:
+    if not text and required:
         raise ApiError(HTTPStatus.BAD_REQUEST, f"{field} is required")
     if len(text) > limit:
         raise ApiError(HTTPStatus.BAD_REQUEST, f"{field} is too long")
     return text
 
 
-def require_chasing_games_write_request(handler: BaseHTTPRequestHandler) -> None:
-    content_type = str(handler.headers.get("Content-Type") or "").split(";", 1)[0].strip().lower()
-    if content_type != "application/json":
-        raise ApiError(HTTPStatus.UNSUPPORTED_MEDIA_TYPE, "Content-Type application/json is required")
-    if handler.headers.get("X-Consolas-Chasing-Games") != "1":
-        raise ApiError(HTTPStatus.FORBIDDEN, "Chasing Games action header is required")
+def normalize_radar_enum(value: Any, allowed: tuple[str, ...], default: str, field: str) -> str:
+    if value is None:
+        return default
+    candidate = str(value).strip().lower()
+    if not candidate:
+        return default
+    if candidate not in allowed:
+        raise ApiError(HTTPStatus.BAD_REQUEST, f"{field} must be one of: {', '.join(item for item in allowed if item)}")
+    return candidate
 
 
-class EbaySearchParser(HTMLParser):
-    """Small, dependency-free parser for eBay's server-rendered search cards."""
-
-    def __init__(self) -> None:
-        super().__init__(convert_charrefs=True)
-        self.items: list[dict[str, str]] = []
-        self.current: dict[str, str] | None = None
-        self.field = ""
-
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        values = {key: value or "" for key, value in attrs}
-        classes = values.get("class", "")
-        if tag == "li" and "s-item" in classes.split():
-            self.current = {}
-            self.field = ""
-            return
-        if self.current is None:
-            return
-        if tag == "a" and "s-item__link" in classes:
-            self.current["url"] = values.get("href", "")
-        elif tag == "img" and "s-item__image-img" in classes:
-            self.current["image"] = values.get("src") or values.get("data-src") or ""
-        elif "s-item__title" in classes:
-            self.field = "title"
-        elif "s-item__price" in classes:
-            self.field = "price"
-        elif "s-item__shipping" in classes:
-            self.field = "shipping"
-        elif "s-item__location" in classes:
-            self.field = "location"
-        elif "s-item__subtitle" in classes:
-            self.field = "condition"
-
-    def handle_data(self, data: str) -> None:
-        if self.current is not None and self.field:
-            self.current[self.field] = f"{self.current.get(self.field, '')} {data}".strip()
-
-    def handle_endtag(self, tag: str) -> None:
-        if tag == "li" and self.current is not None:
-            if self.current.get("title") and self.current.get("url"):
-                self.items.append(self.current)
-            self.current = None
-            self.field = ""
-        elif tag in {"a", "span", "div", "h3"}:
-            self.field = ""
-
-
-def clean_ebay_text(value: str) -> str:
-    return " ".join(str(value or "").split()).strip()
-
-
-def ebay_external_id(url: str, title: str) -> str:
-    parsed = urllib.parse.urlsplit(url)
-    parts = [part for part in parsed.path.split("/") if part]
-    for part in reversed(parts):
-        if part.isdigit() and len(part) >= 8:
-            return part
-    return hashlib.sha1(f"{url}\0{title}".encode("utf-8")).hexdigest()[:24]
-
-
-def fetch_ebay_listings(config: AppConfig, search_query: str, limit: int = 12) -> list[dict[str, str]]:
-    if not config.ebay_client_id or not config.ebay_client_secret:
-        raise ApiError(HTTPStatus.SERVICE_UNAVAILABLE, "Configurá las credenciales de eBay Developers en el add-on")
-    credentials = base64.b64encode(f"{config.ebay_client_id}:{config.ebay_client_secret}".encode("utf-8")).decode("ascii")
-    ebay_api_host = "api.sandbox.ebay.com" if config.ebay_environment == "sandbox" else "api.ebay.com"
-    token_request = urllib.request.Request(
-        f"https://{ebay_api_host}/identity/v1/oauth2/token",
-        data=b"grant_type=client_credentials&scope=https%3A%2F%2Fapi.ebay.com%2Foauth%2Fapi_scope",
-        headers={"Authorization": f"Basic {credentials}", "Content-Type": "application/x-www-form-urlencoded"},
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(token_request, timeout=20) as response:
-            access_token = str(json.loads(response.read().decode("utf-8")).get("access_token") or "")
-    except urllib.error.HTTPError as exc:
-        error_code = ""
-        try:
-            error_code = str(json.loads(exc.read().decode("utf-8")).get("error") or "")
-        except (UnicodeDecodeError, json.JSONDecodeError):
-            pass
-        detail = f": {error_code}" if error_code else ""
-        raise ApiError(HTTPStatus.BAD_GATEWAY, f"eBay rechazó las credenciales (HTTP {exc.code}){detail}") from exc
-    except Exception as exc:
-        raise ApiError(HTTPStatus.BAD_GATEWAY, "No se pudo obtener el token de eBay") from exc
-    if not access_token:
-        raise ApiError(HTTPStatus.BAD_GATEWAY, "eBay no devolvió un token de aplicación")
-
-    query = urllib.parse.urlencode({"q": search_query, "limit": str(limit)})
-    search_request = urllib.request.Request(
-        f"https://{ebay_api_host}/buy/browse/v1/item_summary/search?{query}",
-        headers={"Authorization": f"Bearer {access_token}", "X-EBAY-C-MARKETPLACE-ID": "EBAY_US"},
-    )
-    try:
-        with urllib.request.urlopen(search_request, timeout=20) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        raise ApiError(HTTPStatus.BAD_GATEWAY, f"La búsqueda de eBay falló (HTTP {exc.code})") from exc
-    except Exception as exc:
-        raise ApiError(HTTPStatus.BAD_GATEWAY, "eBay no pudo completar la búsqueda") from exc
-    listings: list[dict[str, str]] = []
-    for raw in payload.get("itemSummaries") or []:
-        if not isinstance(raw, dict):
+def normalize_radar_terms(value: Any, field: str) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        raw_items: list[Any] = value.split(",")
+    elif isinstance(value, list):
+        raw_items = value
+    else:
+        raise ApiError(HTTPStatus.BAD_REQUEST, f"{field} must be a list of terms")
+    terms: list[str] = []
+    for item in raw_items:
+        if isinstance(item, (list, dict)):
+            raise ApiError(HTTPStatus.BAD_REQUEST, f"{field} must be a list of terms")
+        term = " ".join(str(item or "").split()).strip()
+        if not term:
             continue
-        price = raw.get("price") if isinstance(raw.get("price"), dict) else {}
-        shipping = (raw.get("shippingOptions") or [{}])[0] if isinstance(raw.get("shippingOptions"), list) else {}
-        location = raw.get("itemLocation") if isinstance(raw.get("itemLocation"), dict) else {}
-        image = raw.get("image") if isinstance(raw.get("image"), dict) else {}
-        listings.append({
-            "externalId": str(raw.get("itemId") or ""),
-            "title": clean_ebay_text(raw.get("title", "")),
-            "priceLabel": clean_ebay_text(f"{price.get('currency', '')} {price.get('value', '')}"),
-            "conditionLabel": clean_ebay_text(raw.get("condition", "")),
-            "shippingLabel": clean_ebay_text(shipping.get("shippingCostType", "")),
-            "locationLabel": clean_ebay_text(location.get("country", "")),
-            "listingType": "Subasta" if "AUCTION" in (raw.get("buyingOptions") or []) else "Compra directa",
-            "listingUrl": normalize_public_http_url(raw.get("itemWebUrl", "")),
-            "imageUrl": normalize_public_http_url(image.get("imageUrl", "")) if image.get("imageUrl") else "",
-        })
-    return [item for item in listings if item["externalId"] and item["title"] and item["listingUrl"]]
+        if len(term) > RADAR_MAX_TERM_LENGTH:
+            raise ApiError(HTTPStatus.BAD_REQUEST, f"{field} has a term that is too long")
+        if term.lower() not in {existing.lower() for existing in terms}:
+            terms.append(term)
+    if len(terms) > RADAR_MAX_TERMS:
+        raise ApiError(HTTPStatus.BAD_REQUEST, f"{field} accepts up to {RADAR_MAX_TERMS} terms")
+    return terms
 
 
-def fetch_ebay_listings_legacy(search_query: str, limit: int = 12) -> list[dict[str, str]]:
-    query = urllib.parse.urlencode({"_nkw": search_query, "_sacat": "0", "LH_BIN": "1", "rt": "nc"})
-    request = urllib.request.Request(
-        f"https://www.ebay.com/sch/i.html?{query}",
-        headers={"User-Agent": "Mozilla/5.0 (compatible; Consolas-Chasing-Games/1.0)", "Accept-Language": "en-US,en;q=0.8"},
-    )
+def normalize_radar_amount(value: Any, field: str) -> float | None:
+    if value is None or value == "":
+        return None
     try:
-        with urllib.request.urlopen(request, timeout=20) as response:
-            body = response.read(2_000_000).decode("utf-8", errors="replace")
-    except urllib.error.HTTPError as exc:
-        raise ApiError(HTTPStatus.BAD_GATEWAY, f"eBay respondió HTTP {exc.code}") from exc
-    except urllib.error.URLError as exc:
-        reason = str(exc.reason or "error de conexión").replace("\n", " ")[:120]
-        raise ApiError(HTTPStatus.BAD_GATEWAY, f"eBay no respondió: {reason}") from exc
-    except Exception as exc:
-        raise ApiError(HTTPStatus.BAD_GATEWAY, "eBay no pudo completar la consulta") from exc
+        amount = float(value)
+    except (TypeError, ValueError):
+        raise ApiError(HTTPStatus.BAD_REQUEST, f"{field} must be a number") from None
+    if amount != amount or amount in {float("inf"), float("-inf")}:
+        raise ApiError(HTTPStatus.BAD_REQUEST, f"{field} must be a number")
+    if amount < 0:
+        raise ApiError(HTTPStatus.BAD_REQUEST, f"{field} cannot be negative")
+    return round(amount, 2)
 
-    parser = EbaySearchParser()
-    parser.feed(body)
-    listings: list[dict[str, str]] = []
-    seen: set[str] = set()
-    for raw in parser.items:
-        title = clean_ebay_text(raw.get("title", ""))
-        url = normalize_public_http_url(raw.get("url", ""))
-        if not title or title.lower() == "shop on ebay" or not url:
-            continue
-        external_id = ebay_external_id(url, title)
-        if external_id in seen:
-            continue
-        seen.add(external_id)
-        listings.append(
-            {
-                "externalId": external_id,
-                "title": title,
-                "priceLabel": clean_ebay_text(raw.get("price", "")),
-                "conditionLabel": clean_ebay_text(raw.get("condition", "")),
-                "shippingLabel": clean_ebay_text(raw.get("shipping", "")),
-                "locationLabel": clean_ebay_text(raw.get("location", "")),
-                "listingType": "Compra directa",
-                "listingUrl": url,
-                "imageUrl": normalize_public_http_url(raw.get("image", "")) if raw.get("image") else "",
-            }
+
+def normalize_radar_count(value: Any, field: str, maximum: int) -> int | None:
+    if value is None or value == "":
+        return None
+    try:
+        count = int(value)
+    except (TypeError, ValueError):
+        raise ApiError(HTTPStatus.BAD_REQUEST, f"{field} must be a whole number") from None
+    if count < 1 or count > maximum:
+        raise ApiError(HTTPStatus.BAD_REQUEST, f"{field} must be between 1 and {maximum}")
+    return count
+
+
+def normalize_radar_criteria(value: Any, base: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Validate the structured criteria of a search and drop unknown fields."""
+    criteria = default_radar_criteria()
+    criteria.update(base or {})
+    if value is None:
+        return criteria
+    if not isinstance(value, dict):
+        raise ApiError(HTTPStatus.BAD_REQUEST, "criteria must be an object")
+    for field in ("includeTerms", "anyTerms", "excludeTerms"):
+        if field in value:
+            criteria[field] = normalize_radar_terms(value.get(field), field)
+    if "region" in value:
+        criteria["region"] = normalize_radar_text(value.get("region"), "region", 60, required=False)
+    if "condition" in value:
+        criteria["condition"] = normalize_radar_enum(value.get("condition"), RADAR_CONDITIONS, "any", "condition")
+    if "completeness" in value:
+        criteria["completeness"] = normalize_radar_enum(
+            value.get("completeness"), RADAR_COMPLETENESS, "any", "completeness"
         )
-        if len(listings) >= limit:
-            break
-    return listings
+    if "tested" in value:
+        criteria["tested"] = normalize_radar_enum(value.get("tested"), RADAR_REQUIREMENT_LEVELS, "any", "tested")
+    if "originalParts" in value:
+        criteria["originalParts"] = normalize_radar_enum(
+            value.get("originalParts"), RADAR_REQUIREMENT_LEVELS, "any", "originalParts"
+        )
+    if "returnsRequired" in value:
+        criteria["returnsRequired"] = value.get("returnsRequired") is True
+    if "freeShippingOnly" in value:
+        criteria["freeShippingOnly"] = value.get("freeShippingOnly") is True
+    if "currency" in value:
+        currency = normalize_radar_text(value.get("currency"), "currency", 8, required=False).upper()
+        criteria["currency"] = currency or "USD"
+    if "maxItemPrice" in value:
+        criteria["maxItemPrice"] = normalize_radar_amount(value.get("maxItemPrice"), "maxItemPrice")
+    if "maxTotalUsa" in value:
+        criteria["maxTotalUsa"] = normalize_radar_amount(value.get("maxTotalUsa"), "maxTotalUsa")
+    if "minLotSize" in value:
+        criteria["minLotSize"] = normalize_radar_count(value.get("minLotSize"), "minLotSize", 500)
+    if "resultLimit" in value:
+        criteria["resultLimit"] = (
+            normalize_radar_count(value.get("resultLimit"), "resultLimit", RADAR_MAX_RESULT_LIMIT)
+            or RADAR_DEFAULT_RESULT_LIMIT
+        )
+    return criteria
 
 
-def chasing_game_row(row: sqlite3.Row, results: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+def normalize_radar_sources(value: Any) -> list[str]:
+    if value is None:
+        return [RADAR_DEFAULT_SOURCE]
+    if isinstance(value, str):
+        raw_items: list[Any] = [value]
+    elif isinstance(value, list):
+        raw_items = value
+    else:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "sources must be a list of source ids")
+    sources: list[str] = []
+    for item in raw_items:
+        source_id = str(item or "").strip().lower()
+        if not source_id:
+            continue
+        if radar_registry.get_source(source_id) is None:
+            raise ApiError(HTTPStatus.BAD_REQUEST, f"Unknown radar source: {source_id}")
+        if source_id not in sources:
+            sources.append(source_id)
+    return sources or [RADAR_DEFAULT_SOURCE]
+
+
+def build_radar_search_query(name: str, platform: str, criteria: dict[str, Any], explicit: Any = None) -> str:
+    """Explicit query wins; otherwise derive a predictable one from identity and terms."""
+    explicit_query = " ".join(str(explicit or "").split()).strip()
+    if explicit_query:
+        return explicit_query[:300]
+    parts = [name, platform]
+    for term in criteria.get("includeTerms") or []:
+        parts.append(term)
+    seen: set[str] = set()
+    words: list[str] = []
+    for part in parts:
+        candidate = " ".join(str(part or "").split()).strip()
+        if not candidate or candidate.lower() in seen:
+            continue
+        seen.add(candidate.lower())
+        words.append(candidate)
+    return " ".join(words)[:300]
+
+
+def radar_json_field(raw: Any, fallback: Any) -> Any:
+    """Read a persisted JSON column, falling back when the row is unreadable.
+
+    The fallback also declares the expected shape: a value of another type is a
+    corrupted row and must not reach the normalizers. Pass ``{}``/``None`` for an
+    object column and ``[]`` for an array one.
+    """
+
+    expected = dict if fallback is None else type(fallback)
+    try:
+        parsed = json.loads(str(raw or ""))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return fallback
+    return parsed if isinstance(parsed, expected) else fallback
+
+
+def radar_search_row(row: sqlite3.Row, results: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    criteria = normalize_radar_criteria(radar_json_field(row["criteria_json"], None))
+    raw_sources = radar_json_field(row["sources_json"], [RADAR_DEFAULT_SOURCE])
+    sources = [
+        str(item) for item in raw_sources if radar_registry.get_source(str(item)) is not None
+    ] or [RADAR_DEFAULT_SOURCE]
+    status = str(row["status"])
+    runnable_sources = executable_radar_sources(sources)
     return {
         "id": row["id"],
-        "title": row["title"],
+        "name": row["name"],
+        # Compatibilidad con la superficie previa de Chasing Games.
+        "title": row["name"],
+        "searchType": row["search_type"],
+        "status": status,
+        "origin": row["origin"],
+        "priority": row["priority"],
         "platform": row["platform"],
+        "entityType": row["entity_type"],
+        "entityId": row["entity_id"],
         "searchQuery": row["search_query"],
-        "source": row["source"],
-        "enabled": bool(row["enabled"]),
+        "criteria": criteria,
+        "sources": sources,
+        "executableSources": runnable_sources,
+        "notes": row["notes"],
+        "slots": radar_search_slots(row),
+        "slotLabels": [RADAR_SLOT_LABELS[key] for key in radar_search_slots(row)],
+        "enabled": status == "active",
+        "canRun": status == "active" and bool(runnable_sources),
         "createdAt": row["created_at"],
         "updatedAt": row["updated_at"],
         "lastCheckedAt": row["last_checked_at"],
         "lastError": row["last_error"],
+        "archivedAt": row["archived_at"],
         "results": results or [],
+        "resultCount": len(results or []),
+    }
+
+
+def radar_result_row(row: sqlite3.Row) -> dict[str, Any]:
+    """Una coincidencia vista desde su búsqueda: la publicación más sus razones."""
+    reasons = radar_json_field(row["reasons_json"], [])
+    unverified = radar_json_field(row["unverified_json"], [])
+    matched_terms = radar_json_field(row["matched_terms_json"], [])
+    return {
+        "id": row["listing_id"],
+        "listingId": row["listing_id"],
+        "sourceId": row["source_id"],
+        "sourceLabel": radar_source_label(str(row["source_id"])),
+        "externalId": row["external_id"],
+        "title": row["title"],
+        "priceLabel": row["price_label"],
+        "priceAmount": row["price_amount"],
+        "priceCurrency": row["price_currency"],
+        "shippingAmount": row["shipping_amount"],
+        "totalAmount": row["total_amount"],
+        "conditionLabel": row["condition_label"],
+        "shippingLabel": row["shipping_label"],
+        "locationLabel": row["location_label"],
+        "sellerLabel": row["seller_label"],
+        "listingKind": row["listing_kind"],
+        "listingType": RADAR_LISTING_KIND_LABELS.get(str(row["listing_kind"]), ""),
+        "listingUrl": row["listing_url"],
+        "imageUrl": row["image_url"],
+        "availability": row["availability"],
+        "closesAt": row["closes_at"],
+        "confidence": row["confidence"],
+        "reasons": reasons,
+        "unverified": unverified,
+        "matchedTerms": matched_terms,
+        "firstSeenAt": row["first_seen_at"],
+        "lastSeenAt": row["last_seen_at"],
+    }
+
+
+def load_radar_search(conn: sqlite3.Connection, search_id: str) -> sqlite3.Row:
+    row = conn.execute(
+        "SELECT * FROM radar_searches WHERE id = ? AND deleted_at IS NULL", (search_id,)
+    ).fetchone()
+    if row is None:
+        raise ApiError(HTTPStatus.NOT_FOUND, "Radar search not found")
+    return row
+
+
+RADAR_MATCH_SELECT = """
+    SELECT l.*, m.search_id, m.listing_id, m.confidence, m.reasons_json, m.blockers_json,
+           m.unverified_json, m.matched_terms_json, m.first_seen_at AS match_first_seen_at,
+           m.last_seen_at AS match_last_seen_at
+      FROM radar_search_matches m
+      JOIN radar_listings l ON l.id = m.listing_id
+"""
+
+
+def radar_search_results(conn: sqlite3.Connection, search_id: str, limit: int) -> list[dict[str, Any]]:
+    rows = conn.execute(
+        f"""{RADAR_MATCH_SELECT}
+            WHERE m.search_id = ? AND m.is_active = 1
+            ORDER BY m.confidence DESC, m.last_seen_at DESC LIMIT ?""",
+        (search_id, max(1, min(limit, RADAR_MAX_RESULT_LIMIT))),
+    ).fetchall()
+    return [radar_result_row(row) for row in rows]
+
+
+def list_radar_listings(config: AppConfig, limit: int = 100) -> dict[str, Any]:
+    """Inventario deduplicado: una publicación, una fila, todas sus búsquedas.
+
+    Es el criterio de aceptación §21.7 del PRD: una publicación que coincide con
+    dos búsquedas se guarda una vez y se muestra una vez, con las dos razones.
+    """
+
+    capped = max(1, min(int(limit or 100), 500))
+    with _RADAR_LOCK, connect_db(config) as conn:
+        listing_rows = conn.execute(
+            """
+            SELECT l.*, MAX(m.confidence) AS best_confidence, COUNT(*) AS match_count,
+                   MAX(m.last_seen_at) AS match_last_seen_at
+              FROM radar_listings l
+              JOIN radar_search_matches m ON m.listing_id = l.id AND m.is_active = 1
+              JOIN radar_searches s ON s.id = m.search_id AND s.deleted_at IS NULL
+             GROUP BY l.id
+             ORDER BY best_confidence DESC, match_last_seen_at DESC
+             LIMIT ?
+            """,
+            (capped,),
+        ).fetchall()
+        items: list[dict[str, Any]] = []
+        for row in listing_rows:
+            matches = conn.execute(
+                """
+                SELECT m.search_id, m.confidence, m.reasons_json, m.unverified_json,
+                       m.matched_terms_json, s.name AS search_name, s.search_type, s.priority
+                  FROM radar_search_matches m
+                  JOIN radar_searches s ON s.id = m.search_id AND s.deleted_at IS NULL
+                 WHERE m.listing_id = ? AND m.is_active = 1
+                 ORDER BY m.confidence DESC, s.name
+                """,
+                (row["id"],),
+            ).fetchall()
+            items.append(
+                {
+                    "id": row["id"],
+                    "sourceId": row["source_id"],
+                    "sourceLabel": radar_source_label(str(row["source_id"])),
+                    "externalId": row["external_id"],
+                    "title": row["title"],
+                    "listingUrl": row["listing_url"],
+                    "imageUrl": row["image_url"],
+                    "listingKind": row["listing_kind"],
+                    "listingType": RADAR_LISTING_KIND_LABELS.get(str(row["listing_kind"]), ""),
+                    "priceLabel": row["price_label"],
+                    "priceAmount": row["price_amount"],
+                    "priceCurrency": row["price_currency"],
+                    "shippingAmount": row["shipping_amount"],
+                    "shippingLabel": row["shipping_label"],
+                    "totalAmount": row["total_amount"],
+                    "conditionLabel": row["condition_label"],
+                    "locationLabel": row["location_label"],
+                    "sellerLabel": row["seller_label"],
+                    "availability": row["availability"],
+                    "closesAt": row["closes_at"],
+                    "confidence": row["best_confidence"],
+                    "firstSeenAt": row["first_seen_at"],
+                    "lastSeenAt": row["last_seen_at"],
+                    "matchCount": row["match_count"],
+                    "matches": [
+                        {
+                            "searchId": match["search_id"],
+                            "searchName": match["search_name"],
+                            "searchType": match["search_type"],
+                            "priority": match["priority"],
+                            "confidence": match["confidence"],
+                            "reasons": radar_json_field(match["reasons_json"], []),
+                            "unverified": radar_json_field(match["unverified_json"], []),
+                            "matchedTerms": radar_json_field(match["matched_terms_json"], []),
+                        }
+                        for match in matches
+                    ],
+                }
+            )
+    return {
+        "version": RADAR_SEARCHES_VERSION,
+        "environment": config.ebay_environment,
+        "sources": radar_sources_payload(),
+        "count": len(items),
+        "items": items,
+    }
+
+
+def radar_environment_label(config: AppConfig) -> str:
+    return "eBay Sandbox · datos de prueba" if config.ebay_environment == "sandbox" else "eBay USA"
+
+
+def list_radar_searches(config: AppConfig) -> dict[str, Any]:
+    with _RADAR_LOCK, connect_db(config) as conn:
+        rows = conn.execute(
+            """SELECT * FROM radar_searches WHERE deleted_at IS NULL
+               ORDER BY CASE status WHEN 'active' THEN 0 WHEN 'draft' THEN 1 WHEN 'paused' THEN 2 ELSE 3 END,
+                        updated_at DESC, name"""
+        ).fetchall()
+        items = [
+            radar_search_row(
+                row,
+                radar_search_results(
+                    conn,
+                    str(row["id"]),
+                    int(normalize_radar_criteria(radar_json_field(row["criteria_json"], None))["resultLimit"]),
+                ),
+            )
+            for row in rows
+        ]
+    counts = {status: sum(1 for item in items if item["status"] == status) for status in RADAR_SEARCH_STATUSES}
+    return {
+        "version": RADAR_SEARCHES_VERSION,
+        "source": radar_environment_label(config),
+        "environment": config.ebay_environment,
+        "sources": radar_sources_payload(),
+        "counts": counts,
+        "items": items,
+    }
+
+
+def radar_search_payload(config: AppConfig, search_id: str) -> dict[str, Any]:
+    with _RADAR_LOCK, connect_db(config) as conn:
+        row = load_radar_search(conn, search_id)
+        results = radar_search_results(
+            conn,
+            search_id,
+            int(normalize_radar_criteria(radar_json_field(row["criteria_json"], None))["resultLimit"]),
+        )
+        return {"ok": True, "search": radar_search_row(row, results)}
+
+
+def assert_radar_name_is_free(conn: sqlite3.Connection, name: str, platform: str, exclude_id: str = "") -> None:
+    row = conn.execute(
+        """SELECT id FROM radar_searches
+           WHERE deleted_at IS NULL AND lower(name) = ? AND lower(platform) = ? AND id != ?""",
+        (name.lower(), platform.lower(), exclude_id),
+    ).fetchone()
+    if row is not None:
+        raise ApiError(
+            HTTPStatus.CONFLICT,
+            "Ya existe una búsqueda con ese nombre y plataforma",
+            {"id": row["id"]},
+        )
+
+
+def create_radar_search(config: AppConfig, payload: Any) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        raise ApiError(HTTPStatus.BAD_REQUEST, "JSON body must be an object")
+    name = normalize_radar_text(payload.get("name") or payload.get("title"), "name", 200)
+    platform = normalize_radar_text(payload.get("platform"), "platform", 100, required=False)
+    search_type = normalize_radar_enum(payload.get("searchType"), RADAR_SEARCH_TYPES, "chase", "searchType")
+    status = normalize_radar_enum(payload.get("status"), RADAR_SEARCH_STATUSES, "active", "status")
+    origin = normalize_radar_enum(payload.get("origin"), RADAR_SEARCH_ORIGINS, "user", "origin")
+    priority = normalize_radar_enum(payload.get("priority"), RADAR_PRIORITIES, "media", "priority")
+    entity_type = normalize_radar_enum(payload.get("entityType"), RADAR_ENTITY_TYPES, "", "entityType")
+    entity_id = normalize_radar_text(payload.get("entityId"), "entityId", 120, required=False)
+    notes = normalize_radar_text(payload.get("notes"), "notes", 600, required=False)
+    criteria = normalize_radar_criteria(payload.get("criteria"))
+    sources = normalize_radar_sources(payload.get("sources"))
+    slots = normalize_radar_slots(payload.get("slots"))
+    search_query = build_radar_search_query(name, platform, criteria, payload.get("searchQuery"))
+    now = utc_now()
+    search_id = f"radar-{uuid.uuid4().hex[:16]}"
+    with _RADAR_LOCK, connect_db(config) as conn:
+        assert_radar_name_is_free(conn, name, platform)
+        conn.execute(
+            """INSERT INTO radar_searches (
+                 id, name, search_type, status, origin, priority, platform, entity_type, entity_id,
+                 search_query, criteria_json, sources_json, slots_json, notes, created_at, updated_at, archived_at
+               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                search_id, name, search_type, status, origin, priority, platform, entity_type, entity_id,
+                search_query,
+                json.dumps(criteria, ensure_ascii=False, separators=(",", ":")),
+                json.dumps(sources, ensure_ascii=False, separators=(",", ":")),
+                json.dumps(slots, ensure_ascii=False, separators=(",", ":")),
+                notes, now, now, now if status == "archived" else None,
+            ),
+        )
+    return radar_search_payload(config, search_id)
+
+
+def update_radar_search(config: AppConfig, search_id: Any, payload: Any) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        raise ApiError(HTTPStatus.BAD_REQUEST, "JSON body must be an object")
+    target_id = normalize_radar_id(search_id)
+    with _RADAR_LOCK, connect_db(config) as conn:
+        row = load_radar_search(conn, target_id)
+        name = (
+            normalize_radar_text(payload.get("name") or payload.get("title"), "name", 200)
+            if ("name" in payload or "title" in payload)
+            else str(row["name"])
+        )
+        platform = (
+            normalize_radar_text(payload.get("platform"), "platform", 100, required=False)
+            if "platform" in payload
+            else str(row["platform"])
+        )
+        search_type = (
+            normalize_radar_enum(payload.get("searchType"), RADAR_SEARCH_TYPES, "chase", "searchType")
+            if "searchType" in payload
+            else str(row["search_type"])
+        )
+        priority = (
+            normalize_radar_enum(payload.get("priority"), RADAR_PRIORITIES, "media", "priority")
+            if "priority" in payload
+            else str(row["priority"])
+        )
+        entity_type = (
+            normalize_radar_enum(payload.get("entityType"), RADAR_ENTITY_TYPES, "", "entityType")
+            if "entityType" in payload
+            else str(row["entity_type"])
+        )
+        entity_id = (
+            normalize_radar_text(payload.get("entityId"), "entityId", 120, required=False)
+            if "entityId" in payload
+            else str(row["entity_id"])
+        )
+        notes = (
+            normalize_radar_text(payload.get("notes"), "notes", 600, required=False)
+            if "notes" in payload
+            else str(row["notes"])
+        )
+        stored_criteria = normalize_radar_criteria(radar_json_field(row["criteria_json"], None))
+        criteria = (
+            normalize_radar_criteria(payload.get("criteria"), stored_criteria)
+            if "criteria" in payload
+            else stored_criteria
+        )
+        sources = (
+            normalize_radar_sources(payload.get("sources"))
+            if "sources" in payload
+            else normalize_radar_sources(radar_json_field(row["sources_json"], []))
+        )
+        slots = normalize_radar_slots(payload.get("slots")) if "slots" in payload else radar_json_field(row["slots_json"], [])
+        if "searchQuery" in payload:
+            search_query = build_radar_search_query(name, platform, criteria, payload.get("searchQuery"))
+        elif "criteria" in payload or "name" in payload or "title" in payload or "platform" in payload:
+            # Sólo se regenera una consulta derivada; una consulta escrita a mano se respeta.
+            derived_before = build_radar_search_query(str(row["name"]), str(row["platform"]), stored_criteria)
+            search_query = (
+                build_radar_search_query(name, platform, criteria)
+                if derived_before == str(row["search_query"])
+                else str(row["search_query"])
+            )
+        else:
+            search_query = str(row["search_query"])
+        assert_radar_name_is_free(conn, name, platform, target_id)
+        conn.execute(
+            """UPDATE radar_searches SET
+                 name = ?, search_type = ?, priority = ?, platform = ?, entity_type = ?, entity_id = ?,
+                 search_query = ?, criteria_json = ?, sources_json = ?, slots_json = ?, notes = ?, updated_at = ?
+               WHERE id = ?""",
+            (
+                name, search_type, priority, platform, entity_type, entity_id, search_query,
+                json.dumps(criteria, ensure_ascii=False, separators=(",", ":")),
+                json.dumps(sources, ensure_ascii=False, separators=(",", ":")),
+                json.dumps(slots, ensure_ascii=False, separators=(",", ":")),
+                notes, utc_now(), target_id,
+            ),
+        )
+    return radar_search_payload(config, target_id)
+
+
+def set_radar_search_status(config: AppConfig, search_id: Any, status: Any) -> dict[str, Any]:
+    target_id = normalize_radar_id(search_id)
+    next_status = str(status or "").strip().lower()
+    if next_status not in RADAR_SEARCH_STATUSES:
+        raise ApiError(HTTPStatus.BAD_REQUEST, f"status must be one of: {', '.join(RADAR_SEARCH_STATUSES)}")
+    now = utc_now()
+    with _RADAR_LOCK, connect_db(config) as conn:
+        load_radar_search(conn, target_id)
+        conn.execute(
+            "UPDATE radar_searches SET status = ?, archived_at = ?, updated_at = ? WHERE id = ?",
+            (next_status, now if next_status == "archived" else None, now, target_id),
+        )
+    return radar_search_payload(config, target_id)
+
+
+def duplicate_radar_search(config: AppConfig, search_id: Any) -> dict[str, Any]:
+    """A copy always starts as a draft: it never inherits results, history or execution."""
+    target_id = normalize_radar_id(search_id)
+    now = utc_now()
+    new_id = f"radar-{uuid.uuid4().hex[:16]}"
+    with _RADAR_LOCK, connect_db(config) as conn:
+        row = load_radar_search(conn, target_id)
+        platform = str(row["platform"])
+        base_name = normalize_radar_text(f"{row['name']} (copia)", "name", 200)
+        name = base_name
+        attempt = 2
+        while conn.execute(
+            "SELECT 1 FROM radar_searches WHERE deleted_at IS NULL AND lower(name) = ? AND lower(platform) = ?",
+            (name.lower(), platform.lower()),
+        ).fetchone() is not None:
+            name = normalize_radar_text(f"{row['name']} (copia {attempt})", "name", 200)
+            attempt += 1
+            if attempt > 50:
+                raise ApiError(HTTPStatus.CONFLICT, "Demasiadas copias de esta búsqueda")
+        conn.execute(
+            """INSERT INTO radar_searches (
+                 id, name, search_type, status, origin, priority, platform, entity_type, entity_id,
+                 search_query, criteria_json, sources_json, slots_json, notes, created_at, updated_at
+               ) VALUES (?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                new_id, name, str(row["search_type"]), str(row["origin"]), str(row["priority"]), platform,
+                str(row["entity_type"]), str(row["entity_id"]), str(row["search_query"]),
+                str(row["criteria_json"]), str(row["sources_json"]), str(row["slots_json"] or ""),
+                str(row["notes"]), now, now,
+            ),
+        )
+    return radar_search_payload(config, new_id)
+
+
+def delete_radar_search(config: AppConfig, search_id: Any) -> dict[str, Any]:
+    """Logical delete: the search leaves every list but its history survives for recovery."""
+    target_id = normalize_radar_id(search_id)
+    now = utc_now()
+    with _RADAR_LOCK, connect_db(config) as conn:
+        load_radar_search(conn, target_id)
+        conn.execute(
+            "UPDATE radar_searches SET deleted_at = ?, status = 'archived', updated_at = ? WHERE id = ?",
+            (now, now, target_id),
+        )
+    return {"ok": True, "id": target_id, "deletedAt": now}
+
+
+def radar_listing_amount(value: Any) -> float | None:
+    try:
+        amount = float(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+    if amount != amount or amount in {float("inf"), float("-inf")} or amount < 0:
+        return None
+    return round(amount, 2)
+
+
+def radar_listing_id(source_id: str, external_id: str) -> str:
+    """Identidad de una publicación: la fuente y su id externo, nada más.
+
+    No incluye la búsqueda: ese es justamente el punto de separar publicaciones
+    de coincidencias.
+    """
+    digest = hashlib.sha1(f"{source_id}\0{external_id}".encode("utf-8")).hexdigest()[:20]
+    return f"{source_id}-{digest}"
+
+
+def radar_listing_kind_from_label(label: str) -> str:
+    """Compat: las filas viejas guardaban el tipo como etiqueta en castellano."""
+    normalized = str(label or "").strip().lower()
+    if normalized.startswith("subasta"):
+        return "auction"
+    if normalized.startswith("compra"):
+        return "fixed_price"
+    return "unknown"
+
+
+RADAR_LISTING_KIND_LABELS = {
+    "fixed_price": "Compra directa",
+    "auction": "Subasta",
+    "best_offer": "Acepta ofertas",
+    "unknown": "",
+}
+
+
+def collect_radar_source_pages(
+    config: AppConfig, query: str, criteria: dict[str, Any], sources: list[str]
+) -> tuple[list[Any], list[dict[str, Any]]]:
+    """Consulta cada fuente ejecutable de forma aislada.
+
+    Una fuente rota no puede ocultar a las demás ni vaciar el inventario: su falla
+    queda en el recibo y el resto de las publicaciones sigue llegando.
+    """
+
+    pages: list[Any] = []
+    receipts: list[dict[str, Any]] = []
+    for source_id in executable_radar_sources(sources):
+        spec = radar_registry.get_source(source_id)
+        if spec is None:  # pragma: no cover - defensivo
+            continue
+        started_at = utc_now()
+        try:
+            adapter = spec.load()
+            page = adapter.search(config, query, criteria)
+        except Exception as error:  # el adapter es código aislado: nunca tumba la corrida
+            receipts.append(
+                {
+                    "sourceId": source_id,
+                    "status": "failed",
+                    "query": query,
+                    "listingCount": 0,
+                    "errorCount": 1,
+                    "startedAt": started_at,
+                    "finishedAt": utc_now(),
+                    "errors": [f"{spec.label}: {error}"],
+                    "authoritative": False,
+                }
+            )
+            continue
+        pages.append(page)
+        receipt = page.receipt.to_dict() if page.receipt else None
+        if receipt is not None:
+            receipt["errors"] = [f"{spec.label}: {message}" for message in receipt.get("errors") or []]
+            receipts.append(receipt)
+    return pages, receipts
+
+
+def upsert_radar_listing(conn: sqlite3.Connection, listing: MarketplaceListing, now: str) -> str:
+    """Guarda la publicación una sola vez, sin importar cuántas búsquedas la vean."""
+    listing_id = radar_listing_id(listing.source_id, listing.external_id)
+    ttl_seconds = int(radar_source_capabilities(listing.source_id).get("contentTtlSeconds") or 0)
+    expires_at = ""
+    if ttl_seconds > 0:
+        expires_at = (
+            datetime.now(timezone.utc) + timedelta(seconds=ttl_seconds)
+        ).isoformat().replace("+00:00", "Z")
+    conn.execute(
+        """
+        INSERT INTO radar_listings (
+          id, source_id, external_id, title, description, listing_url, image_url, listing_kind,
+          price_amount, price_currency, shipping_amount, shipping_currency, total_amount,
+          price_label, shipping_label, condition_label, location_label, seller_label,
+          availability, closes_at, content_expires_at, first_seen_at, last_seen_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(source_id, external_id) DO UPDATE SET
+          title=excluded.title, description=excluded.description, listing_url=excluded.listing_url,
+          image_url=excluded.image_url, listing_kind=excluded.listing_kind,
+          price_amount=excluded.price_amount, price_currency=excluded.price_currency,
+          shipping_amount=excluded.shipping_amount, shipping_currency=excluded.shipping_currency,
+          total_amount=excluded.total_amount, price_label=excluded.price_label,
+          shipping_label=excluded.shipping_label, condition_label=excluded.condition_label,
+          location_label=excluded.location_label, seller_label=excluded.seller_label,
+          availability=excluded.availability, closes_at=excluded.closes_at,
+          content_expires_at=excluded.content_expires_at, last_seen_at=excluded.last_seen_at
+        """,
+        (
+            listing_id, listing.source_id, listing.external_id, listing.title, listing.description,
+            listing.listing_url, listing.image_url, listing.listing_kind,
+            listing.price_amount, listing.price_currency, listing.shipping_amount, listing.shipping_currency,
+            listing.total_amount, listing.price_label, listing.shipping_label, listing.condition_label,
+            listing.location_label, listing.seller_label, listing.availability, listing.closes_at,
+            expires_at or None, now, now,
+        ),
+    )
+    return listing_id
+
+
+def run_radar_search(config: AppConfig, search_id: Any, run_id: str = "") -> dict[str, Any]:
+    """Ejecuta una búsqueda activa: consulta, evalúa y guarda sus coincidencias.
+
+    El lock por búsqueda cubre también la llamada de red: el scheduler y un
+    “Buscar ahora” simultáneos no pueden escanear dos veces lo mismo.
+    """
+    target_id = normalize_radar_id(search_id)
+    with radar_search_lock(target_id):
+        return execute_radar_search(config, target_id, run_id)
+
+
+def execute_radar_search(config: AppConfig, target_id: str, run_id: str = "") -> dict[str, Any]:
+    with _RADAR_LOCK, connect_db(config) as conn:
+        row = load_radar_search(conn, target_id)
+    status = str(row["status"])
+    if status != "active":
+        raise ApiError(
+            HTTPStatus.CONFLICT,
+            "Sólo una búsqueda activa puede ejecutarse. Activala o reanudala primero.",
+            {"id": target_id, "status": status},
+        )
+    criteria = normalize_radar_criteria(radar_json_field(row["criteria_json"], None))
+    sources = normalize_radar_sources(radar_json_field(row["sources_json"], []))
+    if not executable_radar_sources(sources):
+        raise ApiError(
+            HTTPStatus.CONFLICT,
+            "Ninguna de las fuentes de esta búsqueda puede ejecutarse todavía.",
+            {"id": target_id, "sources": sources},
+        )
+
+    now = utc_now()
+    pages, receipts = collect_radar_source_pages(config, str(row["search_query"]), criteria, sources)
+    failures = [receipt for receipt in receipts if receipt["status"] == "failed"]
+    authoritative = bool(receipts) and all(receipt["authoritative"] for receipt in receipts)
+
+    # Ninguna fuente respondió: se conserva el inventario previo y se explica la falla.
+    # Una respuesta fallida nunca prueba que una publicación dejó de existir.
+    if failures and len(failures) == len(receipts):
+        message = " · ".join(
+            error for receipt in failures for error in (receipt.get("errors") or ["Falla de la fuente"])
+        )
+        with _RADAR_LOCK, connect_db(config) as conn:
+            conn.execute(
+                "UPDATE radar_searches SET last_checked_at = ?, last_error = ?, updated_at = ? WHERE id = ?",
+                (now, message, now, target_id),
+            )
+        record_radar_receipts(config, run_id, target_id, receipts, 0, 0)
+        raise ApiError(HTTPStatus.BAD_GATEWAY, message, {"id": target_id, "receipts": receipts})
+
+    capabilities_by_source = {source_id: radar_source_capabilities(source_id) for source_id in sources}
+    matched_ids: list[str] = []
+    rejected = 0
+
+    with _RADAR_LOCK, connect_db(config) as conn:
+        for page in pages:
+            for listing in page.listings:
+                verdict = evaluate_match(listing, criteria, capabilities_by_source.get(listing.source_id, {}))
+                if not verdict.matched:
+                    rejected += 1
+                    continue
+                listing_id = upsert_radar_listing(conn, listing, now)
+                conn.execute(
+                    """
+                    INSERT INTO radar_search_matches (
+                      search_id, listing_id, confidence, reasons_json, blockers_json, unverified_json,
+                      matched_terms_json, is_active, first_seen_at, last_seen_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+                    ON CONFLICT(search_id, listing_id) DO UPDATE SET
+                      confidence=excluded.confidence, reasons_json=excluded.reasons_json,
+                      blockers_json=excluded.blockers_json, unverified_json=excluded.unverified_json,
+                      matched_terms_json=excluded.matched_terms_json, is_active=1,
+                      last_seen_at=excluded.last_seen_at
+                    """,
+                    (
+                        target_id, listing_id, verdict.confidence,
+                        json.dumps(verdict.reasons, ensure_ascii=False),
+                        json.dumps(verdict.blockers, ensure_ascii=False),
+                        json.dumps(verdict.unverified, ensure_ascii=False),
+                        json.dumps(verdict.matched_terms, ensure_ascii=False),
+                        now, now,
+                    ),
+                )
+                matched_ids.append(listing_id)
+
+        # Sólo una cobertura completa autoriza retirar coincidencias previas.
+        if authoritative:
+            placeholders = ",".join("?" for _ in matched_ids)
+            parameters: list[Any] = [target_id]
+            query = "UPDATE radar_search_matches SET is_active = 0 WHERE search_id = ? AND is_active = 1"
+            if matched_ids:
+                query += f" AND listing_id NOT IN ({placeholders})"
+                parameters.extend(matched_ids)
+            conn.execute(query, parameters)
+
+        last_error = ""
+        if failures:
+            last_error = " · ".join(
+                error for receipt in failures for error in (receipt.get("errors") or ["Falla de la fuente"])
+            )
+        conn.execute(
+            "UPDATE radar_searches SET last_checked_at = ?, last_error = ?, updated_at = ? WHERE id = ?",
+            (now, last_error, now, target_id),
+        )
+
+    record_radar_receipts(config, run_id, target_id, receipts, len(matched_ids), rejected)
+    return {
+        "ok": True,
+        "id": target_id,
+        "results": len(matched_ids),
+        "rejected": rejected,
+        "checkedAt": now,
+        "authoritative": authoritative,
+        "receipts": receipts,
+        "runId": run_id,
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Scheduler durable: slots, corridas y recibos                                  #
+# --------------------------------------------------------------------------- #
+#
+# Contrato heredado de Auction Watch (docs/AUCTION_WATCH_RELIABILITY.md):
+#
+# - un slot genera como máximo un scan;
+# - el slot se reclama de forma atómica antes de escanear, así un reinicio en
+#   medio de una corrida no dispara un segundo scan de la misma ventana;
+# - una corrida parcial o fallida nunca retira inventario;
+# - cada corrida deja recibos por búsqueda y fuente;
+# - una corrida manual reciente y exitosa satisface el slot siguiente.
+
+
+def radar_timezone() -> timezone | Any:
+    """Zona del usuario, con fallback explícito si la imagen no trae tzdata.
+
+    Uruguay no tiene horario de verano desde 2015, así que UTC-3 fijo es un
+    reemplazo correcto y no una aproximación silenciosa.
+    """
+
+    try:
+        from zoneinfo import ZoneInfo
+
+        return ZoneInfo(RADAR_TIMEZONE_NAME)
+    except Exception:  # pragma: no cover - sólo sin tzdata en la imagen
+        print(f"[consolas] Sin tzdata para {RADAR_TIMEZONE_NAME}: el radar usa UTC-3 fijo")
+        return timezone(timedelta(hours=-3))
+
+
+def radar_now_local() -> datetime:
+    return datetime.now(radar_timezone())
+
+
+def parse_iso_datetime(value: Any) -> datetime | None:
+    """Lee un timestamp persistido. Una fila ilegible devuelve `None`, no explota."""
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=timezone.utc)
+
+
+def radar_slot_datetime(slot_key: str, reference: datetime) -> datetime | None:
+    for key, hour, minute in RADAR_SLOTS:
+        if key == slot_key:
+            return reference.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    return None
+
+
+def radar_due_slots(now: datetime) -> list[str]:
+    """Slots de hoy cuya hora ya pasó, del más viejo al más nuevo."""
+    due: list[str] = []
+    for key, hour, minute in RADAR_SLOTS:
+        if now >= now.replace(hour=hour, minute=minute, second=0, microsecond=0):
+            due.append(key)
+    return due
+
+
+def radar_next_slot(now: datetime) -> dict[str, Any]:
+    """El próximo slot, hoy o mañana, en ISO local."""
+    for key, hour, minute in RADAR_SLOTS:
+        slot_time = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        if slot_time > now:
+            return {"slotKey": key, "label": RADAR_SLOT_LABELS[key], "at": slot_time.isoformat()}
+    first_key, hour, minute = RADAR_SLOTS[0]
+    tomorrow = (now + timedelta(days=1)).replace(hour=hour, minute=minute, second=0, microsecond=0)
+    return {"slotKey": first_key, "label": RADAR_SLOT_LABELS[first_key], "at": tomorrow.isoformat()}
+
+
+def normalize_radar_slots(value: Any) -> list[str]:
+    """Slots elegidos por una búsqueda. Lista vacía = todos."""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        raw_items: list[Any] = value.split(",")
+    elif isinstance(value, list):
+        raw_items = value
+    else:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "slots must be a list of slot keys")
+    slots: list[str] = []
+    for item in raw_items:
+        key = str(item or "").strip().lower()
+        if not key:
+            continue
+        if key not in RADAR_SLOT_KEYS:
+            raise ApiError(
+                HTTPStatus.BAD_REQUEST, f"slots must be any of: {', '.join(RADAR_SLOT_KEYS)}"
+            )
+        if key not in slots:
+            slots.append(key)
+    return [key for key in RADAR_SLOT_KEYS if key in slots]
+
+
+def radar_search_slots(row: sqlite3.Row) -> list[str]:
+    stored = radar_json_field(row["slots_json"] if "slots_json" in row.keys() else "", [])
+    slots = [key for key in stored if key in RADAR_SLOT_KEYS]
+    return slots or list(RADAR_SLOT_KEYS)
+
+
+def radar_search_lock(search_id: str) -> threading.Lock:
+    with _RADAR_LOCK:
+        return _RADAR_SEARCH_LOCKS.setdefault(search_id, threading.Lock())
+
+
+def radar_run_row(row: sqlite3.Row, receipts: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    return {
+        "id": row["id"],
+        "kind": row["kind"],
+        "slotKey": row["slot_key"],
+        "slotLabel": RADAR_SLOT_LABELS.get(str(row["slot_key"]), ""),
+        "scheduleDate": row["schedule_date"],
+        "status": row["status"],
+        "startedAt": row["started_at"],
+        "finishedAt": row["finished_at"],
+        "searchesTotal": row["searches_total"],
+        "searchesOk": row["searches_ok"],
+        "searchesFailed": row["searches_failed"],
+        "listingsMatched": row["listings_matched"],
+        "listingsRejected": row["listings_rejected"],
+        "detail": row["detail"],
+        "receipts": receipts or [],
+    }
+
+
+def radar_receipt_row(row: sqlite3.Row) -> dict[str, Any]:
+    return {
+        "searchId": row["search_id"],
+        "sourceId": row["source_id"],
+        "sourceLabel": radar_source_label(str(row["source_id"])),
+        "status": row["status"],
+        "listingCount": row["listing_count"],
+        "matchedCount": row["matched_count"],
+        "rejectedCount": row["rejected_count"],
+        "errorCount": row["error_count"],
+        "errors": radar_json_field(row["errors_json"], []),
+        "startedAt": row["started_at"],
+        "finishedAt": row["finished_at"],
+    }
+
+
+def start_radar_run(config: AppConfig, kind: str, slot_key: str = "", schedule_date: str = "") -> str:
+    run_id = f"radar-run-{uuid.uuid4().hex[:16]}"
+    with _RADAR_LOCK, connect_db(config) as conn:
+        conn.execute(
+            """INSERT INTO radar_runs (id, kind, slot_key, schedule_date, status, started_at)
+               VALUES (?, ?, ?, ?, 'running', ?)""",
+            (run_id, kind, slot_key, schedule_date, utc_now()),
+        )
+    return run_id
+
+
+def finish_radar_run(config: AppConfig, run_id: str, totals: dict[str, Any], detail: str = "") -> dict[str, Any]:
+    failed = int(totals.get("searchesFailed") or 0)
+    total = int(totals.get("searchesTotal") or 0)
+    if total and failed == total:
+        status = "failed"
+    elif failed:
+        status = "degraded"
+    else:
+        status = "completed"
+    with _RADAR_LOCK, connect_db(config) as conn:
+        conn.execute(
+            """UPDATE radar_runs SET status = ?, finished_at = ?, searches_total = ?, searches_ok = ?,
+                 searches_failed = ?, listings_matched = ?, listings_rejected = ?, detail = ?
+               WHERE id = ?""",
+            (
+                status, utc_now(), total, int(totals.get("searchesOk") or 0), failed,
+                int(totals.get("listingsMatched") or 0), int(totals.get("listingsRejected") or 0),
+                detail, run_id,
+            ),
+        )
+        row = conn.execute("SELECT * FROM radar_runs WHERE id = ?", (run_id,)).fetchone()
+    return radar_run_row(row)
+
+
+def record_radar_receipts(config: AppConfig, run_id: str, search_id: str, receipts: list[dict[str, Any]],
+                          matched: int, rejected: int) -> None:
+    if not run_id:
+        return
+    with _RADAR_LOCK, connect_db(config) as conn:
+        for receipt in receipts:
+            conn.execute(
+                """INSERT INTO radar_run_receipts (
+                     run_id, search_id, source_id, status, listing_count, matched_count, rejected_count,
+                     error_count, errors_json, started_at, finished_at
+                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(run_id, search_id, source_id) DO UPDATE SET
+                     status=excluded.status, listing_count=excluded.listing_count,
+                     matched_count=excluded.matched_count, rejected_count=excluded.rejected_count,
+                     error_count=excluded.error_count, errors_json=excluded.errors_json,
+                     finished_at=excluded.finished_at""",
+                (
+                    run_id, search_id, str(receipt.get("sourceId") or ""), str(receipt.get("status") or "failed"),
+                    int(receipt.get("listingCount") or 0), matched, rejected, int(receipt.get("errorCount") or 0),
+                    json.dumps(receipt.get("errors") or [], ensure_ascii=False),
+                    str(receipt.get("startedAt") or utc_now()), str(receipt.get("finishedAt") or utc_now()),
+                ),
+            )
+
+
+def claim_radar_slot(config: AppConfig, schedule_date: str, slot_key: str, run_id: str,
+                     state: str = "fulfilled", detail: str = "") -> bool:
+    """Reclama un slot de forma atómica. `False` si ya estaba tomado.
+
+    Se reclama **antes** de escanear: un crash en medio de la corrida pierde ese
+    slot, que es preferible a repetir el scan y las llamadas externas.
+    """
+
+    with _RADAR_LOCK, connect_db(config) as conn:
+        cursor = conn.execute(
+            """INSERT OR IGNORE INTO radar_schedule_slots
+                 (schedule_date, slot_key, state, fulfilled_by_run_id, detail, claimed_at)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (schedule_date, slot_key, state, run_id, detail, utc_now()),
+        )
+        return cursor.rowcount == 1
+
+
+def latest_successful_radar_run(config: AppConfig) -> sqlite3.Row | None:
+    with _RADAR_LOCK, connect_db(config) as conn:
+        return conn.execute(
+            """SELECT * FROM radar_runs WHERE kind = 'manual' AND status IN ('completed', 'degraded')
+               ORDER BY finished_at DESC LIMIT 1"""
+        ).fetchone()
+
+
+def manual_run_satisfies_slot(config: AppConfig, slot_time: datetime) -> sqlite3.Row | None:
+    """Una corrida manual reciente y exitosa consume el slot que viene.
+
+    Misma regla que `AUCTION_WATCH_MANUAL_FRESHNESS_MINUTES`: no se vuelve a
+    escanear lo mismo minutos después de que el usuario ya lo pidió.
+    """
+
+    if RADAR_MANUAL_FRESHNESS_MINUTES <= 0:
+        return None
+    row = latest_successful_radar_run(config)
+    if row is None or not row["finished_at"]:
+        return None
+    finished_at = parse_iso_datetime(str(row["finished_at"]))
+    if finished_at is None:
+        return None
+    window_start = slot_time - timedelta(minutes=RADAR_MANUAL_FRESHNESS_MINUTES)
+    finished_local = finished_at.astimezone(slot_time.tzinfo)
+    return row if window_start <= finished_local <= slot_time else None
+
+
+def run_radar_searches(config: AppConfig, run_id: str, slot_key: str = "") -> dict[str, Any]:
+    """Ejecuta las búsquedas activas que corresponden a esta corrida.
+
+    Una búsqueda que falla no detiene a las demás: su falla queda en el recibo y
+    en `last_error`, y el resto de la corrida sigue.
+    """
+
+    with _RADAR_LOCK, connect_db(config) as conn:
+        rows = conn.execute(
+            "SELECT * FROM radar_searches WHERE status = 'active' AND deleted_at IS NULL ORDER BY priority, name"
+        ).fetchall()
+
+    selected = [row for row in rows if not slot_key or slot_key in radar_search_slots(row)]
+    totals = {
+        "searchesTotal": len(selected),
+        "searchesOk": 0,
+        "searchesFailed": 0,
+        "listingsMatched": 0,
+        "listingsRejected": 0,
+    }
+    for row in selected:
+        search_id = str(row["id"])
+        try:
+            result = run_radar_search(config, search_id, run_id=run_id)
+        except ApiError as error:
+            totals["searchesFailed"] += 1
+            print(f"[consolas] Collection Radar error for {search_id}: {error.message}")
+            continue
+        totals["searchesOk"] += 1
+        totals["listingsMatched"] += int(result.get("results") or 0)
+        totals["listingsRejected"] += int(result.get("rejected") or 0)
+    return totals
+
+
+def run_due_radar_slots(config: AppConfig) -> list[dict[str, Any]]:
+    """Un tick del scheduler: corre el slot vencido que falte, y sólo uno.
+
+    Si el add-on estuvo apagado y hay varios slots vencidos, se ejecuta
+    únicamente el más reciente; los anteriores se cierran como `skipped` con su
+    motivo. Arrancar disparando tres scans seguidos sería ruido, no recuperación.
+    """
+
+    now = radar_now_local()
+    schedule_date = now.date().isoformat()
+    due = radar_due_slots(now)
+    if not due:
+        return []
+
+    with _RADAR_LOCK, connect_db(config) as conn:
+        taken = {
+            str(row["slot_key"])
+            for row in conn.execute(
+                "SELECT slot_key FROM radar_schedule_slots WHERE schedule_date = ?", (schedule_date,)
+            ).fetchall()
+        }
+    pending = [slot_key for slot_key in due if slot_key not in taken]
+    if not pending:
+        return []
+
+    outcomes: list[dict[str, Any]] = []
+    for slot_key in pending[:-1]:
+        if claim_radar_slot(config, schedule_date, slot_key, "", "skipped", "Slot vencido mientras el add-on no corría"):
+            outcomes.append({"slotKey": slot_key, "state": "skipped"})
+
+    slot_key = pending[-1]
+    slot_time = radar_slot_datetime(slot_key, now) or now
+    fresh_manual = manual_run_satisfies_slot(config, slot_time)
+    if fresh_manual is not None:
+        if claim_radar_slot(
+            config, schedule_date, slot_key, str(fresh_manual["id"]), "fulfilled",
+            "Satisfecho por una corrida manual reciente",
+        ):
+            outcomes.append({"slotKey": slot_key, "state": "fulfilled", "runId": str(fresh_manual["id"])})
+        return outcomes
+
+    run_id = start_radar_run(config, "scheduled", slot_key, schedule_date)
+    if not claim_radar_slot(config, schedule_date, slot_key, run_id):
+        # Otro hilo ganó la carrera por el slot: esta corrida no existe.
+        with _RADAR_LOCK, connect_db(config) as conn:
+            conn.execute("DELETE FROM radar_runs WHERE id = ?", (run_id,))
+        return outcomes
+
+    totals = run_radar_searches(config, run_id, slot_key)
+    run = finish_radar_run(config, run_id, totals)
+    outcomes.append({"slotKey": slot_key, "state": "fulfilled", "runId": run_id, "status": run["status"]})
+    return outcomes
+
+
+def start_manual_radar_run(config: AppConfig) -> dict[str, Any]:
+    """Encola un “Buscar ahora” global. Una solicitud repetida reutiliza la activa."""
+    with _RADAR_RUN_LOCK:
+        with _RADAR_LOCK, connect_db(config) as conn:
+            running = conn.execute(
+                "SELECT * FROM radar_runs WHERE status = 'running' ORDER BY started_at DESC LIMIT 1"
+            ).fetchone()
+        if running is not None:
+            return {"ok": True, "reused": True, "run": radar_run_row(running)}
+        run_id = start_radar_run(config, "manual")
+
+    def worker() -> None:
+        try:
+            totals = run_radar_searches(config, run_id)
+            finish_radar_run(config, run_id, totals)
+        except Exception as error:  # pragma: no cover - defensivo
+            finish_radar_run(
+                config, run_id,
+                {"searchesTotal": 1, "searchesOk": 0, "searchesFailed": 1},
+                detail=str(error),
+            )
+
+    threading.Thread(target=worker, name=f"radar-run-{run_id}", daemon=True).start()
+    with _RADAR_LOCK, connect_db(config) as conn:
+        row = conn.execute("SELECT * FROM radar_runs WHERE id = ?", (run_id,)).fetchone()
+    return {"ok": True, "reused": False, "run": radar_run_row(row)}
+
+
+def list_radar_runs(config: AppConfig, limit: int = RADAR_RUN_HISTORY_LIMIT) -> dict[str, Any]:
+    capped = max(1, min(int(limit or RADAR_RUN_HISTORY_LIMIT), 100))
+    now = radar_now_local()
+    schedule_date = now.date().isoformat()
+    with _RADAR_LOCK, connect_db(config) as conn:
+        rows = conn.execute(
+            "SELECT * FROM radar_runs ORDER BY started_at DESC LIMIT ?", (capped,)
+        ).fetchall()
+        runs: list[dict[str, Any]] = []
+        for row in rows:
+            receipts = conn.execute(
+                "SELECT * FROM radar_run_receipts WHERE run_id = ? ORDER BY search_id, source_id",
+                (str(row["id"]),),
+            ).fetchall()
+            runs.append(radar_run_row(row, [radar_receipt_row(receipt) for receipt in receipts]))
+        today = conn.execute(
+            "SELECT * FROM radar_schedule_slots WHERE schedule_date = ? ORDER BY slot_key", (schedule_date,)
+        ).fetchall()
+    slot_states = {str(row["slot_key"]): row for row in today}
+    return {
+        "version": RADAR_SEARCHES_VERSION,
+        "timezone": RADAR_TIMEZONE_NAME,
+        "now": now.isoformat(),
+        "nextSlot": radar_next_slot(now),
+        "slots": [
+            {
+                "slotKey": key,
+                "label": RADAR_SLOT_LABELS[key],
+                "state": str(slot_states[key]["state"]) if key in slot_states else "pending",
+                "runId": str(slot_states[key]["fulfilled_by_run_id"]) if key in slot_states else "",
+                "detail": str(slot_states[key]["detail"]) if key in slot_states else "",
+            }
+            for key in RADAR_SLOT_KEYS
+        ],
+        "current": next((run for run in runs if run["status"] == "running"), None),
+        "runs": runs,
+    }
+
+
+def run_active_radar_searches(config: AppConfig) -> dict[str, Any]:
+    """Corre todas las búsquedas aprobadas y activas, sin ligarlas a un slot.
+
+    Un borrador espera consentimiento explícito y nunca entra acá.
+    """
+    return run_radar_searches(config, "")
+
+
+# --------------------------------------------------------------------------- #
+# Compatibilidad: la superficie previa de Chasing Games proyecta el radar       #
+# --------------------------------------------------------------------------- #
+
+
+def chasing_game_row(row: sqlite3.Row, results: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    search = radar_search_row(row, results)
+    return {
+        "id": search["id"],
+        "title": search["name"],
+        "platform": search["platform"],
+        "searchQuery": search["searchQuery"],
+        "source": (search["sources"] or [RADAR_DEFAULT_SOURCE])[0],
+        "enabled": search["enabled"],
+        "createdAt": search["createdAt"],
+        "updatedAt": search["updatedAt"],
+        "lastCheckedAt": search["lastCheckedAt"],
+        "lastError": search["lastError"],
+        "results": [
+            {
+                "id": item["id"], "title": item["title"], "priceLabel": item["priceLabel"],
+                "conditionLabel": item["conditionLabel"], "shippingLabel": item["shippingLabel"],
+                "locationLabel": item["locationLabel"], "listingType": item["listingType"],
+                "listingUrl": item["listingUrl"], "imageUrl": item["imageUrl"], "lastSeenAt": item["lastSeenAt"],
+            }
+            for item in search["results"]
+        ],
     }
 
 
 def list_chasing_games(config: AppConfig) -> dict[str, Any]:
-    with _CHASING_GAMES_LOCK, connect_db(config) as conn:
-        rows = conn.execute("SELECT * FROM chasing_games ORDER BY enabled DESC, updated_at DESC, title").fetchall()
-        output = []
-        for row in rows:
-            results = conn.execute(
-                """SELECT * FROM chasing_game_results WHERE chase_id = ? AND is_active = 1
-                   ORDER BY last_seen_at DESC LIMIT 12""",
-                (row["id"],),
-            ).fetchall()
-            output.append(
-                chasing_game_row(
-                    row,
-                    [
-                        {
-                            "id": item["id"], "title": item["title"], "priceLabel": item["price_label"],
-                            "conditionLabel": item["condition_label"], "shippingLabel": item["shipping_label"],
-                            "locationLabel": item["location_label"], "listingType": item["listing_type"],
-                            "listingUrl": item["listing_url"], "imageUrl": item["image_url"], "lastSeenAt": item["last_seen_at"],
-                        }
-                        for item in results
-                    ],
-                )
-            )
-    source = "eBay Sandbox · datos de prueba" if config.ebay_environment == "sandbox" else "eBay USA"
-    return {"version": CHASING_GAMES_VERSION, "source": source, "environment": config.ebay_environment, "items": output}
+    with _RADAR_LOCK, connect_db(config) as conn:
+        rows = conn.execute(
+            """SELECT * FROM radar_searches WHERE deleted_at IS NULL AND status != 'archived'
+               ORDER BY status = 'active' DESC, updated_at DESC, name"""
+        ).fetchall()
+        output = [
+            chasing_game_row(row, radar_search_results(conn, str(row["id"]), RADAR_DEFAULT_RESULT_LIMIT))
+            for row in rows
+        ]
+    return {
+        "version": CHASING_GAMES_VERSION,
+        "source": radar_environment_label(config),
+        "environment": config.ebay_environment,
+        "items": output,
+    }
 
 
 def create_chasing_game(config: AppConfig, payload: Any) -> dict[str, Any]:
+    """Legacy entry point: deterministic id, re-enable on conflict and immediate run."""
     if not isinstance(payload, dict):
         raise ApiError(HTTPStatus.BAD_REQUEST, "JSON body must be an object")
-    title = normalize_chase_text(payload.get("title"), "title", 200)
-    platform = " ".join(str(payload.get("platform") or "").split())[:100]
-    search_query = " ".join(str(payload.get("searchQuery") or f"{title} {platform}").split())[:300]
+    title = normalize_radar_text(payload.get("title"), "title", 200)
+    platform = normalize_radar_text(payload.get("platform"), "platform", 100, required=False)
+    criteria = default_radar_criteria()
+    search_query = build_radar_search_query(title, platform, criteria, payload.get("searchQuery"))
     chase_id = f"chase-{hashlib.sha1(f'{title}\0{platform}'.lower().encode('utf-8')).hexdigest()[:16]}"
     now = utc_now()
-    with _CHASING_GAMES_LOCK, connect_db(config) as conn:
+    with _RADAR_LOCK, connect_db(config) as conn:
         conn.execute(
-            """INSERT INTO chasing_games (id, title, platform, search_query, source, enabled, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, 1, ?, ?)
-               ON CONFLICT(id) DO UPDATE SET enabled = 1, updated_at = excluded.updated_at""",
-            (chase_id, title, platform, search_query, CHASING_GAMES_SOURCE, now, now),
+            """INSERT INTO radar_searches (
+                 id, name, search_type, status, origin, priority, platform, entity_type, entity_id,
+                 search_query, criteria_json, sources_json, notes, created_at, updated_at
+               ) VALUES (?, ?, 'chase', 'active', 'user', 'media', ?, '', '', ?, ?, ?, '', ?, ?)
+               ON CONFLICT(id) DO UPDATE SET status = 'active', deleted_at = NULL, updated_at = excluded.updated_at""",
+            (
+                chase_id, title, platform, search_query,
+                json.dumps(criteria, ensure_ascii=False, separators=(",", ":")),
+                json.dumps([RADAR_DEFAULT_SOURCE], ensure_ascii=False, separators=(",", ":")),
+                now, now,
+            ),
         )
-    return run_chasing_game(config, chase_id)
+    return run_radar_search(config, chase_id)
 
 
 def set_chasing_game_enabled(config: AppConfig, chase_id: Any, enabled: bool) -> dict[str, Any]:
-    target_id = normalize_chase_id(chase_id)
-    with _CHASING_GAMES_LOCK, connect_db(config) as conn:
-        cursor = conn.execute("UPDATE chasing_games SET enabled = ?, updated_at = ? WHERE id = ?", (int(enabled), utc_now(), target_id))
-    if cursor.rowcount != 1:
-        raise ApiError(HTTPStatus.NOT_FOUND, "Chase not found")
+    target_id = normalize_radar_id(chase_id)
+    with _RADAR_LOCK, connect_db(config) as conn:
+        row = conn.execute(
+            "SELECT id FROM radar_searches WHERE id = ? AND deleted_at IS NULL", (target_id,)
+        ).fetchone()
+        if row is None:
+            raise ApiError(HTTPStatus.NOT_FOUND, "Chase not found")
+        now = utc_now()
+        conn.execute(
+            "UPDATE radar_searches SET status = ?, archived_at = NULL, updated_at = ? WHERE id = ?",
+            ("active" if enabled else "paused", now, target_id),
+        )
     return {"ok": True, "id": target_id, "enabled": enabled}
 
 
 def run_chasing_game(config: AppConfig, chase_id: Any) -> dict[str, Any]:
-    target_id = normalize_chase_id(chase_id)
-    with _CHASING_GAMES_LOCK, connect_db(config) as conn:
-        row = conn.execute("SELECT * FROM chasing_games WHERE id = ?", (target_id,)).fetchone()
-    if row is None:
-        raise ApiError(HTTPStatus.NOT_FOUND, "Chase not found")
-    now = utc_now()
     try:
-        listings = fetch_ebay_listings(config, str(row["search_query"]))
+        return run_radar_search(config, chase_id)
     except ApiError as error:
-        with _CHASING_GAMES_LOCK, connect_db(config) as conn:
-            conn.execute("UPDATE chasing_games SET last_checked_at = ?, last_error = ?, updated_at = ? WHERE id = ?", (now, error.message, now, target_id))
+        if error.status == HTTPStatus.NOT_FOUND:
+            raise ApiError(HTTPStatus.NOT_FOUND, "Chase not found") from error
         raise
-    with _CHASING_GAMES_LOCK, connect_db(config) as conn:
-        conn.execute("UPDATE chasing_game_results SET is_active = 0 WHERE chase_id = ?", (target_id,))
-        for listing in listings:
-            external_id = str(listing["externalId"])
-            result_id = f"ebay-{hashlib.sha1(f'{target_id}\0{external_id}'.encode('utf-8')).hexdigest()[:20]}"
-            conn.execute(
-                """INSERT INTO chasing_game_results (
-                     id, chase_id, external_id, title, price_label, condition_label, shipping_label, location_label,
-                     listing_type, listing_url, image_url, is_active, first_seen_at, last_seen_at
-                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
-                   ON CONFLICT(chase_id, external_id) DO UPDATE SET
-                     title=excluded.title, price_label=excluded.price_label, condition_label=excluded.condition_label,
-                     shipping_label=excluded.shipping_label, location_label=excluded.location_label,
-                     listing_type=excluded.listing_type, listing_url=excluded.listing_url, image_url=excluded.image_url,
-                     is_active=1, last_seen_at=excluded.last_seen_at""",
-                (result_id, target_id, external_id, listing["title"], listing["priceLabel"], listing["conditionLabel"], listing["shippingLabel"], listing["locationLabel"], listing["listingType"], listing["listingUrl"], listing["imageUrl"], now, now),
-            )
-        conn.execute("UPDATE chasing_games SET last_checked_at = ?, last_error = '', updated_at = ? WHERE id = ?", (now, now, target_id))
-    return {"ok": True, "id": target_id, "results": len(listings), "checkedAt": now}
+
+
+def delete_chasing_game(config: AppConfig, chase_id: Any) -> dict[str, Any]:
+    try:
+        return delete_radar_search(config, chase_id)
+    except ApiError as error:
+        if error.status == HTTPStatus.NOT_FOUND:
+            raise ApiError(HTTPStatus.NOT_FOUND, "Chase not found") from error
+        raise
 
 
 def run_enabled_chasing_games(config: AppConfig) -> None:
-    with _CHASING_GAMES_LOCK, connect_db(config) as conn:
-        rows = conn.execute("SELECT id FROM chasing_games WHERE enabled = 1").fetchall()
-    for row in rows:
-        try:
-            run_chasing_game(config, row["id"])
-        except ApiError as error:
-            print(f"[consolas] Chasing Games error for {row['id']}: {error.message}")
+    run_active_radar_searches(config)
 
 
-class ChasingGamesScheduler(threading.Thread):
+class RadarSearchScheduler(threading.Thread):
+    """Despierta seguido, escanea poco: sólo cuando vence un slot sin cumplir.
+
+    Reemplaza al hilo que dormía 86.400 segundos desde el arranque, que perdía
+    su horario en cada reinicio y no dejaba rastro de lo que había corrido.
+    """
+
     def __init__(self, config: AppConfig) -> None:
-        super().__init__(name="chasing-games", daemon=True)
+        super().__init__(name="collection-radar", daemon=True)
         self.config = config
 
     def run(self) -> None:
         while True:
-            run_enabled_chasing_games(self.config)
-            threading.Event().wait(max(300, CHASING_GAMES_INTERVAL_SECONDS))
+            try:
+                for outcome in run_due_radar_slots(self.config):
+                    print(f"[consolas] Collection Radar slot {outcome['slotKey']}: {outcome['state']}")
+            except Exception as error:  # el scheduler no puede morirse por una corrida
+                print(f"[consolas] Collection Radar scheduler error: {error}")
+            threading.Event().wait(RADAR_SCHEDULER_INTERVAL_SECONDS)
 
 
 def build_health_payload(config: AppConfig) -> dict[str, Any]:
@@ -2345,6 +3825,25 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/chasing-games":
             self.send_json(list_chasing_games(config))
             return
+        if path == "/api/radar/searches":
+            self.send_json(list_radar_searches(config))
+            return
+        if path == "/api/radar/runs":
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            limit = (query.get("limit") or [str(RADAR_RUN_HISTORY_LIMIT)])[0]
+            self.send_json(
+                list_radar_runs(config, int(limit) if limit.isdigit() else RADAR_RUN_HISTORY_LIMIT)
+            )
+            return
+        if path == "/api/radar/listings":
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            limit = (query.get("limit") or ["100"])[0]
+            self.send_json(list_radar_listings(config, int(limit) if limit.isdigit() else 100))
+            return
+        if path.startswith("/api/radar/searches/"):
+            search_id = normalize_radar_id(path.removeprefix("/api/radar/searches/"))
+            self.send_json(radar_search_payload(config, search_id))
+            return
         if path.startswith("/media/"):
             self.serve_media(path.removeprefix("/media/"))
             return
@@ -2418,6 +3917,35 @@ class Handler(BaseHTTPRequestHandler):
             payload = read_json_body(self, self.config())
             self.send_json(complete_auction_watch_run(self.config(), payload))
             return
+        if path == "/api/radar/searches":
+            require_radar_write_request(self)
+            payload = read_json_body(self, self.config())
+            self.send_json(create_radar_search(self.config(), payload), HTTPStatus.CREATED)
+            return
+        if path == "/api/radar/run-now":
+            require_radar_write_request(self)
+            self.send_json(start_manual_radar_run(self.config()), HTTPStatus.ACCEPTED)
+            return
+        if path.startswith("/api/radar/searches/"):
+            require_radar_write_request(self)
+            payload = read_json_body(self, self.config())
+            parts = path.removeprefix("/api/radar/searches/").split("/")
+            if len(parts) == 1:
+                self.send_json(update_radar_search(self.config(), parts[0], payload))
+                return
+            if len(parts) != 2:
+                raise ApiError(HTTPStatus.NOT_FOUND, "Unknown endpoint")
+            search_id, action = parts
+            if action == "run":
+                self.send_json(run_radar_search(self.config(), search_id))
+                return
+            if action == "status":
+                self.send_json(set_radar_search_status(self.config(), search_id, payload.get("status")))
+                return
+            if action == "duplicate":
+                self.send_json(duplicate_radar_search(self.config(), search_id), HTTPStatus.CREATED)
+                return
+            raise ApiError(HTTPStatus.NOT_FOUND, "Unknown endpoint")
         if path == "/api/chasing-games":
             require_chasing_games_write_request(self)
             payload = read_json_body(self, self.config())
@@ -2441,14 +3969,15 @@ class Handler(BaseHTTPRequestHandler):
 
     def route_delete(self) -> None:
         parsed = urllib.parse.urlsplit(self.path)
+        if parsed.path.startswith("/api/radar/searches/"):
+            require_radar_write_request(self)
+            search_id = normalize_radar_id(parsed.path.removeprefix("/api/radar/searches/"))
+            self.send_json(delete_radar_search(self.config(), search_id))
+            return
         if parsed.path.startswith("/api/chasing-games/"):
             require_chasing_games_write_request(self)
-            chase_id = normalize_chase_id(parsed.path.removeprefix("/api/chasing-games/"))
-            with _CHASING_GAMES_LOCK, connect_db(self.config()) as conn:
-                cursor = conn.execute("DELETE FROM chasing_games WHERE id = ?", (chase_id,))
-            if cursor.rowcount != 1:
-                raise ApiError(HTTPStatus.NOT_FOUND, "Chase not found")
-            self.send_json({"ok": True, "id": chase_id})
+            chase_id = parsed.path.removeprefix("/api/chasing-games/")
+            self.send_json(delete_chasing_game(self.config(), chase_id))
             return
         if parsed.path != "/api/auction-watch/dismissals":
             if parsed.path != "/api/auction-watch/following":
@@ -2509,7 +4038,7 @@ def main() -> int:
     config = AppConfig()
     init_db(config)
     ensure_state_media_migrated(config)
-    ChasingGamesScheduler(config).start()
+    RadarSearchScheduler(config).start()
     print(f"[consolas] Starting on {config.host}:{config.port}")
     print(f"[consolas] Persistent data: {config.data_dir}")
     print(f"[consolas] Static web: {config.static_dir}")

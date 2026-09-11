@@ -3,8 +3,6 @@
 .chasing-count strong { display:block; color:var(--ink); font-size:2rem; }
 .chasing-add { margin-top:18px; display:grid; grid-template-columns:minmax(0,1fr) minmax(360px,1.2fr); gap:20px; align-items:end; }
 .chasing-add h2 { margin:.2rem 0; }
-#chasingForm { display:grid; grid-template-columns:1fr 150px auto; gap:10px; }
-#chasingForm input { min-width:0; }
 .chasing-list { display:grid; gap:16px; margin-top:18px; }
 .chase-card { padding:20px; }
 .chase-card.is-paused { opacity:.72; }
@@ -15,7 +13,88 @@
 .chase-card-meta,.chase-result-meta { display:flex; flex-wrap:wrap; gap:8px 14px; color:var(--muted); font-size:.82rem; margin:14px 0; }
 .chase-error { color:var(--danger); }.chase-actions { margin:0 0 16px; }.chase-delete { color:var(--danger); }
 .chase-results { display:grid; gap:8px; }
-.chase-result { display:grid; grid-template-columns:54px minmax(0,1fr) auto; gap:12px; align-items:center; border:1px solid var(--line); border-radius:12px; padding:10px; background:rgba(255,255,255,.46); }
+.chase-result { display:grid; grid-template-columns:54px minmax(0,1fr) auto; gap:12px; align-items:center; border:1px solid var(--line); border-radius:12px; padding:10px; background:rgba(255,255,255,.04); }
 .chase-result img { width:54px; height:70px; object-fit:contain; }.chase-result h3 { margin:2px 0; font-size:.96rem; }.chase-result-meta { margin:4px 0 0; }.chase-result-price { display:grid; justify-items:end; gap:6px; white-space:nowrap; }.chase-empty-results { margin:0; padding:16px; color:var(--muted); border:1px dashed var(--line); border-radius:12px; }.chasing-feedback { margin:14px 0 0; color:var(--muted); }
 .chasing-sandbox-notice { margin:14px 0 0; max-width:760px; padding:10px 13px; border:1px solid rgba(138, 191, 255, .45); border-radius:10px; color:#c8e3ff; background:rgba(56, 126, 190, .12); font-size:.94rem; }
-@media (max-width:720px) { .chasing-hero,.chasing-add { display:grid; }.chasing-count { text-align:left; }.chasing-add { grid-template-columns:1fr; } #chasingForm { grid-template-columns:1fr; }.chase-result { grid-template-columns:42px minmax(0,1fr); }.chase-result img { width:42px;height:56px; }.chase-result-price { grid-column:2; justify-items:start; } }
+@media (max-width:720px) { .chasing-hero,.chasing-add { display:grid; }.chasing-count { text-align:left; }.chasing-add { grid-template-columns:1fr; }.chase-result { grid-template-columns:42px minmax(0,1fr); }.chase-result img { width:42px;height:56px; }.chase-result-price { grid-column:2; justify-items:start; } }
+
+/* ------------------------------------------------------------------ */
+/* Collection Radar · Búsquedas                                        */
+/* ------------------------------------------------------------------ */
+
+/* Estado del perfil de búsqueda */
+.chase-status.is-active { border-color:rgba(120,220,170,.5); color:#8fe6bd; }
+.chase-status.is-draft { border-color:rgba(255,214,140,.5); color:#ffd68c; }
+.chase-status.is-paused,.chase-status.is-archived { border-color:var(--line); color:var(--muted); }
+.chase-status.is-archived { opacity:.8; }
+.radar-card.is-paused,.radar-card.is-archived { opacity:.74; }
+.radar-card-badges { display:grid; gap:6px; justify-items:end; align-content:start; }
+.radar-priority { font:500 .72rem "IBM Plex Mono",monospace; color:var(--muted); }
+.radar-draft-note { margin:12px 0 0; padding:9px 12px; border:1px solid rgba(255,214,140,.35); border-radius:10px; background:rgba(255,199,92,.1); color:#ffd68c; font-size:.9rem; }
+.radar-chips { display:flex; flex-wrap:wrap; gap:6px; margin:14px 0 0; }
+.radar-chips span { border:1px solid var(--line); border-radius:999px; padding:4px 10px; font-size:.78rem; color:var(--muted); }
+.radar-blocked { color:#ffd68c; }
+
+/* Filtros por estado */
+.radar-filters { display:flex; flex-wrap:wrap; gap:8px; margin:18px 0 0; }
+.radar-filter { display:inline-flex; align-items:center; gap:8px; border:1px solid var(--line); border-radius:999px; padding:7px 14px; background:transparent; color:var(--muted); font:500 .84rem inherit; cursor:pointer; }
+.radar-filter span { font-family:"IBM Plex Mono",monospace; font-size:.74rem; opacity:.75; }
+.radar-filter.is-active { border-color:var(--ink); color:var(--ink); }
+
+/* Formulario de alta y edición: corto primero, criterios detrás de un desplegable */
+.radar-form { display:grid; gap:14px; margin-top:14px; }
+.radar-form-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:12px; }
+.radar-form label,.radar-notes { display:grid; gap:5px; font-size:.82rem; color:var(--muted); min-width:0; }
+.radar-form input,.radar-form select,.radar-form textarea { min-width:0; }
+.radar-form textarea { resize:vertical; font:inherit; }
+.radar-advanced { border:1px solid var(--line); border-radius:12px; padding:12px 14px; display:grid; gap:12px; }
+.radar-advanced summary { cursor:pointer; font:500 .86rem inherit; color:var(--ink); }
+.radar-form-checks { display:flex; flex-wrap:wrap; gap:14px; }
+.radar-form-checks label,.radar-source-option { display:flex; align-items:center; gap:8px; font-size:.84rem; color:var(--muted); }
+.radar-sources { border:1px solid var(--line); border-radius:12px; padding:10px 14px; display:grid; gap:8px; margin:0; }
+.radar-sources legend { padding:0 6px; font:500 .78rem "IBM Plex Mono",monospace; color:var(--muted); }
+.radar-source-option.is-blocked { opacity:.78; align-items:start; flex-wrap:wrap; }
+.radar-source-note { flex-basis:100%; font-size:.76rem; color:var(--muted); opacity:.85; }
+.radar-form-actions { margin:0; }
+.chasing-add.is-open { grid-template-columns:1fr; align-items:start; }
+.chasing-feedback.is-error { color:var(--danger); }
+.chasing-feedback.is-success { color:#8fe6bd; }
+
+/* Por qué sirve cada publicación y qué falta verificar. */
+.chase-result-why { margin:6px 0 0; padding:0 0 0 16px; display:grid; gap:2px; font-size:.78rem; color:var(--muted); }
+.chase-result-why li::marker { color:rgba(143,230,189,.7); }
+.chase-result-why li.is-unverified { color:#ffd68c; }
+.chase-result-why li.is-unverified::marker { color:rgba(255,214,140,.7); }
+.chase-result-total { font-size:.76rem; color:var(--muted); font-family:"IBM Plex Mono",monospace; }
+
+/* La grilla no puede crecer con su contenido: un título largo o seis acciones
+   ensanchaban la página entera en pantallas angostas. */
+.chasing-list { grid-template-columns:minmax(0,1fr); }
+.chase-actions { flex-wrap:wrap; }
+.chase-card-head > div { min-width:0; }
+.chase-card-head h2,.chase-card-head p,.chase-result h3 { overflow-wrap:anywhere; }
+/* La celda de imagen siempre ocupa su lugar, con o sin foto de la publicación. */
+.chase-result-placeholder { width:54px; height:70px; border:1px dashed var(--line); border-radius:8px; opacity:.5; }
+
+@media (max-width:720px) {
+  .radar-card-badges { justify-items:start; }
+  .radar-form-grid { grid-template-columns:1fr; }
+  .radar-filters { overflow-x:auto; flex-wrap:nowrap; padding-bottom:4px; }
+  .radar-filter { flex:0 0 auto; }
+  .chase-card-head { flex-wrap:wrap; }
+  .chase-result-placeholder { width:42px; height:56px; }
+  /* Seis acciones apiladas empujan los resultados fuera de pantalla. */
+  body.studio-variant .chase-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+  body.studio-variant .chase-actions .btn-primary { grid-column:1 / -1; }
+}
+
+/* Franja del scheduler: slots del día y próxima corrida. */
+.radar-schedule { margin-top:18px; display:grid; grid-template-columns:minmax(0,1fr) auto; gap:20px; align-items:center; }
+.radar-schedule h2 { margin:.2rem 0; }
+.radar-schedule p.muted { margin:10px 0 0; }
+.radar-slots { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+.radar-slot { display:inline-flex; align-items:baseline; gap:6px; border:1px solid var(--line); border-radius:999px; padding:5px 11px; font:500 .8rem "IBM Plex Mono",monospace; color:var(--muted); }
+.radar-slot em { font-style:normal; font-size:.72rem; opacity:.8; }
+.radar-slot.is-fulfilled { border-color:rgba(120,220,170,.5); color:#8fe6bd; }
+.radar-slot.is-skipped { border-color:rgba(255,214,140,.45); color:#ffd68c; }
+@media (max-width:720px) { .radar-schedule { grid-template-columns:1fr; align-items:start; } }

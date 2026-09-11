@@ -41,28 +41,28 @@ class ChasingGamesTests(unittest.TestCase):
         with self.assertRaisesRegex(ApiError, "credenciales de eBay Developers"):
             run_chasing_game(self.config, "iss-deluxe-snes")
 
-    @patch("server.app.fetch_ebay_listings")
+    @patch("radar.sources.ebay.EbayBrowseSource.fetch_item_summaries")
     def test_manual_run_persists_and_refreshes_ebay_results(self, mock_fetch) -> None:
         mock_fetch.return_value = [{
-            "externalId": "123456789012",
+            "itemId": "v1|123456789012|0",
             "title": "International Superstar Soccer Deluxe SNES Tested",
-            "priceLabel": "US $90.00",
-            "conditionLabel": "Pre-owned",
-            "shippingLabel": "US $8 shipping",
-            "locationLabel": "Located in United States",
-            "listingType": "Compra directa",
-            "listingUrl": "https://www.ebay.com/itm/123456789012",
-            "imageUrl": "https://i.ebayimg.com/example.jpg",
+            "itemWebUrl": "https://www.ebay.com/itm/123456789012",
+            "price": {"value": "90.00", "currency": "USD"},
+            "condition": "Pre-owned",
+            "buyingOptions": ["FIXED_PRICE"],
+            "itemLocation": {"country": "US"},
+            "image": {"imageUrl": "https://i.ebayimg.com/example.jpg"},
+            "shippingOptions": [{"shippingCostType": "FIXED", "shippingCost": {"value": "8.00", "currency": "USD"}}],
         }]
 
         result = run_chasing_game(self.config, "iss-deluxe-snes")
         self.assertTrue(result["ok"])
         self.assertEqual(result["results"], 1)
         item = list_chasing_games(self.config)["items"][0]
-        self.assertEqual(item["results"][0]["priceLabel"], "US $90.00")
+        self.assertEqual(item["results"][0]["priceLabel"], "USD 90.00")
         self.assertTrue(item["lastCheckedAt"])
 
-    @patch("server.app.fetch_ebay_listings", return_value=[])
+    @patch("radar.sources.ebay.EbayBrowseSource.fetch_item_summaries", return_value=[])
     def test_new_chase_can_be_paused(self, _mock_fetch) -> None:
         created = create_chasing_game(self.config, {"title": "Metal Gear Solid", "platform": "PS1"})
         self.assertTrue(created["ok"])
