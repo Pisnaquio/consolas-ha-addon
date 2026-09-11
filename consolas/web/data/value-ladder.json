@@ -1,0 +1,233 @@
+{
+  "version": 1,
+  "updatedAt": "2026-09-11",
+  "note": "Guía de modelos y valor por consola (PRD §11.1). Explica qué variante conviene para jugar, cuál para coleccionar y por qué existe el premium. Los hechos de hardware llevan su fuente; los precios NO se inventan: salen de las referencias del catálogo o quedan pendientes.",
+  "priceNote": "Las variantes no traen importes propios todavía. El catálogo guarda un precio por consola, no por revisión, y asignarlo a una variante sería atribuirle una precisión que no tiene.",
+  "pendingAll": [
+    "Tramos de condición por variante: loose, loose completo, boxed, CIB y nuevo.",
+    "Rareza, volumen de ventas y confianza de cada referencia.",
+    "Disponibilidad de repuestos y accesorios por variante.",
+    "Premium porcentual y absoluto frente al modelo común."
+  ],
+  "ladders": {
+    "ps2": {
+      "family": "Sony PlayStation 2",
+      "sources": [
+        {
+          "label": "Documentación de revisiones de PS2",
+          "url": "https://www.pricecharting.com/console/playstation-2"
+        }
+      ],
+      "verifiedAt": "2026-09-11",
+      "confidence": "alta para identificación y diferencias técnicas; sin precios por variante",
+      "playPick": "slim-90001",
+      "collectPick": "fat-30001",
+      "variants": [
+        {
+          "id": "fat-30001",
+          "name": "Fat — SCPH-30001 y afines",
+          "years": "2000-2003",
+          "region": "NTSC-U/C",
+          "identify": "Caja negra grande, se puede parar vertical. Bahía de expansión en la parte trasera.",
+          "technical": "Bahía para disco rígido y adaptador de red. Sin ethernet integrado en los modelos más tempranos.",
+          "reliability": "La falla clásica es el Disc Read Error por desgaste del lector. Es el modelo que más la sufre.",
+          "note": "La más buscada por coleccionistas por ser la silueta original, y la única que acepta HDD interno."
+        },
+        {
+          "id": "fat-50001",
+          "name": "Fat — SCPH-50001",
+          "years": "2003-2004",
+          "region": "NTSC-U/C",
+          "identify": "Igual que la Fat anterior por fuera; se distingue por el número de modelo en la etiqueta trasera.",
+          "technical": "Ethernet integrado. Sin lector de DVD-RAM, a diferencia de revisiones previas.",
+          "reliability": "Mejor que las primeras Fat, pero sigue siendo un lector con desgaste conocido."
+        },
+        {
+          "id": "slim-70000",
+          "name": "Slim — SCPH-70000",
+          "years": "2004-2005",
+          "region": "NTSC-U/C",
+          "identify": "Chasis delgado, fuente de alimentación externa (ladrillo).",
+          "technical": "Ethernet integrado. Sin bahía de expansión: no acepta disco rígido interno.",
+          "reliability": "La primera Slim tuvo problemas de lector reportados con más frecuencia que las Slim tardías."
+        },
+        {
+          "id": "slim-90001",
+          "name": "Slim — SCPH-90001",
+          "years": "2008-2013",
+          "region": "NTSC-U/C",
+          "identify": "Slim con fuente integrada: el cable va directo a la consola, sin ladrillo.",
+          "technical": "La última revisión. Fuente interna, ethernet integrado, sin bahía de expansión.",
+          "reliability": "La más confiable de la familia y la más cómoda de conseguir completa.",
+          "note": "Es la recomendación por defecto para jugar: más chica, más fresca y con menos historial de fallas."
+        }
+      ],
+      "pending": [
+        "Precios por variante con procedencia y fecha.",
+        "Diferencias de compatibilidad con juegos de PS1 por revisión.",
+        "Ediciones especiales y su premium frente al modelo común."
+      ]
+    },
+    "atari": {
+      "family": "Atari 2600 / VCS",
+      "sources": [
+        {
+          "label": "AtariAge — archivo de consolas 2600",
+          "url": "https://www.atariage.com/2600/archives/consoles.php"
+        },
+        {
+          "label": "PriceCharting — Heavy Sixer",
+          "url": "https://www.pricecharting.com/game/atari-2600/atari-2600-system-heavy-sixer"
+        }
+      ],
+      "verifiedAt": "2026-09-11",
+      "confidence": "alta para identificación; el premium del Heavy Sixer es conocido pero no está cuantificado acá",
+      "playPick": "four-switch",
+      "collectPick": "heavy-sixer",
+      "variants": [
+        {
+          "id": "heavy-sixer",
+          "name": "Heavy Sixer",
+          "years": "1977",
+          "region": "NTSC",
+          "identify": "Seis switches, plástico notablemente más grueso y pesado, y un bisel de madera más ancho. Fabricada principalmente en Sunnyvale, California.",
+          "technical": "La primera VCS. Su construcción más robusta es lo que le da el apodo.",
+          "note": "Es la variante histórica de la familia: distinguirla de una Light Sixer es el paso previo a comparar precios, no algo posterior."
+        },
+        {
+          "id": "light-sixer",
+          "name": "Light Sixer",
+          "years": "1978-1980",
+          "region": "NTSC",
+          "identify": "También seis switches, pero plástico más liviano y bisel más angosto que la Heavy.",
+          "technical": "Misma electrónica esencial, construcción aligerada para abaratar producción."
+        },
+        {
+          "id": "four-switch",
+          "name": "Cuatro switches — «woody»",
+          "years": "1980-1982",
+          "region": "NTSC",
+          "identify": "Cuatro switches al frente; los de dificultad pasaron a la parte trasera. Conserva el frente de madera.",
+          "technical": "La más común y la más barata de conseguir funcionando.",
+          "note": "Recomendación para jugar: abundante, y su valor de colección es el más bajo de la familia."
+        },
+        {
+          "id": "vader",
+          "name": "Cuatro switches todo negro — «Darth Vader»",
+          "years": "1982-1983",
+          "region": "NTSC",
+          "identify": "Sin frente de madera: carcasa negra completa.",
+          "technical": "Misma plataforma, presentación rediseñada."
+        },
+        {
+          "id": "2600-jr",
+          "name": "2600 Jr",
+          "years": "1986-1992",
+          "region": "NTSC / PAL",
+          "identify": "Mucho más chica y plana, con franja de color al frente.",
+          "technical": "Rediseño tardío y económico. Compatible con la biblioteca completa."
+        }
+      ],
+      "pending": [
+        "Premium porcentual del Heavy Sixer frente a una cuatro switches, con fuente y fecha.",
+        "Diferencias de fiabilidad entre revisiones.",
+        "Variantes PAL y su compatibilidad."
+      ]
+    },
+    "snes": {
+      "family": "Super Nintendo",
+      "sources": [
+        {
+          "label": "PriceCharting — Super Nintendo",
+          "url": "https://www.pricecharting.com/console/super-nintendo"
+        }
+      ],
+      "verifiedAt": "2026-09-11",
+      "confidence": "alta para identificación y salida de video; sin precios por variante",
+      "playPick": "sns-001-1chip",
+      "collectPick": "sns-001",
+      "variants": [
+        {
+          "id": "sns-001",
+          "name": "SNS-001 original",
+          "years": "1991-1996",
+          "region": "NTSC-U/C",
+          "identify": "Carcasa gris con botones violetas y palanca de expulsión.",
+          "technical": "Salida multi-AV con S-Video y RGB disponibles.",
+          "reliability": "El plástico gris tiende a amarillear con los años; es cosmético, no funcional."
+        },
+        {
+          "id": "sns-001-1chip",
+          "name": "SNS-001 revisión 1CHIP",
+          "years": "1994-1996",
+          "region": "NTSC-U/C",
+          "identify": "Externamente idéntica a una SNS-001: sólo se confirma abriendo la consola y leyendo la placa.",
+          "technical": "Consolida varios chips de video en uno. Da una imagen notablemente más nítida por RGB y S-Video.",
+          "note": "Es la preferida para jugar por calidad de imagen, y por eso paga un premium sobre una SNS-001 común."
+        },
+        {
+          "id": "sns-101",
+          "name": "SNS-101 «Jr» / Mini",
+          "years": "1997-1999",
+          "region": "NTSC-U/C",
+          "identify": "Mucho más chica, sin palanca de expulsión y con líneas redondeadas.",
+          "technical": "Sin salida S-Video ni RGB: sólo compuesto. Tampoco tiene el puerto de expansión inferior.",
+          "note": "Más barata de conseguir, pero la limitación de video la deja fuera si el objetivo es la mejor imagen."
+        }
+      ],
+      "pending": [
+        "Cómo identificar una 1CHIP por número de serie antes de abrirla.",
+        "Premium de la 1CHIP frente a una SNS-001 común, con fuente.",
+        "Variantes con Super Game Boy y sus accesorios."
+      ]
+    },
+    "n64": {
+      "family": "Nintendo 64",
+      "sources": [
+        {
+          "label": "PriceCharting — Nintendo 64",
+          "url": "https://www.pricecharting.com/console/nintendo-64"
+        }
+      ],
+      "verifiedAt": "2026-09-11",
+      "confidence": "alta para identificación y accesorios; sin precios por variante",
+      "playPick": "nus-001",
+      "collectPick": "funtastic",
+      "variants": [
+        {
+          "id": "nus-001",
+          "name": "NUS-001 gris",
+          "years": "1996-2002",
+          "region": "NTSC-U/C",
+          "identify": "El modelo estándar, gris carbón.",
+          "technical": "Trae Jumper Pak de fábrica. Algunos juegos exigen el Expansion Pak para funcionar.",
+          "reliability": "El punto débil de la plataforma no es la consola sino el joystick del control, que se desgasta con el uso.",
+          "note": "Recomendación para jugar: la más abundante. Lo que hay que mirar es el estado del joystick, no el de la consola."
+        },
+        {
+          "id": "funtastic",
+          "name": "Serie Funtastic — translúcidas",
+          "years": "1999-2001",
+          "region": "NTSC-U/C",
+          "identify": "Carcasa translúcida de color: Jungle Green, Grape, Watermelon, Fire Orange e Ice Blue.",
+          "technical": "Idéntica por dentro a la NUS-001.",
+          "note": "El premium es puramente de colección: no cambia nada de cómo se juega."
+        },
+        {
+          "id": "pikachu",
+          "name": "Edición Pikachu",
+          "years": "2000",
+          "region": "NTSC-U/C",
+          "identify": "Carcasa con Pikachu en relieve y botones temáticos.",
+          "technical": "Misma electrónica que la NUS-001.",
+          "note": "Edición especial: se paga por la presentación, no por capacidad."
+        }
+      ],
+      "pending": [
+        "Estado del joystick como criterio de precio, que es lo que más mueve el valor real.",
+        "Premium de cada color Funtastic, con fuente.",
+        "Variantes PAL y sus diferencias de velocidad."
+      ]
+    }
+  }
+}

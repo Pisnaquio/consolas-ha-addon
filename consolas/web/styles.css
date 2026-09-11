@@ -2150,3 +2150,134 @@ h2 {
 @media (max-width: 760px) {
   .imported-console-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* Value Ladder — guía de modelos y valor por consola (PRD §11.1). */
+.value-ladder .section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.7rem;
+}
+.ladder-family {
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font: 0.68rem/1.4 "IBM Plex Mono", monospace;
+}
+.value-ladder .ladder-intro {
+  margin: 0.35rem 0 0.75rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.value-ladder .ladder-owned {
+  margin: 0 0 0.85rem;
+  padding: 0.5rem 0.7rem;
+  border-left: 3px solid var(--accent);
+  background: rgba(12, 143, 176, 0.08);
+  font-size: 0.88rem;
+}
+.value-ladder .ladder-owned.is-missing {
+  border-left-color: var(--line);
+  color: var(--muted);
+}
+.ladder-variants {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 0.75rem;
+}
+.ladder-variant {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.ladder-variant.is-mine {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px rgba(12, 143, 176, 0.25);
+}
+.ladder-variant header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+.ladder-variant h4 {
+  margin: 0;
+  font-size: 0.98rem;
+  text-wrap: balance;
+}
+.ladder-meta {
+  margin: 0.2rem 0 0;
+  color: var(--muted);
+  font: 0.7rem/1.3 "IBM Plex Mono", monospace;
+}
+.ladder-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.25rem;
+}
+.ladder-badge {
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  font: 0.62rem/1.4 "IBM Plex Mono", monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  background: rgba(61, 83, 108, 0.12);
+  color: var(--muted);
+}
+.ladder-badge.is-mine { background: rgba(12, 143, 176, 0.16); color: #075d74; }
+.ladder-badge.is-play { background: rgba(46, 138, 87, 0.14); color: #1f6b43; }
+.ladder-badge.is-collect { background: rgba(151, 104, 32, 0.14); color: #7a5417; }
+.ladder-facts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.ladder-fact small {
+  display: block;
+  color: var(--muted);
+  font: 0.62rem/1.2 "IBM Plex Mono", monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.ladder-fact p {
+  margin: 0.15rem 0 0;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+.ladder-note {
+  margin: 0;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.83rem;
+  line-height: 1.4;
+}
+.ladder-pick { align-self: flex-start; }
+.ladder-price-note,
+.ladder-pending,
+.ladder-sources {
+  margin-top: 0.9rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+.ladder-pending small,
+.ladder-sources small {
+  display: block;
+  margin-bottom: 0.25rem;
+  font: 0.62rem/1.2 "IBM Plex Mono", monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.ladder-pending ul,
+.ladder-sources ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  line-height: 1.5;
+}

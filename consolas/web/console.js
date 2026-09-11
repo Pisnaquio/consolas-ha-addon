@@ -35,6 +35,7 @@ const appState = {
   baseAccessories: [],
   allStatuses: [],
   accessoryCatalogByConsole: {},
+  valueLadder: null,
   draft: null,
   saveMessage: "",
   accessoryFilters: {
@@ -146,6 +147,32 @@ function renderPriceReference(prices, item) {
       </div>
     </section>
   `;
+}
+
+function renderValueLadderSection(item) {
+  const api = window.ValueLadder;
+  if (!api) return "";
+  const ladder = api.findLadder(appState.valueLadder, item.id);
+  return api.render(ladder, {
+    consoleName: item.nombre,
+    owned: item.tengo === true,
+    ownedVariantId: item.varianteId || "",
+    priceNote: appState.valueLadder?.priceNote || "",
+    pendingAll: appState.valueLadder?.pendingAll || []
+  });
+}
+
+function bindValueLadderEvents() {
+  document.querySelectorAll("[data-ladder-own]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const picked = button.dataset.ladderOwn;
+      const varianteId = appState.item?.varianteId === picked ? "" : picked;
+      // Es una edición explícita del usuario: va por la capa central de colección.
+      saveDetailEdits({ varianteId });
+      appState.item = { ...appState.item, varianteId };
+      render();
+    });
+  });
 }
 
 function applyItemOverride(item) {
@@ -2385,6 +2412,7 @@ function renderDetail(item) {
     </section>
 
     <section class="detail-sections">
+      ${renderValueLadderSection(item)}
       <article class="detail-block">
         <div class="section-head">
           <h2>Gestion de consola</h2>
@@ -3277,6 +3305,8 @@ function bindAccessoryEvents() {
 }
 
 function bindDetailEvents() {
+  bindValueLadderEvents();
+
   const saveDetailBtn = document.getElementById("saveDetailBtn");
   if (saveDetailBtn) {
     saveDetailBtn.addEventListener("click", () => {
@@ -3497,10 +3527,11 @@ async function init() {
 
   try {
     const cacheKey = "20260623g";
-    const [consolesRes, gamesRes, accessoriesRes] = await Promise.all([
+    const [consolesRes, gamesRes, accessoriesRes, ladderRes] = await Promise.all([
       fetch(`./data/consoles.json?v=${cacheKey}`),
       fetch(`./data/console-games.json?v=${cacheKey}`),
-      fetch(`./data/console-accessories.json?v=20260622f`)
+      fetch(`./data/console-accessories.json?v=20260622f`),
+      fetch(`./data/value-ladder.json?v=${cacheKey}`).catch(() => null)
     ]);
 
     if (!consolesRes.ok) throw new Error("No se pudo cargar data/consoles.json");
@@ -3508,6 +3539,8 @@ async function init() {
     const consolesPayload = await consolesRes.json();
     const gamesPayload = gamesRes.ok ? await gamesRes.json() : { byConsole: {} };
     const accessoriesPayload = accessoriesRes.ok ? await accessoriesRes.json() : { byConsole: {} };
+    // La guía de variantes es complementaria: si falta, la ficha sigue andando.
+    appState.valueLadder = ladderRes?.ok ? await ladderRes.json() : null;
     const auctionWatchRefresh = loadAuctionWatchSnapshot().catch((error) => {
       console.info("[AuctionWatch] console refresh unavailable", error);
       return null;
