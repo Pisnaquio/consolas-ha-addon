@@ -260,6 +260,11 @@
     return write("/radar/run-now", {});
   }
 
+  /** El Master propone; nunca activa. Todo lo que crea nace como borrador. */
+  async function regenerateMaster() {
+    return write("/radar/master/regenerate", {});
+  }
+
   /** Inventario deduplicado: una publicación, una fila, todas sus búsquedas. */
   async function loadListings(limit = 100) {
     listings = await request(`/radar/listings?limit=${encodeURIComponent(limit)}`);
@@ -339,6 +344,7 @@
     getRunStatusLabel,
     formatSlotTime,
     startRun,
+    regenerateMaster,
     createSearch,
     updateSearch,
     setStatus,

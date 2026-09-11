@@ -38,13 +38,14 @@ _SERVER_DIR = Path(__file__).resolve().parent
 if str(_SERVER_DIR) not in sys.path:
     sys.path.insert(0, str(_SERVER_DIR))
 
+from radar.master import propose_master_searches  # noqa: E402
 from radar.matching import evaluate_match  # noqa: E402
 from radar.model import MarketplaceListing  # noqa: E402
 from radar.sources import registry as radar_registry  # noqa: E402
 
 
 SERVICE_NAME = "consolas-server"
-SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.23")
+SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.24")
 DEFAULT_DATA_DIR = "/data"
 DEFAULT_STATIC_DIR = "/app/web"
 DATABASE_NAME = "consolas.sqlite"
@@ -3534,6 +3535,73 @@ def run_active_radar_searches(config: AppConfig) -> dict[str, Any]:
     return run_radar_searches(config, "")
 
 
+def load_console_catalog(config: AppConfig) -> list[dict[str, Any]]:
+    """Catálogo base de consolas. Es referencia: nunca decide propiedad."""
+    path = config.static_dir / "data" / "consoles.json"
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    entries = payload.get("consolas") if isinstance(payload, dict) else None
+    return [entry for entry in entries or [] if isinstance(entry, dict)]
+
+
+def radar_master_proposals(config: AppConfig) -> list[dict[str, Any]]:
+    return propose_master_searches(read_state(config), load_console_catalog(config))
+
+
+def master_search_id(key: str) -> str:
+    """Id estable por propuesta: regenerar no duplica ni pisa lo que ya existe."""
+    return f"master-{hashlib.sha1(key.encode('utf-8')).hexdigest()[:16]}"
+
+
+def regenerate_radar_master(config: AppConfig) -> dict[str, Any]:
+    """Escribe las propuestas del Master como borradores, sin activar ninguna.
+
+    Es idempotente y conservador: una propuesta que el usuario ya tocó —la
+    activó, la pausó, la archivó, la editó o la borró— no se vuelve a crear ni
+    se sobrescribe. El Master sugiere una vez; la decisión queda del lado del
+    usuario.
+    """
+
+    proposals = radar_master_proposals(config)
+    now = utc_now()
+    created: list[str] = []
+    skipped: list[str] = []
+
+    with _RADAR_LOCK, connect_db(config) as conn:
+        for proposal in proposals:
+            search_id = master_search_id(str(proposal["key"]))
+            existing = conn.execute("SELECT status, deleted_at FROM radar_searches WHERE id = ?", (search_id,)).fetchone()
+            if existing is not None:
+                skipped.append(search_id)
+                continue
+            criteria = normalize_radar_criteria(proposal.get("criteria"))
+            conn.execute(
+                """INSERT INTO radar_searches (
+                     id, name, search_type, status, origin, priority, platform, entity_type, entity_id,
+                     search_query, criteria_json, sources_json, slots_json, notes, created_at, updated_at
+                   ) VALUES (?, ?, ?, 'draft', 'master', ?, ?, ?, ?, ?, ?, ?, '', ?, ?, ?)""",
+                (
+                    search_id, str(proposal["name"]), str(proposal["searchType"]), str(proposal["priority"]),
+                    str(proposal["platform"]), str(proposal["entityType"]), str(proposal["entityId"]),
+                    build_radar_search_query(str(proposal["name"]), str(proposal["platform"]), criteria),
+                    json.dumps(criteria, ensure_ascii=False, separators=(",", ":")),
+                    json.dumps([RADAR_DEFAULT_SOURCE], ensure_ascii=False, separators=(",", ":")),
+                    str(proposal["rationale"]), now, now,
+                ),
+            )
+            created.append(search_id)
+
+    return {
+        "ok": True,
+        "proposed": len(proposals),
+        "created": len(created),
+        "skipped": len(skipped),
+        "proposals": proposals,
+    }
+
+
 # --------------------------------------------------------------------------- #
 # Compatibilidad: la superficie previa de Chasing Games proyecta el radar       #
 # --------------------------------------------------------------------------- #
@@ -3828,6 +3896,9 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/radar/searches":
             self.send_json(list_radar_searches(config))
             return
+        if path == "/api/radar/master":
+            self.send_json({"ok": True, "proposals": radar_master_proposals(config)})
+            return
         if path == "/api/radar/runs":
             query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
             limit = (query.get("limit") or [str(RADAR_RUN_HISTORY_LIMIT)])[0]
@@ -3921,6 +3992,10 @@ class Handler(BaseHTTPRequestHandler):
             require_radar_write_request(self)
             payload = read_json_body(self, self.config())
             self.send_json(create_radar_search(self.config(), payload), HTTPStatus.CREATED)
+            return
+        if path == "/api/radar/master/regenerate":
+            require_radar_write_request(self)
+            self.send_json(regenerate_radar_master(self.config()), HTTPStatus.CREATED)
             return
         if path == "/api/radar/run-now":
             require_radar_write_request(self)

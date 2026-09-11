@@ -464,3 +464,21 @@ test("the repository posts the global run with the radar write header", async ()
   assert.equal(requests[0].options.headers["X-Consolas-Radar"], "1");
   assert.match(requests[0].url, /\/radar\/run-now$/);
 });
+
+test("the Master action is offered and never promises to activate anything", async () => {
+  const { html } = await renderPage({ items: [search()], runs: SCHEDULE });
+
+  assert.match(html, /data-master="1"/);
+  assert.match(html, /Que el Master proponga/);
+});
+
+test("the repository asks the Master through its own endpoint", async () => {
+  const { repository, requests } = await renderPage({ items: [search()], runs: SCHEDULE });
+  requests.length = 0;
+
+  await repository.regenerateMaster();
+
+  assert.equal(requests[0].options.method, "POST");
+  assert.equal(requests[0].options.headers["X-Consolas-Radar"], "1");
+  assert.match(requests[0].url, /\/radar\/master\/regenerate$/);
+});

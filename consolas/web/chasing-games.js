@@ -477,7 +477,10 @@
                 { criteria: {}, sources: ["ebay-us"] },
                 { formId: "radarCreate", submitLabel: "Guardar y activar", cancelAction: "create" }
               )
-            : `<div class="card-actions"><button class="btn-link btn-primary" type="button" data-open-create="1">Nueva búsqueda</button></div>`
+            : `<div class="card-actions">
+                <button class="btn-link btn-primary" type="button" data-open-create="1">Nueva búsqueda</button>
+                <button class="btn-link" type="button" data-master="1"${busy ? " disabled" : ""}>Que el Master proponga</button>
+              </div>`
         }
       </section>
       ${feedback ? `<p class="chasing-feedback is-${escapeHtml(feedbackTone)}" role="status">${escapeHtml(feedback)}</p>` : ""}
@@ -566,6 +569,27 @@
         );
       });
     }
+
+    each("[data-master]", (button) =>
+      button.addEventListener("click", async () => {
+        let summary = "";
+        await perform(
+          "Leyendo tu colección…",
+          async () => {
+            const result = await repository.regenerateMaster();
+            summary =
+              result.created > 0
+                ? `${result.created} propuestas nuevas, en borrador. Revisalas y activá las que quieras.`
+                : "Sin propuestas nuevas: las que el Master ve ya existen.";
+          },
+          "",
+          () => {
+            statusFilter = "draft";
+            setFeedback(summary, "success");
+          }
+        );
+      })
+    );
 
     each("[data-run-all]", (button) =>
       button.addEventListener("click", () =>
