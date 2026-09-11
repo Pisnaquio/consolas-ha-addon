@@ -35,6 +35,30 @@
       }
     },
     {
+      "id": "ps2",
+      "nombre": "PlayStation 2",
+      "fabricante": "Sony",
+      "generacion": "6ta",
+      "anioLanzamiento": 2000,
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/3/39/PS2-Versions.png/500px-PS2-Versions.png"
+      ],
+      "precioFuente": "manual",
+      "priceChartingUrl": "https://www.pricecharting.com/console/playstation-2",
+      "precioGameStop": 160,
+      "precioNotas": {
+        "verificadoEn": "2026-03-23",
+        "fuentes": {
+          "precioGameStop": "Manual por usuario (GameStop)"
+        },
+        "revisiones": [
+          "Fat",
+          "Slim"
+        ],
+        "pendiente": "Faltan PriceCharting, eBay sold y CIB por revisión y variante (Fat / Slim)."
+      }
+    },
+    {
       "id": "ps4",
       "nombre": "PlayStation 4",
       "fabricante": "Sony",

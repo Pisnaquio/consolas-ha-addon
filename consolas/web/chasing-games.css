@@ -98,3 +98,10 @@
 .radar-slot.is-fulfilled { border-color:rgba(120,220,170,.5); color:#8fe6bd; }
 .radar-slot.is-skipped { border-color:rgba(255,214,140,.45); color:#ffd68c; }
 @media (max-width:720px) { .radar-schedule { grid-template-columns:1fr; align-items:start; } }
+/* Banda de decisión: el veredicto se lee antes que el precio. */
+.chase-result-band { margin:4px 0 0; font:500 .78rem "IBM Plex Mono",monospace; color:var(--muted); }
+.chase-result-band span { opacity:.78; font-weight:400; }
+.chase-result-band.is-ganga,.chase-result-band.is-buena { color:#8fe6bd; }
+.chase-result-band.is-premium { color:#ffd68c; }
+.chase-result-band.is-caro { color:var(--danger); }
+.chase-result-total.is-imported { color:var(--accent); opacity:.9; }

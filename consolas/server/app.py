@@ -39,13 +39,14 @@ if str(_SERVER_DIR) not in sys.path:
     sys.path.insert(0, str(_SERVER_DIR))
 
 from radar.master import propose_master_searches  # noqa: E402
+from radar.valuation import pick_benchmark, references_from_console_entry, score_listing  # noqa: E402
 from radar.matching import evaluate_match  # noqa: E402
 from radar.model import MarketplaceListing  # noqa: E402
 from radar.sources import registry as radar_registry  # noqa: E402
 
 
 SERVICE_NAME = "consolas-server"
-SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.24")
+SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.25")
 DEFAULT_DATA_DIR = "/data"
 DEFAULT_STATIC_DIR = "/app/web"
 DATABASE_NAME = "consolas.sqlite"
@@ -507,6 +508,16 @@ def init_db(config: AppConfig) -> None:
         # frecuencia por el hecho de actualizar el add-on.
         if "slots_json" not in radar_search_columns:
             conn.execute("ALTER TABLE radar_searches ADD COLUMN slots_json TEXT NOT NULL DEFAULT ''")
+        match_columns = {
+            str(row["name"]) for row in conn.execute("PRAGMA table_info(radar_search_matches)").fetchall()
+        }
+        for column_name, column_definition in {
+            "score": "INTEGER",
+            "band": "TEXT NOT NULL DEFAULT ''",
+            "valuation_json": "TEXT NOT NULL DEFAULT '{}'",
+        }.items():
+            if column_name not in match_columns:
+                conn.execute(f"ALTER TABLE radar_search_matches ADD COLUMN {column_name} {column_definition}")
         migrate_chasing_games_to_radar(conn)
         migrate_radar_results_to_listings(conn)
         seed_radar_searches(conn)
@@ -2525,6 +2536,9 @@ def radar_result_row(row: sqlite3.Row) -> dict[str, Any]:
         "availability": row["availability"],
         "closesAt": row["closes_at"],
         "confidence": row["confidence"],
+        "score": row["score"],
+        "band": row["band"],
+        "valuation": radar_json_field(row["valuation_json"], {}),
         "reasons": reasons,
         "unverified": unverified,
         "matchedTerms": matched_terms,
@@ -2544,8 +2558,8 @@ def load_radar_search(conn: sqlite3.Connection, search_id: str) -> sqlite3.Row:
 
 RADAR_MATCH_SELECT = """
     SELECT l.*, m.search_id, m.listing_id, m.confidence, m.reasons_json, m.blockers_json,
-           m.unverified_json, m.matched_terms_json, m.first_seen_at AS match_first_seen_at,
-           m.last_seen_at AS match_last_seen_at
+           m.unverified_json, m.matched_terms_json, m.score, m.band, m.valuation_json,
+           m.first_seen_at AS match_first_seen_at, m.last_seen_at AS match_last_seen_at
       FROM radar_search_matches m
       JOIN radar_listings l ON l.id = m.listing_id
 """
@@ -2555,7 +2569,7 @@ def radar_search_results(conn: sqlite3.Connection, search_id: str, limit: int) -
     rows = conn.execute(
         f"""{RADAR_MATCH_SELECT}
             WHERE m.search_id = ? AND m.is_active = 1
-            ORDER BY m.confidence DESC, m.last_seen_at DESC LIMIT ?""",
+            ORDER BY COALESCE(m.score, -1) DESC, m.confidence DESC, m.last_seen_at DESC LIMIT ?""",
         (search_id, max(1, min(limit, RADAR_MAX_RESULT_LIMIT))),
     ).fetchall()
     return [radar_result_row(row) for row in rows]
@@ -3005,6 +3019,44 @@ def upsert_radar_listing(conn: sqlite3.Connection, listing: MarketplaceListing, 
     return listing_id
 
 
+def radar_entity_references(config: AppConfig, entity_type: str, entity_id: str) -> list[Any]:
+    """Referencias de precio de la entidad vinculada, con su procedencia.
+
+    Hoy sólo hay catálogo de consolas; una búsqueda sin entidad vinculada se
+    queda sin benchmark y lo dice, en vez de compararse contra cualquier cosa.
+    """
+
+    if entity_type != "console" or not entity_id:
+        return []
+    for entry in load_console_catalog(config):
+        if str(entry.get("id") or "") == entity_id:
+            return references_from_console_entry(entry)
+    return []
+
+
+def valuate_radar_match(
+    listing: MarketplaceListing, verdict: Any, criteria: dict[str, Any], references: list[Any],
+    entity_type: str = "",
+) -> Any:
+    """Puntúa una coincidencia que ya pasó los filtros obligatorios."""
+    completeness = str(criteria.get("completeness") or "any")
+    benchmark = pick_benchmark(references, completeness=completeness if completeness != "any" else "loose")
+    return score_listing(
+        price_amount=listing.price_amount,
+        shipping_amount=listing.shipping_amount,
+        currency=listing.price_currency or str(criteria.get("currency") or "USD"),
+        benchmark=benchmark,
+        match_confidence=verdict.confidence,
+        match_reasons=verdict.reasons,
+        match_unverified=verdict.unverified,
+        completeness=completeness if completeness != "any" else "loose",
+        seller_known=bool(listing.seller_label),
+        # El tipo de entidad decide el peso estimado del courier. Un lote no
+        # declara entidad y por eso no recibe un costo importado inventado.
+        entity_type=entity_type,
+    )
+
+
 def run_radar_search(config: AppConfig, search_id: Any, run_id: str = "") -> dict[str, Any]:
     """Ejecuta una búsqueda activa: consulta, evalúa y guarda sus coincidencias.
 
@@ -3055,6 +3107,7 @@ def execute_radar_search(config: AppConfig, target_id: str, run_id: str = "") ->
         raise ApiError(HTTPStatus.BAD_GATEWAY, message, {"id": target_id, "receipts": receipts})
 
     capabilities_by_source = {source_id: radar_source_capabilities(source_id) for source_id in sources}
+    references = radar_entity_references(config, str(row["entity_type"]), str(row["entity_id"]))
     matched_ids: list[str] = []
     rejected = 0
 
@@ -3066,16 +3119,18 @@ def execute_radar_search(config: AppConfig, target_id: str, run_id: str = "") ->
                     rejected += 1
                     continue
                 listing_id = upsert_radar_listing(conn, listing, now)
+                card = valuate_radar_match(listing, verdict, criteria, references, str(row["entity_type"]))
                 conn.execute(
                     """
                     INSERT INTO radar_search_matches (
                       search_id, listing_id, confidence, reasons_json, blockers_json, unverified_json,
-                      matched_terms_json, is_active, first_seen_at, last_seen_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+                      matched_terms_json, score, band, valuation_json, is_active, first_seen_at, last_seen_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
                     ON CONFLICT(search_id, listing_id) DO UPDATE SET
                       confidence=excluded.confidence, reasons_json=excluded.reasons_json,
                       blockers_json=excluded.blockers_json, unverified_json=excluded.unverified_json,
-                      matched_terms_json=excluded.matched_terms_json, is_active=1,
+                      matched_terms_json=excluded.matched_terms_json, score=excluded.score,
+                      band=excluded.band, valuation_json=excluded.valuation_json, is_active=1,
                       last_seen_at=excluded.last_seen_at
                     """,
                     (
@@ -3084,6 +3139,8 @@ def execute_radar_search(config: AppConfig, target_id: str, run_id: str = "") ->
                         json.dumps(verdict.blockers, ensure_ascii=False),
                         json.dumps(verdict.unverified, ensure_ascii=False),
                         json.dumps(verdict.matched_terms, ensure_ascii=False),
+                        card.score, card.band,
+                        json.dumps(card.to_dict(), ensure_ascii=False, separators=(",", ":")),
                         now, now,
                     ),
                 )

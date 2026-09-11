@@ -269,6 +269,8 @@
       .map((item) => `<li class="is-unverified">${escapeHtml(item)}</li>`)
       .join("");
     const total = repository.formatTotal(result);
+    const benchmark = repository.describeBenchmark(result.valuation || {});
+    const imported = repository.formatImported(result);
     // La celda de imagen siempre existe: sin ella la grilla de la card colapsa.
     return `<article class="chase-result">
       ${
@@ -280,6 +282,15 @@
         <p class="eyebrow">${escapeHtml(result.listingType || result.sourceLabel || repository.getSourceLabel(result.sourceId))}${
           result.confidence ? ` · ${repository.formatConfidence(result.confidence)}` : ""
         }</p>
+        ${
+          result.band
+            ? `<p class="chase-result-band is-${escapeHtml(result.band)}">${escapeHtml(
+                repository.getBandLabel(result.band)
+              )}${Number.isFinite(Number(result.score)) ? ` · ${Number(result.score)}/100` : ""}${
+                benchmark ? ` <span>${escapeHtml(benchmark)}</span>` : ""
+              }</p>`
+            : ""
+        }
         <h3>${escapeHtml(result.title)}</h3>
         <div class="chase-result-meta">${meta || "<span>Detalles a confirmar</span>"}</div>
         ${reasons || unverified ? `<ul class="chase-result-why">${reasons}${unverified}</ul>` : ""}
@@ -287,6 +298,7 @@
       <div class="chase-result-price">
         <strong>${escapeHtml(result.priceLabel || "Ver precio")}</strong>
         ${total ? `<span class="chase-result-total">${escapeHtml(total)}</span>` : ""}
+        ${imported ? `<span class="chase-result-total is-imported">${escapeHtml(imported)}</span>` : ""}
         <a class="btn-link" href="${escapeHtml(result.listingUrl)}" target="_blank" rel="noreferrer noopener">Ver publicación</a>
       </div>
     </article>`;

@@ -482,3 +482,137 @@ test("the repository asks the Master through its own endpoint", async () => {
   assert.equal(requests[0].options.headers["X-Consolas-Radar"], "1");
   assert.match(requests[0].url, /\/radar\/master\/regenerate$/);
 });
+
+test("a result leads with its decision band and names the reference behind it", async () => {
+  const { html } = await renderPage({
+    items: [
+      search({
+        results: [
+          {
+            id: "ebay-us-abc",
+            sourceId: "ebay-us",
+            sourceLabel: "eBay USA",
+            title: "PS1 console tested",
+            priceLabel: "USD 35.00",
+            priceAmount: 35,
+            priceCurrency: "USD",
+            listingUrl: "https://www.ebay.com/itm/1",
+            imageUrl: "",
+            score: 78,
+            band: "ganga",
+            valuation: {
+              benchmark: { value: 55, currency: "USD", sourceLabel: "PriceCharting", stale: false, independent: true }
+            },
+            reasons: [],
+            unverified: [],
+            lastSeenAt: "2026-09-10T10:00:00Z"
+          }
+        ],
+        resultCount: 1
+      })
+    ],
+    runs: SCHEDULE
+  });
+
+  assert.match(html, /chase-result-band is-ganga">Ganga real · 78\/100/);
+  assert.match(html, /vs USD 55 \(PriceCharting\)/);
+});
+
+test("a reference that is stale or not independent says so on the card", async () => {
+  const { html } = await renderPage({
+    items: [
+      search({
+        results: [
+          {
+            id: "ebay-us-abc",
+            sourceId: "ebay-us",
+            title: "PS1 console",
+            priceLabel: "USD 90.00",
+            priceAmount: 90,
+            priceCurrency: "USD",
+            listingUrl: "https://www.ebay.com/itm/1",
+            imageUrl: "",
+            score: 31,
+            band: "caro",
+            valuation: {
+              benchmark: { value: 55, currency: "USD", sourceLabel: "PriceCharting", stale: true, independent: false }
+            },
+            reasons: [],
+            unverified: [],
+            lastSeenAt: "2026-09-10T10:00:00Z"
+          }
+        ],
+        resultCount: 1
+      })
+    ],
+    runs: SCHEDULE
+  });
+
+  assert.match(html, /is-caro">Caro/);
+  assert.match(html, /referencia vieja/);
+  assert.match(html, /no independiente/);
+});
+
+test("the imported cost is shown as an estimate, never as a firm total", async () => {
+  const { html } = await renderPage({
+    items: [
+      search({
+        results: [
+          {
+            id: "ebay-us-abc",
+            sourceId: "ebay-us",
+            title: "PS2 Slim tested",
+            priceLabel: "USD 150.00",
+            priceAmount: 150,
+            priceCurrency: "USD",
+            totalAmount: 162,
+            listingUrl: "https://www.ebay.com/itm/1",
+            imageUrl: "",
+            score: 62,
+            band: "razonable",
+            valuation: {
+              cost: { currency: "USD", subtotalUsa: 162, importedTotal: 214.5, importedEstimated: true }
+            },
+            reasons: [],
+            unverified: [],
+            lastSeenAt: "2026-09-10T10:00:00Z"
+          }
+        ],
+        resultCount: 1
+      })
+    ],
+    runs: SCHEDULE
+  });
+
+  assert.match(html, /≈ USD 214,5 puesto acá/);
+  assert.match(html, /USD 162 recibido/);
+});
+
+test("a listing with no imported estimate does not fake one", async () => {
+  const { html } = await renderPage({
+    items: [
+      search({
+        results: [
+          {
+            id: "ebay-us-lot",
+            sourceId: "ebay-us",
+            title: "PS2 game lot",
+            priceLabel: "USD 189.00",
+            priceAmount: 189,
+            priceCurrency: "USD",
+            listingUrl: "https://www.ebay.com/itm/2",
+            imageUrl: "",
+            valuation: { cost: { currency: "USD", subtotalUsa: 189, importedTotal: null } },
+            reasons: [],
+            unverified: [],
+            lastSeenAt: "2026-09-10T10:00:00Z"
+          }
+        ],
+        resultCount: 1
+      })
+    ],
+    runs: SCHEDULE
+  });
+
+  assert.doesNotMatch(html, /puesto acá/);
+});

@@ -191,12 +191,42 @@
     return chips;
   }
 
+  /** Costo puesto en Uruguay. Siempre marcado como estimado: el peso lo es. */
+  function formatImported(result = {}) {
+    const cost = result.valuation?.cost;
+    if (!cost || cost.importedTotal == null) return "";
+    return `≈ ${formatAmount(cost.importedTotal, cost.currency)} puesto acá`;
+  }
+
   /** Total recibido en Estados Unidos, sólo cuando el envío está confirmado. */
   function formatTotal(result = {}) {
     const total = Number(result.totalAmount);
     const price = Number(result.priceAmount);
     if (!Number.isFinite(total) || !Number.isFinite(price) || total === price) return "";
     return `${formatAmount(total, result.priceCurrency)} recibido`;
+  }
+
+  const BAND_LABELS = {
+    ganga: "Ganga real",
+    buena: "Buena compra",
+    razonable: "Precio razonable",
+    premium: "Premium justificable",
+    caro: "Caro",
+    "sin-referencia": "Sin referencia"
+  };
+
+  function getBandLabel(band) {
+    return BAND_LABELS[band] || "";
+  }
+
+  /** Qué referencia se usó y de dónde salió: nunca un número sin origen. */
+  function describeBenchmark(valuation = {}) {
+    const benchmark = valuation.benchmark;
+    if (!benchmark) return "";
+    const parts = [`vs ${formatAmount(benchmark.value, benchmark.currency)} (${benchmark.sourceLabel})`];
+    if (benchmark.stale) parts.push("referencia vieja");
+    if (benchmark.independent === false) parts.push("no independiente");
+    return parts.join(" · ");
   }
 
   function formatConfidence(confidence) {
@@ -331,7 +361,10 @@
     getBlockedSources,
     formatAmount,
     formatTotal,
+    formatImported,
     formatConfidence,
+    getBandLabel,
+    describeBenchmark,
     describeCriteria,
     loadListings,
     getListings,
