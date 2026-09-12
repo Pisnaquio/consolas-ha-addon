@@ -22,6 +22,7 @@ from server.app import (
     purge_expired_radar_content,
     radar_search_payload,
     read_state,
+    record_radar_decision,
     run_active_radar_searches,
     run_radar_search,
     set_radar_search_status,
@@ -764,6 +765,19 @@ class ContentTtlTests(RadarSearchTestCase):
         self.store_listing("vieja", "2020-01-01T00:00:00Z")
         purge_expired_radar_content(self.config)
         self.assertEqual(purge_expired_radar_content(self.config)["purged"], 0)
+
+    def test_a_decision_on_expired_content_is_purged_with_it(self) -> None:
+        # Ni «seguida» ni «descartada» sobreviven a un artículo que ya no
+        # existe: no hay nada que seguir ni nada que recordar haber rechazado.
+        self.store_listing("vieja", "2020-01-01T00:00:00Z")
+        record_radar_decision(self.config, {"listingId": "ebay-us-vieja", "decision": "following"})
+        with connect_db(self.config) as conn:
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM radar_decisions").fetchone()[0], 1)
+
+        purge_expired_radar_content(self.config)
+
+        with connect_db(self.config) as conn:
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM radar_decisions").fetchone()[0], 0)
 
 
 class ListingFeedValuationTests(RadarSearchTestCase):

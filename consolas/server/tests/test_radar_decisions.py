@@ -261,6 +261,24 @@ class FeedTests(DecisionTestCase):
         self.assertEqual(self.feed_ids(), [])
         self.assertEqual(read_state(self.config)["user"], before["user"])
 
+    def test_a_match_carries_what_registrar_compra_would_write(self) -> None:
+        # "Registrar compra" (slice 9) necesita saber a qué entidad del
+        # catálogo escribir; sin eso no puede ofrecerse la acción.
+        linked = create_radar_search(self.config, {"name": "PS2 vinculada", "entityType": "console", "entityId": "ps2"})["search"]
+        with patch("radar.sources.ebay.EbayBrowseSource.fetch_item_summaries", return_value=[ebay_summary()]):
+            run_radar_search(self.config, linked["id"])
+
+        item = list_radar_feed(self.config)["items"][0]
+        match = next(m for m in item["matches"] if m["searchId"] == linked["id"])
+        self.assertEqual(match["entityType"], "console")
+        self.assertEqual(match["entityId"], "ps2")
+
+    def test_a_search_with_no_linked_entity_leaves_it_blank(self) -> None:
+        [listing_id] = self.seed([ebay_summary()])
+        item = next(entry for entry in list_radar_feed(self.config)["items"] if entry["id"] == listing_id)
+        self.assertEqual(item["matches"][0]["entityType"], "")
+        self.assertEqual(item["matches"][0]["entityId"], "")
+
 
 if __name__ == "__main__":
     unittest.main()

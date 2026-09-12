@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { supervisorRequest, ingressFetch, websocketUrl, DEFAULT_ADDON_SLUG, unwrap } from "../../scripts/lib/ha-connection.mjs";
+import { supervisorRequest, ingressFetch, openIngressSession, websocketUrl, DEFAULT_ADDON_SLUG, unwrap } from "../../scripts/lib/ha-connection.mjs";
 
 // Mocks the Supervisor WebSocket handshake (auth_required -> auth -> auth_ok -> supervisor/api
 // request -> id:1 response) so this file can run without a real Home Assistant instance or
@@ -90,6 +90,45 @@ test("ingressFetch chains addon info -> session -> same-origin fetch with the se
       assert.equal(capturedRequest.url, endpoint);
       assert.equal(capturedRequest.options.headers.get("Cookie"), "ingress_session=sess-123");
       assert.equal(response.ok, true);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+test("openIngressSession opens the WebSocket handshake once and reuses it across many fetches", async () => {
+  let wsOpens = 0;
+  await withFakeSocket({
+    reply: (message) => {
+      if (message.endpoint.endsWith("/info")) return { id: 1, success: true, result: { data: { ingress_url: "/api/hassio_ingress/abc/" } } };
+      if (message.endpoint === "/ingress/session") return { id: 1, success: true, result: { data: { session: "sess-once" } } };
+      throw new Error(`unexpected endpoint ${message.endpoint}`);
+    },
+  }, async () => {
+    // Cuenta aperturas de socket por encima de la que ya hace withFakeSocket: envuelve la clase
+    // fake para contar sin cambiar su comportamiento.
+    const RealFake = globalThis.WebSocket;
+    globalThis.WebSocket = class extends RealFake { constructor(...args) { wsOpens += 1; super(...args); } };
+
+    const capturedRequests = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (url, options) => { capturedRequests.push({ url, options }); return { ok: true, status: 200 }; };
+    try {
+      const session = await openIngressSession({
+        token: "t", wsUrl: websocketUrl("https://ha.example"), haUrl: "https://ha.example", addonSlug: DEFAULT_ADDON_SLUG,
+      });
+      assert.equal(wsOpens, 2, "un handshake abre dos sockets del Supervisor: info del add-on + sesión de ingress");
+
+      await session.fetch("api/radar/searches");
+      await session.fetch("api/radar/searches", { method: "POST" });
+      await session.fetch("api/radar/listings?limit=500");
+
+      assert.equal(wsOpens, 2, "las llamadas siguientes reutilizan la sesión: ningún socket nuevo");
+      assert.equal(capturedRequests.length, 3);
+      capturedRequests.forEach((request) => {
+        assert.equal(request.options.headers.get("Cookie"), "ingress_session=sess-once");
+      });
+      assert.equal(capturedRequests[0].url, "https://ha.example/api/hassio_ingress/abc/api/radar/searches");
     } finally {
       globalThis.fetch = originalFetch;
     }

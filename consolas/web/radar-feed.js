@@ -32,7 +32,10 @@
   ];
 
   let feed = null;
+  let budget = null;
   let dismissing = "";
+  let purchasing = "";
+  let editingBudget = false;
   let feedback = "";
   let feedbackTone = "info";
   let busy = false;
@@ -54,7 +57,12 @@
   }
 
   async function reload() {
-    feed = await repository.loadFeed();
+    const [nextFeed, nextBudget] = await Promise.all([
+      repository.loadFeed(),
+      repository.loadBudget().catch(() => null), // el presupuesto es complementario: sin él, el feed igual funciona
+    ]);
+    feed = nextFeed;
+    budget = nextBudget;
     render();
   }
 
@@ -77,6 +85,34 @@
     }
   }
 
+  function budgetWidget() {
+    if (!budget) return "";
+    if (editingBudget) {
+      return `<form class="budget-widget budget-edit" data-budget-form="1">
+        <label for="budgetInput">Presupuesto mensual (USD)</label>
+        <input id="budgetInput" name="monthlyBudgetUsd" type="number" min="0" step="1"
+          value="${budget.monthlyBudgetUsd != null ? budget.monthlyBudgetUsd : ""}"
+          placeholder="Sin configurar" />
+        <button class="btn-link btn-primary" type="submit">Guardar</button>
+        <button class="btn-link" type="button" data-cancel-budget="1">Cancelar</button>
+      </form>`;
+    }
+    if (!budget.configured) {
+      return `<div class="budget-widget">
+        <span class="muted">Presupuesto mensual sin configurar.</span>
+        <button class="btn-link" type="button" data-edit-budget="1">Configurar</button>
+      </div>`;
+    }
+    const overBudget = budget.available != null && budget.available < 0;
+    return `<div class="budget-widget${overBudget ? " is-over" : ""}">
+      <div><strong>${escapeHtml(money(budget.monthlyBudgetUsd, "USD"))}</strong><span>presupuesto de ${escapeHtml(budget.month)}</span></div>
+      <div><strong>${escapeHtml(money(budget.spent, "USD"))}</strong><span>gastado (${budget.spentCount})</span></div>
+      <div><strong>${escapeHtml(money(budget.reserved, "USD"))}</strong><span>reservado (${budget.reservedCount})</span></div>
+      <div><strong>${escapeHtml(money(budget.available, "USD"))}</strong><span>${overBudget ? "sobre el presupuesto" : "disponible"}</span></div>
+      <button class="btn-link" type="button" data-edit-budget="1">Editar</button>
+    </div>`;
+  }
+
   function dropBadge(drop) {
     if (!drop) return "";
     const percent = Math.round(drop.ratio * 100);
@@ -97,9 +133,18 @@
     return "";
   }
 
+  /** La búsqueda que matcheó tiene que decir a qué consola escribiría "Registrar compra". */
+  function purchasableEntity(item) {
+    const match = (item.matches || []).find((m) => m.entityType && m.entityId);
+    return match && window.RadarPurchase?.canWriteCollection(match.entityType) ? match : null;
+  }
+
   function actions(item) {
     const id = escapeHtml(item.id);
     const following = item.decision?.decision === "following";
+    const reserved = item.decision?.reserved === true;
+    const purchased = item.decision?.decision === "purchased";
+    const entity = purchasableEntity(item);
     const snoozeMenu = SNOOZE_OPTIONS.map(
       (option) => `<button class="btn-link" type="button" data-snooze="${id}" data-days="${option.days}">${escapeHtml(option.label)}</button>`
     ).join("");
@@ -108,9 +153,36 @@
       <button class="btn-link${following ? " is-on" : ""}" type="button" data-follow="${id}">
         ${following ? "Dejar de seguir" : "Seguir"}
       </button>
+      ${
+        following
+          ? `<button class="btn-link${reserved ? " is-on" : ""}" type="button" data-reserve="${id}">
+               ${reserved ? "Quitar del presupuesto" : "Reservar en el presupuesto"}
+             </button>`
+          : ""
+      }
       ${snoozeMenu}
+      ${
+        entity && !purchased
+          ? `<button class="btn-link btn-primary" type="button" data-purchase="${id}">Registrar compra</button>`
+          : ""
+      }
       <button class="btn-link chase-delete" type="button" data-dismiss="${id}">Descartar</button>
     </div>`;
+  }
+
+  function purchaseForm(item) {
+    if (purchasing !== item.id) return "";
+    const entity = purchasableEntity(item);
+    if (!entity) return "";
+    const id = escapeHtml(item.id);
+    return `<form class="purchase-form" data-purchase-form="${id}" data-entity-type="${escapeHtml(entity.entityType)}" data-entity-id="${escapeHtml(entity.entityId)}">
+      <p class="muted">Se va a marcar «Tengo» en ${escapeHtml(entity.entityType === "console" ? "esta consola" : entity.entityId)} con el precio pagado.</p>
+      <label class="visually-hidden" for="price-${id}">Precio pagado</label>
+      <input id="price-${id}" name="priceAmount" type="number" min="0" step="0.01"
+        value="${item.priceAmount != null ? item.priceAmount : ""}" placeholder="Precio pagado" required />
+      <button class="btn-link btn-primary" type="submit">Confirmar compra</button>
+      <button class="btn-link" type="button" data-cancel-purchase="1">Cancelar</button>
+    </form>`;
   }
 
   function dismissForm(item) {
@@ -152,6 +224,7 @@
       ${decisionLine(item)}
       ${actions(item)}
       ${dismissForm(item)}
+      ${purchaseForm(item)}
     </article>`;
   }
 
@@ -176,6 +249,7 @@
           <div><strong>${counts.snoozed || 0}</strong><span>dormidas</span></div>
         </div>
       </header>
+      ${budgetWidget()}
       ${feedback ? `<p class="chasing-feedback is-${escapeHtml(feedbackTone)}" role="status">${escapeHtml(feedback)}</p>` : ""}
       <section class="feed-list">${
         items.length
@@ -220,6 +294,78 @@
         );
       })
     );
+
+    each("[data-reserve]", (button) =>
+      button.addEventListener("click", () => {
+        const id = button.dataset.reserve;
+        const item = [...(feed?.items || []), ...(feed?.following || [])].find((entry) => entry.id === id);
+        const isReserved = item?.decision?.reserved === true;
+        return perform(
+          isReserved ? "Quitando del presupuesto…" : "Reservando…",
+          () => repository.decide(id, { decision: "following", reserved: !isReserved }),
+          isReserved ? "Ya no cuenta como plan probable." : "Cuenta como plan probable en el presupuesto del mes."
+        );
+      })
+    );
+
+    each("[data-edit-budget]", (button) =>
+      button.addEventListener("click", () => {
+        editingBudget = true;
+        render();
+      })
+    );
+
+    each("[data-cancel-budget]", (button) =>
+      button.addEventListener("click", () => {
+        editingBudget = false;
+        render();
+      })
+    );
+
+    const budgetForm = root.querySelector?.("[data-budget-form]");
+    budgetForm?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const data = new FormData(event.currentTarget);
+      const raw = String(data.get("monthlyBudgetUsd") || "").trim();
+      await perform(
+        "Guardando presupuesto…",
+        () => repository.updateBudget(raw === "" ? null : Number(raw)),
+        "Presupuesto actualizado."
+      );
+      editingBudget = false;
+      render();
+    });
+
+    each("[data-purchase]", (button) =>
+      button.addEventListener("click", () => {
+        purchasing = purchasing === button.dataset.purchase ? "" : button.dataset.purchase;
+        render();
+      })
+    );
+
+    each("[data-cancel-purchase]", (button) =>
+      button.addEventListener("click", () => {
+        purchasing = "";
+        render();
+      })
+    );
+
+    const purchaseFormEl = root.querySelector?.("[data-purchase-form]");
+    purchaseFormEl?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const data = new FormData(event.currentTarget);
+      const listingId = event.currentTarget.dataset.purchaseForm;
+      const entityType = event.currentTarget.dataset.entityType;
+      const entityId = event.currentTarget.dataset.entityId;
+      const priceAmount = Number(data.get("priceAmount"));
+      await perform(
+        "Registrando compra…",
+        () => window.RadarPurchase.registerPurchase({ listingId, entityType, entityId, priceAmount, currency: "USD" }),
+        "Compra registrada. Ya la marcamos como tuya en la colección."
+      );
+      purchasing = "";
+      render();
+    });
 
     each("[data-snooze]", (button) =>
       button.addEventListener("click", () => {

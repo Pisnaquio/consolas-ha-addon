@@ -28,6 +28,12 @@
 
   let statusFilter = "all";
   let editingId = "";
+  let prefillName = "";
+  let prefillPlatform = "";
+  let manualEntryId = "";
+  let lotCalcId = "";
+  let lotCalcPieceCount = 3;
+  let lotCalcResult = null;
   let creating = false;
   let feedback = "";
   let feedbackTone = "info";
@@ -222,6 +228,31 @@
     </form>`;
   }
 
+  /**
+   * Carga manual de ShopGoodwill (PRD §12.3, slice 10): el owner ya vio la
+   * publicación — por Personal Shopper o abriéndola — y trae los datos acá.
+   * Nunca un crawler. Se evalúa contra los mismos criterios que un resultado
+   * automático; si no encaja, se explica por qué en vez de guardarla igual.
+   */
+  function manualListingForm(item) {
+    if (manualEntryId !== item.id) return "";
+    const id = escapeHtml(item.id);
+    return `<form class="radar-form" id="radarManual-${id}">
+      <p class="muted">Pegá lo que trajo la alerta de Personal Shopper o lo que viste al abrir la publicación. Queda marcada "verificación pendiente" hasta que confirmes Add to Cart en el sitio real.</p>
+      <label>Título<input type="text" name="title" maxlength="300" required /></label>
+      <label>Link de la publicación<input type="url" name="listingUrl" placeholder="https://shopgoodwill.com/item/…" required /></label>
+      <div class="radar-form-grid">
+        <label>Precio (USD)<input type="number" name="priceAmount" min="0" step="0.01" required /></label>
+        <label>Envío (USD)<input type="number" name="shippingAmount" min="0" step="0.01" /></label>
+      </div>
+      <label>Condición<input type="text" name="conditionLabel" maxlength="200" placeholder="Used, tested…" /></label>
+      <div class="card-actions radar-form-actions">
+        <button class="btn-link btn-primary" type="submit"${busy ? " disabled" : ""}>Agregar</button>
+        <button class="btn-link" type="button" data-cancel-manual="1">Cancelar</button>
+      </div>
+    </form>`;
+  }
+
   function readForm(form) {
     const data = new FormData(form);
     const text = (field) => String(data.get(field) || "").trim();
@@ -292,6 +323,11 @@
             : ""
         }
         <h3>${escapeHtml(result.title)}</h3>
+        ${
+          result.requiresVerification
+            ? `<p class="radar-verification-pending">Verificación pendiente: confirmá Add to Cart en el sitio antes de decidir.</p>`
+            : ""
+        }
         <div class="chase-result-meta">${meta || "<span>Detalles a confirmar</span>"}</div>
         ${reasons || unverified ? `<ul class="chase-result-why">${reasons}${unverified}</ul>` : ""}
       </div>
@@ -300,8 +336,76 @@
         ${total ? `<span class="chase-result-total">${escapeHtml(total)}</span>` : ""}
         ${imported ? `<span class="chase-result-total is-imported">${escapeHtml(imported)}</span>` : ""}
         <a class="btn-link" href="${escapeHtml(result.listingUrl)}" target="_blank" rel="noreferrer noopener">Ver publicación</a>
+        ${
+          result.requiresVerification
+            ? `<button class="btn-link" type="button" data-verify="${escapeHtml(result.id)}">Marcar verificada</button>`
+            : ""
+        }
+        <button class="btn-link" type="button" data-lot-calc="${escapeHtml(result.id)}">Valorar como lote</button>
       </div>
-    </article>`;
+    </article>${lotCalculator(result)}`;
+  }
+
+  /**
+   * Valuación de lotes (PRD §10.5): valor conservador, valor útil para vos,
+   * costo por pieza útil, descuento. Las piezas las escribís vos — el radar
+   * no lee fotos ni parsea "PS2 + 8 juegos" de un título (eso es
+   * reconocimiento asistido, PRD P2, sin construir). Nada de esto se guarda:
+   * es una calculadora de bolsillo para decidir, no un registro.
+   */
+  function lotPieceRow(index) {
+    return `<fieldset class="radar-lot-piece">
+      <legend>Pieza ${index + 1}</legend>
+      <label>Nombre<input type="text" name="pieceName${index}" maxlength="200" /></label>
+      <label>Valor comparable (USD)<input type="number" name="pieceValue${index}" min="0" step="0.01" /></label>
+      <label>Factor de condición (0–1)<input type="number" name="pieceCondition${index}" min="0" max="1" step="0.05" value="1" /></label>
+      <div class="radar-form-checks">
+        <label><input type="checkbox" name="pieceWanted${index}" checked /> La quiero</label>
+        <label><input type="checkbox" name="pieceOwned${index}" /> Ya la tengo</label>
+        <label><input type="checkbox" name="pieceDuplicate${index}" /> Duplicada en el lote</label>
+      </div>
+    </fieldset>`;
+  }
+
+  function lotResultSummary(result) {
+    if (!result) return "";
+    const line = (label, value) =>
+      value == null ? "" : `<div><strong>${escapeHtml(repository.formatAmount(value, "USD"))}</strong><span>${escapeHtml(label)}</span></div>`;
+    const discountLine =
+      result.discount == null
+        ? ""
+        : `<div><strong>${Math.round(result.discount * 100)}%</strong><span>descuento sobre el valor conservador</span></div>`;
+    const caveats = (result.caveats || []).map((c) => `<li>${escapeHtml(c)}</li>`).join("");
+    return `<div class="radar-lot-result">
+      <div class="radar-lot-result-grid">
+        ${line("valor conservador", result.conservativeValue)}
+        ${line("valor útil para vos", result.usefulValue)}
+        ${line("costo por pieza útil", result.costPerUsefulPiece)}
+        ${discountLine}
+      </div>
+      ${caveats ? `<ul class="radar-lot-caveats">${caveats}</ul>` : ""}
+    </div>`;
+  }
+
+  function lotCalculator(result) {
+    if (lotCalcId !== result.id) return "";
+    const id = escapeHtml(result.id);
+    const pieces = Array.from({ length: lotCalcPieceCount }, (_, index) => lotPieceRow(index)).join("");
+    return `<div class="detail-block radar-lot-calc">
+      <p class="muted">Cuánto vale de verdad este lote, pieza por pieza. Nada se guarda: es para decidir ahora, no un registro.</p>
+      <form id="radarLot-${id}" data-lot-form="${id}">
+        <label>Costo total del lote (USD)
+          <input type="number" name="totalCost" min="0" step="0.01" value="${result.totalAmount != null ? result.totalAmount : ""}" />
+        </label>
+        ${pieces}
+        <div class="card-actions radar-form-actions">
+          <button class="btn-link" type="button" data-lot-add-piece="1">+ Agregar pieza</button>
+          <button class="btn-link btn-primary" type="submit"${busy ? " disabled" : ""}>Calcular</button>
+          <button class="btn-link" type="button" data-lot-cancel="1">Cerrar</button>
+        </div>
+      </form>
+      ${lotResultSummary(lotCalcResult)}
+    </div>`;
   }
 
   function searchActions(item) {
@@ -330,6 +434,11 @@
     }
     actions.push(`<button class="btn-link" type="button" data-edit="${id}">Editar</button>`);
     actions.push(`<button class="btn-link" type="button" data-duplicate="${id}">Duplicar</button>`);
+    if (item.status !== "archived") {
+      // ShopGoodwill llega por Personal Shopper/alerta guardada, nunca por scan
+      // propio — el owner ya vio la publicación y trae los datos a mano (PRD §12.3).
+      actions.push(`<button class="btn-link" type="button" data-manual-entry="${id}">Agregar de ShopGoodwill</button>`);
+    }
     if (item.status !== "archived") {
       actions.push(`<button class="btn-link" type="button" data-status="${id}" data-next="archived">Archivar</button>`);
     }
@@ -433,6 +542,7 @@
       </div>
       ${searchActions(item)}
       ${isEditing ? searchForm(item, { formId: `radarEdit-${item.id}`, submitLabel: "Guardar cambios", cancelAction: "edit" }) : ""}
+      ${manualListingForm(item)}
       <div class="chase-results">${
         results.length
           ? results.map(resultCard).join("")
@@ -486,7 +596,7 @@
         ${
           creating
             ? searchForm(
-                { criteria: {}, sources: ["ebay-us"] },
+                { criteria: {}, sources: ["ebay-us"], name: prefillName, platform: prefillPlatform },
                 { formId: "radarCreate", submitLabel: "Guardar y activar", cancelAction: "create" }
               )
             : `<div class="card-actions">
@@ -582,6 +692,112 @@
       });
     }
 
+    each("[data-manual-entry]", (button) =>
+      button.addEventListener("click", () => {
+        manualEntryId = manualEntryId === button.dataset.manualEntry ? "" : button.dataset.manualEntry;
+        editingId = "";
+        render();
+      })
+    );
+
+    each("[data-cancel-manual]", (button) =>
+      button.addEventListener("click", () => {
+        manualEntryId = "";
+        render();
+      })
+    );
+
+    if (manualEntryId) {
+      const targetId = manualEntryId;
+      document.getElementById(`radarManual-${targetId}`)?.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const data = new FormData(event.currentTarget);
+        const payload = {
+          searchId: targetId,
+          title: String(data.get("title") || "").trim(),
+          listingUrl: String(data.get("listingUrl") || "").trim(),
+          priceAmount: Number(data.get("priceAmount")),
+          shippingAmount: data.get("shippingAmount") ? Number(data.get("shippingAmount")) : null,
+          conditionLabel: String(data.get("conditionLabel") || "").trim(),
+        };
+        await perform(
+          "Agregando…",
+          () => repository.createManualListing(payload),
+          "Agregada. Queda como verificación pendiente hasta que confirmes la publicación real.",
+          () => {
+            manualEntryId = "";
+          }
+        );
+      });
+    }
+
+    each("[data-verify]", (button) =>
+      button.addEventListener("click", () =>
+        perform(
+          "Marcando verificada…",
+          () => repository.verifyListing(button.dataset.verify),
+          "Verificada. Ya cuenta como una oportunidad confirmada."
+        )
+      )
+    );
+
+    each("[data-lot-calc]", (button) =>
+      button.addEventListener("click", () => {
+        const opening = lotCalcId !== button.dataset.lotCalc;
+        lotCalcId = opening ? button.dataset.lotCalc : "";
+        lotCalcPieceCount = 3;
+        lotCalcResult = null;
+        render();
+      })
+    );
+
+    each("[data-lot-cancel]", (button) =>
+      button.addEventListener("click", () => {
+        lotCalcId = "";
+        lotCalcResult = null;
+        render();
+      })
+    );
+
+    each("[data-lot-add-piece]", (button) =>
+      button.addEventListener("click", () => {
+        lotCalcPieceCount += 1;
+        render();
+      })
+    );
+
+    if (lotCalcId) {
+      document.getElementById(`radarLot-${lotCalcId}`)?.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const data = new FormData(event.currentTarget);
+        const num = (field) => (data.get(field) === "" || data.get(field) == null ? null : Number(data.get(field)));
+        const pieces = [];
+        for (let index = 0; index < lotCalcPieceCount; index += 1) {
+          const name = String(data.get(`pieceName${index}`) || "").trim();
+          if (!name) continue;
+          pieces.push({
+            name,
+            comparableValue: num(`pieceValue${index}`),
+            conditionFactor: num(`pieceCondition${index}`) ?? 1,
+            wanted: data.get(`pieceWanted${index}`) != null,
+            alreadyOwned: data.get(`pieceOwned${index}`) != null,
+            isDuplicate: data.get(`pieceDuplicate${index}`) != null,
+          });
+        }
+        try {
+          busy = true;
+          render();
+          lotCalcResult = await repository.computeLotValuation({ totalCost: num("totalCost"), pieces });
+          busy = false;
+          render();
+        } catch (error) {
+          busy = false;
+          setFeedback(error.message, "error");
+          render();
+        }
+      });
+    }
+
     each("[data-master]", (button) =>
       button.addEventListener("click", async () => {
         let summary = "";
@@ -663,7 +879,15 @@
     );
   }
 
+  function applyPrefillFromUrl() {
+    const params = new URLSearchParams(window.location?.search || "");
+    prefillName = params.get("prefillName") || "";
+    prefillPlatform = params.get("prefillPlatform") || "";
+    if (params.get("open") === "create") creating = true;
+  }
+
   async function start() {
+    applyPrefillFromUrl();
     try {
       await reload();
     } catch (error) {

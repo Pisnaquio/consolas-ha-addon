@@ -1,0 +1,745 @@
+{
+  "version": 1,
+  "note": "Catálogo editorial de franquicias (Franchise Collection Tracker). Sólo relaciones editoriales — nunca ownership, wishlist, condición ni ningún estado del usuario. Eso vive exclusivamente en DataStore/CollectionRepository, igual que el resto del catálogo.",
+  "franchises": {
+    "god-of-war": {
+      "id": "god-of-war",
+      "name": "God of War",
+      "summary": "De la Grecia antigua a la Escandinavia nórdica: la saga completa de Kratos, sus lanzamientos, remasters, compilaciones y piezas de colección.",
+      "eras": [
+        {
+          "id": "greek",
+          "label": "Era griega"
+        },
+        {
+          "id": "norse",
+          "label": "Era nórdica"
+        },
+        {
+          "id": "future",
+          "label": "Anunciados / futuro"
+        }
+      ],
+      "works": [
+        {
+          "id": "god-of-war-2005",
+          "title": "God of War",
+          "era": "greek",
+          "year": 2005,
+          "workStatus": "released",
+          "originalPlatformId": "ps2"
+        },
+        {
+          "id": "god-of-war-2-2007",
+          "title": "God of War II",
+          "era": "greek",
+          "year": 2007,
+          "workStatus": "released",
+          "originalPlatformId": "ps2"
+        },
+        {
+          "id": "chains-of-olympus-2008",
+          "title": "God of War: Chains of Olympus",
+          "era": "greek",
+          "year": 2008,
+          "workStatus": "released",
+          "originalPlatformId": "psp"
+        },
+        {
+          "id": "god-of-war-3-2010",
+          "title": "God of War III",
+          "era": "greek",
+          "year": 2010,
+          "workStatus": "released",
+          "originalPlatformId": "ps3"
+        },
+        {
+          "id": "ghost-of-sparta-2010",
+          "title": "God of War: Ghost of Sparta",
+          "era": "greek",
+          "year": 2010,
+          "workStatus": "released",
+          "originalPlatformId": "psp"
+        },
+        {
+          "id": "ascension-2013",
+          "title": "God of War: Ascension",
+          "era": "greek",
+          "year": 2013,
+          "workStatus": "released",
+          "originalPlatformId": "ps3"
+        },
+        {
+          "id": "god-of-war-2018",
+          "title": "God of War",
+          "era": "norse",
+          "year": 2018,
+          "workStatus": "released",
+          "originalPlatformId": "ps4",
+          "notes": "Mismo nombre que el original de 2005 — reinicio narrativo, no remake."
+        },
+        {
+          "id": "ragnarok-2022",
+          "title": "God of War Ragnarök",
+          "era": "norse",
+          "year": 2022,
+          "workStatus": "released",
+          "originalPlatformId": "ps4"
+        },
+        {
+          "id": "sons-of-sparta-2026",
+          "title": "God of War: Sons of Sparta",
+          "era": "norse",
+          "year": 2026,
+          "workStatus": "released",
+          "originalPlatformId": "ps5",
+          "notes": "Plataformero 2D sobre un joven Kratos en el Agogé espartano junto a su hermano Deimos. Desarrollado por Mega Cat Studios con guion del equipo de Santa Monica Studio — no es un juego de acción en tercera persona como el resto de la saga.",
+          "sourceUrl": "https://blog.playstation.com/2026/02/12/god-of-war-greek-trilogy-remake-in-development-god-of-war-sons-of-sparta-out-now/",
+          "lastVerified": "2026-09-12"
+        },
+        {
+          "id": "god-of-war-greek-trilogy-remake",
+          "title": "God of War: Greek Trilogy Remake",
+          "era": "future",
+          "year": null,
+          "workStatus": "announced",
+          "originalPlatformId": null,
+          "notes": "Anunciado, en desarrollo muy temprano. Sin plataforma, formato ni fecha confirmados — no inventar SKU ni año.",
+          "sourceUrl": "https://blog.playstation.com/2026/02/12/god-of-war-greek-trilogy-remake-in-development-god-of-war-sons-of-sparta-out-now/",
+          "lastVerified": "2026-09-12"
+        },
+        {
+          "id": "laufey",
+          "title": "Laufey",
+          "era": "future",
+          "year": null,
+          "workStatus": "announced",
+          "originalPlatformId": null,
+          "excludeFromDenominator": true,
+          "notes": "Anunciado/upcoming. Queda fuera del denominador de cobertura hasta que salga (PRD del tracker, indicación explícita del owner)."
+        }
+      ],
+      "historical": [
+        {
+          "id": "betrayal-2007",
+          "title": "God of War: Betrayal",
+          "type": "historical",
+          "platformLabel": "Java ME (celular)",
+          "year": 2007,
+          "note": "Discontinuado, sin edición física ni forma legítima de conseguirlo hoy."
+        },
+        {
+          "id": "a-call-from-the-wilds",
+          "title": "A Call from the Wilds",
+          "type": "historical",
+          "platformLabel": "Web / promocional",
+          "note": "Contenido complementario, no un lanzamiento independiente."
+        },
+        {
+          "id": "mimirs-vision",
+          "title": "Mimir's Vision",
+          "type": "historical",
+          "platformLabel": "Web / promocional",
+          "note": "Contenido complementario, no un lanzamiento independiente."
+        },
+        {
+          "id": "ragnarok-valhalla",
+          "title": "God of War Ragnarök: Valhalla",
+          "type": "dlc",
+          "platformLabel": "PS4 / PS5",
+          "year": 2023,
+          "relatedWorkId": "ragnarok-2022",
+          "note": "DLC gratuito de Ragnarök, no un lanzamiento físico independiente."
+        }
+      ],
+      "releases": [
+        {
+          "id": "gow-2005-ps2-na",
+          "title": "God of War",
+          "workIds": [
+            "god-of-war-2005"
+          ],
+          "platformId": "ps2",
+          "releaseType": "original",
+          "deliveryByComponent": [
+            "disc"
+          ],
+          "releaseStatus": "released",
+          "physicalStatus": "available",
+          "discCount": 1,
+          "codeStatus": "not-applicable",
+          "region": "NTSC-U/C",
+          "year": 2005,
+          "isPrimaryPhysicalTarget": true
+        },
+        {
+          "id": "gow2-2007-ps2-na",
+          "title": "God of War II",
+          "workIds": [
+            "god-of-war-2-2007"
+          ],
+          "platformId": "ps2",
+          "releaseType": "original",
+          "deliveryByComponent": [
+            "disc"
+          ],
+          "releaseStatus": "released",
+          "physicalStatus": "available",
+          "discCount": 1,
+          "codeStatus": "not-applicable",
+          "region": "NTSC-U/C",
+          "year": 2007,
+          "isPrimaryPhysicalTarget": true
+        },
+        {
+          "id": "chains-of-olympus-2008-psp-na",
+          "title": "God of War: Chains of Olympus",
+          "workIds": [
+            "chains-of-olympus-2008"
+          ],
+          "platformId": "psp",
+          "releaseType": "original",
+          "deliveryByComponent": [
+            "umd"
+          ],
+          "releaseStatus": "released",
+          "physicalStatus": "available",
+          "discCount": 1,
+          "codeStatus": "not-applicable",
+          "region": "NTSC-U/C",
+          "year": 2008,
+          "isPrimaryPhysicalTarget": true
+        },
+        {
+          "id": "ghost-of-sparta-2010-psp-na",
+          "title": "God of War: Ghost of Sparta",
+          "workIds": [
+            "ghost-of-sparta-2010"
+          ],
+          "platformId": "psp",
+          "releaseType": "original",
+          "deliveryByComponent": [
+            "umd"
+          ],
+          "releaseStatus": "released",
+          "physicalStatus": "available",
+          "discCount": 1,
+          "codeStatus": "not-applicable",
+          "region": "NTSC-U/C",
+          "year": 2010,
+          "isPrimaryPhysicalTarget": true
+        },
+        {
+          "id": "gow-collection-2009-ps3",
+          "title": "God of War Collection",
+          "workIds": [
+            "god-of-war-2005",
+            "god-of-war-2-2007"
+          ],
+          "platformId": "ps3",
+          "releaseType": "collection",
+          "deliveryByComponent": [
+            "disc"
+          ],
+          "releaseStatus": "released",
+          "physicalStatus": "available",
+          "discCount": 1,
+          "codeStatus": "not-applicable",
+          "region": "NTSC-U/C",
+          "year": 2009,
+          "notes": "GoW y GoW II remasterizados en HD, un solo disco — un lanzamiento físico que cubre dos obras.",
+          "isPrimaryPhysicalTarget": false
+        },
+        {
+          "id": "gow-collection-2012-vita",
+          "title": "God of War Collection",
+          "workIds": [
+            "god-of-war-2005",
+            "god-of-war-2-2007"
+          ],
+          "platformId": "ps-vita",
+          "releaseType": "port",
+          "deliveryByComponent": [
+            "digital"
+          ],
+          "releaseStatus": "released",
+          "physicalStatus": "none",
+          "discCount": 0,
+          "codeStatus": "not-applicable",
+          "region": "NTSC-U/C",
+          "year": 2012,
+          "notes": "Port digital de la Collection de PS3.",
+          "isPrimaryPhysicalTarget": false
+        },
+        {
+          "id": "gow-origins-collection-2011-ps3",
+          "title": "God of War: Origins Collection",
+          "workIds": [
+            "chains-of-olympus-2008",
+            "ghost-of-sparta-2010"
+          ],
+          "platformId": "ps3",
+          "releaseType": "collection",
+          "deliveryByComponent": [
+            "disc"
+          ],
+          "releaseStatus": "released",
+          "physicalStatus": "available",
+          "discCount": 1,
+          "codeStatus": "not-applicable",
+          "region": "NTSC-U/C",
+          "year": 2011,
+          "notes": "Chains of Olympus y Ghost of Sparta remasterizados. Título europeo equivalente: God of War Collection – Volume II.",
+          "isPrimaryPhysicalTarget": false
+        },
+        {
+          "id": "gow3-2010-ps3-na",
+          "title": "God of War III",
+          "workIds": [
+            "god-of-war-3-2010"
+          ],
+          "platformId": "ps3",
+          "releaseType": "original",
+          "deliveryByComponent": [
+            "disc"
+          ],
+          "releaseStatus": "released",
+          "physicalStatus": "available",
+          "discCount": 1,
+          "codeStatus": "not-applicable",
+          "region": "NTSC-U/C",
+          "year": 2010,
+          "isPrimaryPhysicalTarget": true
+        },
+        {
+          "id": "gow3-remastered-2015-ps4",
+          "title": "God of War III Remastered",
+          "workIds": [
+            "god-of-war-3-2010"
+          ],
+          "platformId": "ps4",
+          "releaseType": "remaster",
+          "deliveryByComponent": [
+            "disc"
+          ],
+          "releaseStatus": "released",
+          "physicalStatus": "available",
+          "discCount": 1,
+          "codeStatus": "not-applicable",
+          "region": "NTSC-U/C",
+          "year": 2015,
+          "isPrimaryPhysicalTarget": false
+        },
+        {
+          "id": "gow-saga-2012-ps3",
+          "title": "God of War Saga",
+          "workIds": [
+            "god-of-war-2005",
+            "god-of-war-2-2007",
+            "chains-of-olympus-2008",
+            "ghost-of-sparta-2010",
+            "god-of-war-3-2010"
+          ],
+          "platformId": "ps3",
+          "releaseType": "collection",
+          "deliveryByComponent": [
+            "disc",
+            "voucher"
+          ],
+          "releaseStatus": "released",
+          "physicalStatus": "available",
+          "discCount": 2,
+          "codeStatus": "included",
+          "region": "NTSC-U/C",
+          "year": 2012,
+          "notes": "Bundle de God of War Collection + Origins Collection + acceso a God of War III. El componente de GoW III se distribuyó por código/PSN, no como disco propio dentro del set — una copia usada no garantiza que ese código siga sin canjear.",
+          "sourceUrl": "https://blog.playstation.com/2012/08/06/never-stop-playing-with-playstation-collections/",
+          "lastVerified": "2026-09-12",
+          "isPrimaryPhysicalTarget": false
+        },
+        {
+          "id": "gow-complete-collection-ps3",
+          "title": "God of War: Complete Collection",
+          "workIds": [
+            "god-of-war-2005",
+            "god-of-war-2-2007",
+            "chains-of-olympus-2008",
+            "ghost-of-sparta-2010",
+            "god-of-war-3-2010"
+          ],
+          "platformId": "ps3",
+          "releaseType": "collection",
+          "deliveryByComponent": [
+            "disc",
+            "voucher"
+          ],
+          "releaseStatus": "released",
+          "physicalStatus": "available",
+          "discCount": null,
+          "codeStatus": "possibly-expired",
+          "region": "PAL",
+          "year": 2012,
+          "notes": "Confirmado como SKU real y distinto de God of War Saga: PriceCharting lo cataloga por separado para PAL PlayStation 3 (God Of War Complete Collection). Mismo elenco de 5 juegos que Saga. No pude confirmar con una fuente primaria si son 2 o 3 discos Blu-ray ni el estado exacto de los vouchers de descarga para PSP en la tirada PAL, asi que discCount y codeStatus quedan sin cerrar.",
+          "verificationPending": true,
+          "isPrimaryPhysicalTarget": false,
+          "sourceUrl": "https://www.pricecharting.com/game/pal-playstation-3/god-of-war-complete-collection",
+          "lastVerified": "2026-09-11"
+        },
+        {
+          "id": "gow-omega-collection-2012-ps3",
+          "title": "God of War: Omega Collection",
+          "workIds": [
+            "god-of-war-2005",
+            "god-of-war-2-2007",
+            "chains-of-olympus-2008",
+            "ghost-of-sparta-2010",
+            "god-of-war-3-2010"
+          ],
+          "platformId": "ps3",
+          "releaseType": "collection",
+          "deliveryByComponent": [
+            "disc"
+          ],
+          "releaseStatus": "released",
+          "physicalStatus": "available",
+          "discCount": 3,
+          "codeStatus": "not-applicable",
+          "region": "Latinoamérica",
+          "year": 2012,
+          "notes": "Exclusiva de Latinoamérica: 3 discos (God of War Collection, Origins Collection y God of War III), steelbook y estatua de Kratos numerada, obra de un artista argentino. Es la crown jewel regional de la franquicia.",
+          "isCrownJewel": true,
+          "sourceUrl": "https://blog.latam.playstation.com/2012/06/06/e3-2012-presentamos-god-of-war-omega-collection/",
+          "lastVerified": "2026-09-12",
+          "isPrimaryPhysicalTarget": false
+        },
+        {
+          "id": "ascension-2013-ps3-na",
+          "title": "God of War: Ascension",
+          "workIds": [
+            "ascension-2013"
+          ],
+          "platformId": "ps3",
+          "releaseType": "original",
+          "deliveryByComponent": [
+            "disc"
+          ],
+          "releaseStatus": "released",
+          "physicalStatus": "available",
+          "discCount": 1,
+          "codeStatus": "not-applicable",
+          "region": "NTSC-U/C",
+          "year": 2013,
+          "isPrimaryPhysicalTarget": true
+        },
+        {
+          "id": "gow-2018-ps4-na",
+          "title": "God of War",
+          "workIds": [
+            "god-of-war-2018"
+          ],
+          "platformId": "ps4",
+          "releaseType": "original",
+          "deliveryByComponent": [
+            "disc"
+          ],
+          "releaseStatus": "released",
+          "physicalStatus": "available",
+          "discCount": 1,
+          "codeStatus": "not-applicable",
+          "region": "NTSC-U/C",
+          "year": 2018,
+          "catalogRef": {
+            "consoleId": "ps4",
+            "gameId": "god-of-war"
+          },
+          "isPrimaryPhysicalTarget": true
+        },
+        {
+          "id": "ragnarok-2022-ps4-na",
+          "title": "God of War Ragnarök",
+          "workIds": [
+            "ragnarok-2022"
+          ],
+          "platformId": "ps4",
+          "releaseType": "original",
+          "deliveryByComponent": [
+            "disc"
+          ],
+          "releaseStatus": "released",
+          "physicalStatus": "available",
+          "discCount": 1,
+          "codeStatus": "not-applicable",
+          "region": "NTSC-U/C",
+          "year": 2022,
+          "catalogRef": {
+            "consoleId": "ps4",
+            "gameId": "god-of-war-ragnarok"
+          },
+          "isPrimaryPhysicalTarget": true
+        },
+        {
+          "id": "ragnarok-2022-ps5-na",
+          "title": "God of War Ragnarök",
+          "workIds": [
+            "ragnarok-2022"
+          ],
+          "platformId": "ps5",
+          "releaseType": "original",
+          "deliveryByComponent": [
+            "disc"
+          ],
+          "releaseStatus": "released",
+          "physicalStatus": "available",
+          "discCount": 1,
+          "codeStatus": "not-applicable",
+          "region": "NTSC-U/C",
+          "year": 2022,
+          "catalogRef": {
+            "consoleId": "ps5",
+            "gameId": "ps5-god-of-war-ragnarok"
+          },
+          "isPrimaryPhysicalTarget": false
+        },
+        {
+          "id": "sons-of-sparta-2026-ps5-standard",
+          "title": "God of War: Sons of Sparta — Standard Edition",
+          "workIds": [
+            "sons-of-sparta-2026"
+          ],
+          "platformId": "ps5",
+          "releaseType": "original",
+          "deliveryByComponent": [
+            "digital"
+          ],
+          "releaseStatus": "released",
+          "physicalStatus": "not-announced",
+          "discCount": 0,
+          "codeStatus": "not-applicable",
+          "region": "Global",
+          "year": 2026,
+          "priceUsd": 29.99,
+          "notes": "Sólo digital por ahora. No afirmar que nunca tendrá edición física.",
+          "sourceUrl": "https://blog.playstation.com/2026/02/12/god-of-war-greek-trilogy-remake-in-development-god-of-war-sons-of-sparta-out-now/",
+          "lastVerified": "2026-09-12",
+          "isPrimaryPhysicalTarget": true
+        },
+        {
+          "id": "sons-of-sparta-2026-ps5-deluxe",
+          "title": "God of War: Sons of Sparta — Digital Deluxe Edition",
+          "workIds": [
+            "sons-of-sparta-2026"
+          ],
+          "platformId": "ps5",
+          "releaseType": "special-edition",
+          "deliveryByComponent": [
+            "digital"
+          ],
+          "releaseStatus": "released",
+          "physicalStatus": "not-announced",
+          "discCount": 0,
+          "codeStatus": "not-applicable",
+          "region": "Global",
+          "year": 2026,
+          "priceUsd": 39.99,
+          "notes": "Extras digitales sobre la Standard — no cuenta como una segunda obra, es la misma obra con contenido extra.",
+          "sourceUrl": "https://blog.playstation.com/2026/02/12/god-of-war-greek-trilogy-remake-in-development-god-of-war-sons-of-sparta-out-now/",
+          "lastVerified": "2026-09-12",
+          "isPrimaryPhysicalTarget": false
+        }
+      ],
+      "editions": [
+        {
+          "id": "gow3-ultimate-edition-2010",
+          "releaseId": "gow3-2010-ps3-na",
+          "name": "God of War III: Ultimate Edition",
+          "year": 2010,
+          "isCrownJewel": false,
+          "completenessChecklist": [
+            "outerBox",
+            "disc",
+            "steelbook",
+            "artbook",
+            "soundtrack",
+            "figureOrStatue"
+          ],
+          "notes": "Incluye steelbook, artbook, soundtrack y una réplica/estatua — verificar inventario exacto de la caja antes de marcar una unidad como completa."
+        },
+        {
+          "id": "gow-ultimate-trilogy-edition",
+          "releaseId": "gow3-2010-ps3-na",
+          "name": "God of War: Ultimate Trilogy Edition (con la Caja de Pandora)",
+          "year": 2010,
+          "isCrownJewel": true,
+          "completenessChecklist": [
+            "gow3Disc",
+            "collectionBluRay",
+            "pandorasBoxReplica",
+            "artbook",
+            "postcards",
+            "soundtrackCds"
+          ],
+          "notes": "Confirmado por PlayStation Blog (dic. 2009 y feb. 2010): incluye el disco de God of War III, el Blu-ray de God of War Collection (I y II remasterizados), replica esculpida de la Caja de Pandora, artbook, postales y el soundtrack de la trilogia en 3 CDs. Edicion limitada solo para Europa, Australia y Nueva Zelanda (PAL); no hubo version NTSC. El releaseId apunta al lanzamiento base de God of War III porque el catalogo no tiene una entrada PAL separada para ese juego.",
+          "sourceUrl": "https://blog.playstation.com/archive/2010/02/05/god-of-war-iii-ultimate-trilogy-edition-box-unveiled",
+          "lastVerified": "2026-09-11"
+        },
+        {
+          "id": "ascension-collectors-edition-2013",
+          "releaseId": "ascension-2013-ps3-na",
+          "name": "God of War: Ascension — Collector's Edition",
+          "year": 2013,
+          "isCrownJewel": false,
+          "completenessChecklist": [
+            "outerBox",
+            "disc",
+            "steelbook",
+            "artbook",
+            "soundtrack",
+            "figureOrStatue"
+          ]
+        },
+        {
+          "id": "gow-2018-collectors-edition",
+          "releaseId": "gow-2018-ps4-na",
+          "name": "God of War (2018) — Collector's Edition",
+          "year": 2018,
+          "isCrownJewel": true,
+          "completenessChecklist": [
+            "outerBox",
+            "disc",
+            "mimirHeadStatue",
+            "steelbook",
+            "artbook",
+            "soundtrack"
+          ]
+        },
+        {
+          "id": "gow-2018-stone-mason-edition",
+          "releaseId": "gow-2018-ps4-na",
+          "name": "God of War (2018) — Stone Mason Edition",
+          "year": 2018,
+          "isCrownJewel": false,
+          "completenessChecklist": [
+            "outerBox",
+            "disc",
+            "steelbook",
+            "artCard"
+          ]
+        },
+        {
+          "id": "ragnarok-collectors-edition",
+          "releaseId": "ragnarok-2022-ps4-na",
+          "name": "God of War Ragnarök — Collector's Edition",
+          "year": 2022,
+          "isCrownJewel": false,
+          "completenessChecklist": [
+            "knowledgeKeepersShrineBox",
+            "steelbookDisplayOnly",
+            "mjolnirReplica",
+            "vanirTwinsCarvings",
+            "diceSet",
+            "gameVoucher"
+          ],
+          "notes": "Sin disco físico del juego — el código impreso reemplaza al disco (PRD: el checklist tiene que poder expresarlo). Steelbook incluido es sólo de exhibición.",
+          "sourceUrl": "https://blog.playstation.com/2022/07/06/god-of-war-ragnarok-collectors-edition-unboxing/",
+          "lastVerified": "2026-09-12"
+        },
+        {
+          "id": "ragnarok-jotnar-edition",
+          "releaseId": "ragnarok-2022-ps4-na",
+          "name": "God of War Ragnarök — Jötnar Edition",
+          "year": 2022,
+          "isCrownJewel": true,
+          "completenessChecklist": [
+            "knowledgeKeepersShrineBox",
+            "steelbookDisplayOnly",
+            "mjolnirReplica",
+            "vanirTwinsCarvings",
+            "diceSet",
+            "gameVoucher",
+            "vinylRecord",
+            "pinSet",
+            "draupnirRing",
+            "yggdrasilMap"
+          ],
+          "notes": "Todo lo de Collector's Edition más vinilo, set de pines, anillo Draupnir y mapa de Yggdrasil. Tampoco trae disco — código impreso.",
+          "sourceUrl": "https://blog.playstation.com/2022/07/06/god-of-war-ragnarok-collectors-edition-unboxing/",
+          "lastVerified": "2026-09-12"
+        }
+      ],
+      "hardware": [
+        {
+          "id": "psp-deep-red-chains",
+          "name": "PSP Deep Red — bundle Chains of Olympus",
+          "platformId": "psp",
+          "relatedWorkIds": [
+            "chains-of-olympus-2008"
+          ],
+          "year": 2008,
+          "notes": "PSP-2000 roja con arte de Kratos, God of War: Chains of Olympus en UMD y la pelicula Superbad en UMD como pack promocional. Lanzamiento limitado en Norteamerica coincidiendo con el juego (2008).",
+          "sourceUrl": "https://www.amazon.com/PlayStation-Portable-Limited-Entertainment-Sony-PSP/dp/B0014WMFHY",
+          "lastVerified": "2026-09-11"
+        },
+        {
+          "id": "psp-3000-black-red-ghost",
+          "name": "PSP-3000 Black/Red — bundle Ghost of Sparta",
+          "platformId": "psp",
+          "relatedWorkIds": [
+            "ghost-of-sparta-2010"
+          ],
+          "year": 2010,
+          "notes": "PSP-3000 bicolor negro/rojo con God of War: Ghost of Sparta en UMD, vouchers de descarga para Chains of Olympus y para la pelicula Kick-Ass, y Memory Stick PRO Duo de 2GB. Lanzado el 2 de noviembre de 2010 a USD 199.99.",
+          "sourceUrl": "https://techtickerblog.com/2010/08/31/sony-announces-god-of-war-ghost-of-sparta-psp-3000-bundle/",
+          "lastVerified": "2026-09-11"
+        },
+        {
+          "id": "ps3-garnet-red-ascension",
+          "name": "PS3 Garnet Red — bundle Ascension",
+          "platformId": "ps3",
+          "relatedWorkIds": [
+            "ascension-2013"
+          ],
+          "year": 2013,
+          "notes": "PS3 de 500GB en Garnet Red (color inspirado en el tatuaje de Kratos), incluye God of War: Ascension, God of War Saga (los 5 juegos anteriores) y 30 dias de PlayStation Plus. Bundle Legacy, lanzado el 12 de marzo de 2013 a USD 349.",
+          "sourceUrl": "https://blog.playstation.com/2013/01/31/god-of-war-ascension-legacy-bundle-includes-garnet-red-ps3/",
+          "lastVerified": "2026-09-11"
+        },
+        {
+          "id": "ps4-pro-leviathan-grey",
+          "name": "PS4 Pro Leviathan Grey — bundle God of War",
+          "platformId": "ps4",
+          "relatedWorkIds": [
+            "god-of-war-2018"
+          ],
+          "year": 2018,
+          "notes": "PS4 Pro de 1TB en Leviathan Grey con diseno inspirado en el Hacha Leviatan y runas nordicas, control DualShock 4 a tono y God of War (2018) Day One Edition en disco. Lanzado el 20 de abril de 2018 a USD 399.99.",
+          "sourceUrl": "https://blog.playstation.com/archive/2018/03/06/introducing-the-god-of-war-limited-edition-ps4-pro-bundle/",
+          "lastVerified": "2026-09-11"
+        },
+        {
+          "id": "dualsense-ragnarok",
+          "name": "DualSense — edición God of War Ragnarök",
+          "platformId": "ps5",
+          "relatedWorkIds": [
+            "ragnarok-2022"
+          ],
+          "year": 2022,
+          "notes": "DualSense en degrade azul hielo y blanco con grafica de oso y lobo (Kratos y Atreus) y el logo de Ragnarok en el dorso. Lanzado el 9 de noviembre de 2022 a USD 75.",
+          "sourceUrl": "https://direct.playstation.com/en-us/buy-accessories/dualsense-wireless-controller-god-of-war-ragnarok-limited-edition",
+          "lastVerified": "2026-09-11"
+        },
+        {
+          "id": "dualsense-20th-anniversary-gow",
+          "name": "DualSense — 20th Anniversary God of War",
+          "platformId": "ps5",
+          "relatedWorkIds": [
+            "god-of-war-2005"
+          ],
+          "year": 2025,
+          "notes": "DualSense gris ceniza con el tatuaje carmesi de Kratos, por los 20 anos del lanzamiento original de 2005. Preventa desde el 3 de octubre y lanzamiento el 23 de octubre de 2025, a USD 84.99.",
+          "sourceUrl": "https://blog.playstation.com/2025/09/24/celebrate-kratos-legacy-with-the-dualsense-wireless-controller-god-of-war-20th-anniversary-limited-edition/",
+          "lastVerified": "2026-09-11"
+        }
+      ]
+    }
+  }
+}

@@ -34,6 +34,10 @@
 .radar-chips { display:flex; flex-wrap:wrap; gap:6px; margin:14px 0 0; }
 .radar-chips span { border:1px solid var(--line); border-radius:999px; padding:4px 10px; font-size:.78rem; color:var(--muted); }
 .radar-blocked { color:#ffd68c; }
+/* ShopGoodwill llega por Personal Shopper/alerta guardada, nunca por scan propio (PRD §12.3): */
+.radar-verification-pending { margin:.3rem 0 0; padding:5px 10px; border-radius:8px; display:inline-block;
+                                background:rgba(255,199,92,.1); border:1px solid rgba(255,214,140,.35);
+                                color:#ffd68c; font-size:.78rem; }
 
 /* Filtros por estado */
 .radar-filters { display:flex; flex-wrap:wrap; gap:8px; margin:18px 0 0; }
@@ -51,6 +55,19 @@
 .radar-advanced summary { cursor:pointer; font:500 .86rem inherit; color:var(--ink); }
 .radar-form-checks { display:flex; flex-wrap:wrap; gap:14px; }
 .radar-form-checks label,.radar-source-option { display:flex; align-items:center; gap:8px; font-size:.84rem; color:var(--muted); }
+
+/* Valuación de lotes (PRD §10.5): calculadora de bolsillo, nada se persiste. */
+.radar-lot-calc { margin-top:10px; padding:16px; }
+.radar-lot-piece { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:10px;
+                    margin:10px 0 0; padding:12px; border:1px solid var(--line); border-radius:10px; }
+.radar-lot-piece legend { padding:0 6px; font:500 .74rem "IBM Plex Mono",monospace; color:var(--muted); }
+.radar-lot-piece .radar-form-checks { grid-column:1 / -1; }
+.radar-lot-result { margin-top:14px; padding-top:12px; border-top:1px dashed var(--line); }
+.radar-lot-result-grid { display:flex; flex-wrap:wrap; gap:20px; }
+.radar-lot-result-grid div { display:grid; gap:2px; }
+.radar-lot-result-grid strong { font:600 1rem "IBM Plex Mono",monospace; color:var(--ink); }
+.radar-lot-result-grid span { font-size:.72rem; color:var(--muted); }
+.radar-lot-caveats { margin:10px 0 0; padding-left:16px; font-size:.8rem; color:var(--muted); }
 .radar-sources { border:1px solid var(--line); border-radius:12px; padding:10px 14px; display:grid; gap:8px; margin:0; }
 .radar-sources legend { padding:0 6px; font:500 .78rem "IBM Plex Mono",monospace; color:var(--muted); }
 .radar-source-option.is-blocked { opacity:.78; align-items:start; flex-wrap:wrap; }

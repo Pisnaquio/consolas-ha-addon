@@ -569,6 +569,78 @@
           "valor": 110
         }
       }
+    },
+    {
+      "id": "ps3",
+      "nombre": "PlayStation 3",
+      "fabricante": "Sony",
+      "generacion": "7ma",
+      "anioLanzamiento": 2006,
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e9/PS3_consoles_montage.png/500px-PS3_consoles_montage.png"
+      ],
+      "precioFuente": "manual",
+      "precioGameStop": 180,
+      "precioNotas": {
+        "verificadoEn": "2026-03-23",
+        "fuentes": {
+          "precioGameStop": "Manual por usuario (GameStop)"
+        },
+        "revisiones": [
+          "Fat",
+          "Slim",
+          "Super Slim"
+        ],
+        "pendiente": "Faltan PriceCharting, eBay sold y CIB por revisión."
+      }
+    },
+    {
+      "id": "psp",
+      "nombre": "PlayStation Portable (PSP)",
+      "fabricante": "Sony",
+      "generacion": "7ma",
+      "anioLanzamiento": 2004,
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/4/46/Psp-1000.jpg/500px-Psp-1000.jpg"
+      ],
+      "precioFuente": "manual",
+      "precioGameStop": 150,
+      "precioNotas": {
+        "verificadoEn": "2026-03-23",
+        "fuentes": {
+          "precioGameStop": "Manual por usuario (GameStop)"
+        },
+        "revisiones": [
+          "PSP-1000",
+          "PSP-2000",
+          "PSP-3000",
+          "PSP Go"
+        ],
+        "pendiente": "Faltan PriceCharting, eBay sold y CIB por revisión."
+      }
+    },
+    {
+      "id": "ps-vita",
+      "nombre": "PlayStation Vita",
+      "fabricante": "Sony",
+      "generacion": "8va",
+      "anioLanzamiento": 2011,
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b4/PlayStation-Vita-1101-FL.jpg/500px-PlayStation-Vita-1101-FL.jpg"
+      ],
+      "precioFuente": "manual",
+      "precioGameStop": 240,
+      "precioNotas": {
+        "verificadoEn": "2026-03-23",
+        "fuentes": {
+          "precioGameStop": "Manual por usuario (GameStop)"
+        },
+        "revisiones": [
+          "PCH-1000",
+          "PCH-2000"
+        ],
+        "pendiente": "Faltan PriceCharting, eBay sold y CIB por revisión."
+      }
     }
   ]
 }

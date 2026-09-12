@@ -1,0 +1,109 @@
+/* Franchise Collection Tracker. Extiende el lenguaje visual existente
+   (detail-hero, detail-block, chip, btn-link) — nada de identidad nueva. */
+
+.franchise-hero { display: flex; justify-content: space-between; gap: 28px; align-items: start; flex-wrap: wrap; }
+.franchise-hero > div:first-child { flex: 1 1 360px; min-width: 0; }
+
+.franchise-next-action {
+  margin: 14px 0 0;
+  padding: 10px 14px;
+  border-left: 3px solid var(--accent-2, #63d8aa);
+  background: rgba(99, 216, 170, 0.08);
+  border-radius: 0 10px 10px 0;
+  font-size: 0.9rem;
+}
+.franchise-next-action.is-done { border-left-color: var(--line); background: transparent; color: var(--muted); }
+
+.franchise-progress-grid { display: grid; gap: 14px; min-width: 240px; flex: 0 0 260px; }
+.franchise-progress-head { display: flex; justify-content: space-between; font: 500 0.78rem "IBM Plex Mono", monospace; color: var(--muted); margin-bottom: 4px; }
+.franchise-progress-head strong { color: var(--ink); }
+.franchise-progress-track { height: 7px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.franchise-progress-track span { display: block; height: 100%; background: linear-gradient(90deg, var(--accent-2, #63d8aa), var(--accent, #32c7ff)); border-radius: inherit; }
+
+.franchise-filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 22px 0 18px; }
+.franchise-filters select,
+.franchise-filters input[type="search"] {
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ink);
+  border-radius: 10px;
+  padding: 7px 10px;
+  font: 400 0.84rem inherit;
+}
+.franchise-filters input[type="search"] { flex: 1 1 200px; min-width: 160px; }
+
+.pill-group { display: flex; gap: 6px; flex-wrap: wrap; }
+.pill {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 6px 13px;
+  font: 500 0.8rem inherit;
+  cursor: pointer;
+}
+.pill.is-active { border-color: var(--accent); color: var(--accent); background: rgba(50, 199, 255, 0.1); }
+
+.franchise-section { margin-top: 30px; }
+.franchise-section .section-head { margin-bottom: 12px; }
+
+.franchise-work { padding: 18px 20px; margin-bottom: 14px; }
+.franchise-work.is-covered { border-left: 3px solid var(--accent-2, #63d8aa); }
+.franchise-work-head { display: flex; justify-content: space-between; align-items: start; gap: 12px; flex-wrap: wrap; }
+.franchise-work-head h2 { margin: 0.15rem 0; font-size: 1.05rem; }
+
+.chip.is-owned { border-color: var(--accent-2, #63d8aa); color: var(--accent-2, #63d8aa); }
+.chip.is-missing { color: var(--muted); }
+.chip.is-announced { border-color: #ffd68c; color: #ffd68c; }
+
+.franchise-releases { display: grid; gap: 10px; margin-top: 12px; }
+.franchise-release { padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255, 255, 255, 0.02); }
+.franchise-release.is-owned { border-color: var(--accent-2, #63d8aa); }
+.franchise-release.is-historical { opacity: 0.82; }
+.franchise-release-head { display: flex; justify-content: space-between; align-items: start; gap: 10px; flex-wrap: wrap; }
+.franchise-release-title { margin: 0; font-weight: 600; font-size: 0.92rem; }
+.franchise-release-meta { margin: 3px 0 0; font: 400 0.76rem "IBM Plex Mono", monospace; color: var(--muted); }
+.franchise-release-note { margin: 8px 0 0; font-size: 0.8rem; color: var(--muted); }
+.franchise-release-note.is-warning { color: #ffd68c; }
+.franchise-release-note.is-pending { color: #8fb8dc; font-style: italic; }
+.franchise-release-price { margin: 4px 0 0; font: 500 0.76rem "IBM Plex Mono", monospace; color: var(--accent-2, #63d8aa); }
+.franchise-release-cover {
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+.franchise-release-actions { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.franchise-ownership { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
+.franchise-ownership .btn-link { padding: 5px 10px; font-size: 0.76rem; }
+.franchise-ownership .btn-link.is-on { border-color: var(--accent); color: var(--accent); background: rgba(50, 199, 255, 0.1); }
+
+.franchise-checklist { margin-top: 10px; font-size: 0.78rem; }
+.franchise-checklist summary { cursor: pointer; color: var(--muted); }
+.franchise-checklist ul { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; }
+.franchise-checklist label { display: flex; align-items: center; gap: 6px; }
+
+.franchise-crown-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.franchise-crown {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+}
+.franchise-crown.is-owned { border-color: #ffd68c; }
+.franchise-crown-title { margin: 0; font-weight: 600; font-size: 0.9rem; }
+.franchise-crown .btn-link.is-on { border-color: #ffd68c; color: #ffd68c; background: rgba(255, 214, 140, 0.1); }
+
+.franchise-empty { padding: 28px; text-align: center; }
+
+@media (max-width: 760px) {
+  .franchise-hero { flex-direction: column; }
+  .franchise-progress-grid { width: 100%; flex: none; }
+}

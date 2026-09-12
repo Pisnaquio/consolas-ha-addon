@@ -65,7 +65,7 @@ function search(overrides = {}) {
   };
 }
 
-async function renderPage({ items = [], environment = "production", failLoad = false, runs = null } = {}) {
+async function renderPage({ items = [], environment = "production", failLoad = false, runs = null, search = "" } = {}) {
   let html = "";
   const requests = [];
   const root = {
@@ -97,7 +97,7 @@ async function renderPage({ items = [], environment = "production", failLoad = f
     const body = url.includes("/radar/runs") ? runs || { slots: [], runs: [] } : model;
     return { ok: true, status: 200, async json() { return body; } };
   };
-  const windowStub = {};
+  const windowStub = { location: { search } };
   const document = {
     getElementById(id) {
       return id === "chasingGamesRoot" ? root : null;
@@ -109,6 +109,7 @@ async function renderPage({ items = [], environment = "production", failLoad = f
     fetch: fetchImpl,
     confirm: () => true,
     Intl,
+    URLSearchParams,
     console: { error() {}, info() {} }
   });
 
@@ -615,4 +616,158 @@ test("a listing with no imported estimate does not fake one", async () => {
   });
 
   assert.doesNotMatch(html, /puesto acá/);
+});
+
+test("offers to add a ShopGoodwill find by hand, never a scan of its own", async () => {
+  const { html } = await renderPage({ items: [search()] });
+
+  assert.match(html, /data-manual-entry="radar-1">Agregar de ShopGoodwill/);
+});
+
+test("an archived search does not offer to add a manual find", async () => {
+  const { html } = await renderPage({ items: [search({ status: "archived", archivedAt: "2026-09-01T00:00:00Z" })] });
+
+  assert.doesNotMatch(html, /Agregar de ShopGoodwill/);
+});
+
+test("adding a ShopGoodwill find goes through its own endpoint, never a crawler", async () => {
+  const { repository, requests } = await renderPage({ items: [search()] });
+  requests.length = 0;
+
+  await repository.createManualListing({
+    searchId: "radar-1",
+    title: "PS2 Slim tested",
+    listingUrl: "https://shopgoodwill.com/item/1",
+    priceAmount: 45,
+  });
+
+  assert.equal(requests[0].options.method, "POST");
+  assert.equal(requests[0].options.headers["X-Consolas-Radar"], "1");
+  assert.match(requests[0].url, /\/radar\/manual-listings$/);
+  assert.match(requests[0].options.body, /"searchId":"radar-1"/);
+});
+
+test("a result pending verification says so and offers to confirm it", async () => {
+  const { html } = await renderPage({
+    items: [
+      search({
+        results: [
+          {
+            id: "shopgoodwill-1",
+            sourceId: "shopgoodwill",
+            title: "PS2 Slim from ShopGoodwill",
+            priceLabel: "USD 45.00",
+            priceAmount: 45,
+            priceCurrency: "USD",
+            listingUrl: "https://shopgoodwill.com/item/1",
+            requiresVerification: true,
+            verifiedAt: null,
+            reasons: [],
+            unverified: [],
+            lastSeenAt: "2026-09-10T10:00:00Z",
+          },
+        ],
+        resultCount: 1,
+      }),
+    ],
+  });
+
+  assert.match(html, /Verificación pendiente/);
+  assert.match(html, /data-verify="shopgoodwill-1">Marcar verificada/);
+});
+
+test("a verified result does not ask to be verified again", async () => {
+  const { html } = await renderPage({
+    items: [
+      search({
+        results: [
+          {
+            id: "shopgoodwill-1",
+            sourceId: "shopgoodwill",
+            title: "PS2 Slim from ShopGoodwill",
+            priceLabel: "USD 45.00",
+            priceAmount: 45,
+            priceCurrency: "USD",
+            listingUrl: "https://shopgoodwill.com/item/1",
+            requiresVerification: false,
+            verifiedAt: "2026-09-11T10:00:00Z",
+            reasons: [],
+            unverified: [],
+            lastSeenAt: "2026-09-10T10:00:00Z",
+          },
+        ],
+        resultCount: 1,
+      }),
+    ],
+  });
+
+  assert.doesNotMatch(html, /Verificación pendiente/);
+  assert.doesNotMatch(html, /Marcar verificada/);
+});
+
+test("verifying a listing goes through its own endpoint with the write header", async () => {
+  const { repository, requests } = await renderPage({ items: [search()] });
+  requests.length = 0;
+
+  await repository.verifyListing("shopgoodwill-1");
+
+  assert.equal(requests[0].options.method, "POST");
+  assert.equal(requests[0].options.headers["X-Consolas-Radar"], "1");
+  assert.match(requests[0].url, /\/radar\/listings\/shopgoodwill-1\/verify$/);
+});
+
+test("every result offers to value it as a lot, pieces filled in by hand", async () => {
+  const { html } = await renderPage({
+    items: [
+      search({
+        results: [
+          {
+            id: "ebay-us-lot-1", sourceId: "ebay-us", title: "PS2 bundle, 8 games",
+            priceLabel: "USD 60.00", priceAmount: 60, priceCurrency: "USD", totalAmount: 60,
+            listingUrl: "https://www.ebay.com/itm/1", reasons: [], unverified: [],
+            lastSeenAt: "2026-09-10T10:00:00Z",
+          },
+        ],
+        resultCount: 1,
+      }),
+    ],
+  });
+
+  assert.match(html, /data-lot-calc="ebay-us-lot-1">Valorar como lote/);
+  assert.doesNotMatch(html, /radar-lot-calc/, "el panel no se abre solo");
+});
+
+test("the lot calculator computes through its own endpoint, pieces and totalCost, never a title parsed", async () => {
+  const { repository, requests } = await renderPage({ items: [search()] });
+  requests.length = 0;
+
+  await repository.computeLotValuation({
+    totalCost: 60,
+    pieces: [
+      { name: "PS2 Slim", comparableValue: 40, wanted: true, alreadyOwned: false, isDuplicate: false },
+      { name: "God of War", comparableValue: 15, wanted: true, alreadyOwned: false, isDuplicate: false },
+    ],
+  });
+
+  assert.equal(requests[0].options.method, "POST");
+  assert.equal(requests[0].options.headers["X-Consolas-Radar"], "1");
+  assert.match(requests[0].url, /\/radar\/lot-valuation$/);
+  assert.match(requests[0].options.body, /"comparableValue":40/);
+  assert.match(requests[0].options.body, /"comparableValue":15/);
+});
+
+test("arriving from the Franchise Tracker's Buscar con Radar link opens the create form pre-filled", async () => {
+  const { html } = await renderPage({
+    items: [],
+    search: "?open=create&prefillName=God+of+War+III+%28PlayStation+3%29&prefillPlatform=PlayStation+3"
+  });
+
+  assert.match(html, /chasing-add is-open/);
+  assert.match(html, /value="God of War III \(PlayStation 3\)"/);
+  assert.match(html, /value="PlayStation 3"/);
+});
+
+test("with no query string at all, the create form stays closed as always", async () => {
+  const { html } = await renderPage({ items: [] });
+  assert.doesNotMatch(html, /chasing-add is-open/);
 });

@@ -35,6 +35,25 @@
 .dismiss-form select,.dismiss-form input { min-width:0; }
 .dismiss-form input { flex:1 1 190px; }
 
+.purchase-form { display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:11px 13px;
+                border:1px solid var(--accent); border-radius:10px; background:rgba(99,216,170,.06); }
+.purchase-form p { flex-basis:100%; margin:0 0 2px; font-size:.8rem; }
+.purchase-form input { flex:1 1 140px; min-width:0; }
+
+/* Presupuesto mensual (PRD §10.6): contexto, nunca un bloqueo. */
+.budget-widget { display:flex; flex-wrap:wrap; gap:20px; align-items:center; margin-top:16px;
+                  padding:12px 16px; border:1px solid var(--line); border-radius:12px; }
+.budget-widget div { display:grid; gap:2px; }
+.budget-widget strong { font:600 1.05rem "IBM Plex Mono",monospace; color:var(--ink); }
+.budget-widget span { font-size:.72rem; color:var(--muted); }
+.budget-widget.is-over strong:last-of-type { color:#ff9a7a; }
+.budget-widget.budget-edit { align-items:end; }
+.budget-widget.budget-edit label { display:block; font-size:.78rem; color:var(--muted); margin-bottom:4px; }
+.budget-widget.budget-edit input { min-width:0; }
+@media (max-width:720px) {
+  .budget-widget { flex-direction:column; align-items:start; }
+}
+
 .feed-empty { padding:28px; text-align:center; border:1px dashed var(--line); border-radius:12px; color:var(--muted); }
 .feed-section-title { margin:26px 0 0; }
 @media (max-width:720px) {

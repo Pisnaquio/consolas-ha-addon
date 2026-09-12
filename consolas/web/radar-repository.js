@@ -350,6 +350,48 @@
     });
   }
 
+  /** Presupuesto mensual (PRD §10.6): monto guardado, gastado/reservado/disponible. */
+  async function loadBudget() {
+    return request("/radar/budget");
+  }
+
+  async function getPreferences() {
+    return request("/radar/preferences");
+  }
+
+  async function updateBudget(monthlyBudgetUsd) {
+    return write("/radar/preferences", { monthlyBudgetUsd });
+  }
+
+  /** PRD §10.5, cálculo puro: nada se persiste ni se infiere del título. */
+  async function computeLotValuation(payload) {
+    return write("/radar/lot-valuation", payload);
+  }
+
+  /**
+   * Deja evidencia del radar (para presupuesto e historial) y marca la
+   * decisión como "purchased". NO escribe la colección — ver
+   * `window.RadarPurchase` para la única acción que sí lo hace.
+   */
+  async function recordPurchase(payload) {
+    return write("/radar/purchases", payload);
+  }
+
+  /**
+   * Carga manual de una fuente de verificación asistida (ShopGoodwill, PRD
+   * §12.3): nunca un crawler — el owner trae los datos de una publicación
+   * que ya vio, y se evalúa contra los mismos criterios que un resultado
+   * automático.
+   */
+  async function createManualListing(payload) {
+    return write("/radar/manual-listings", payload);
+  }
+
+  /** Confirma Add to Cart/Buy Now en la publicación real; sin esto, un snippet no alcanza. */
+  async function verifyListing(listingId) {
+    return write(`/radar/listings/${encodeURIComponent(listingId)}/verify`, {});
+  }
+
   window.RadarRepository = {
     STATUS_ORDER,
     STATUS_LABELS,
@@ -405,6 +447,13 @@
     setStatus,
     duplicateSearch,
     runSearch,
-    deleteSearch
+    deleteSearch,
+    loadBudget,
+    getPreferences,
+    updateBudget,
+    computeLotValuation,
+    recordPurchase,
+    createManualListing,
+    verifyListing
   };
 })();

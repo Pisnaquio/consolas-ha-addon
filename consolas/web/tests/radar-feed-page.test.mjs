@@ -41,7 +41,25 @@ function item(overrides = {}) {
   };
 }
 
-async function renderFeed({ items = [], following = [], counts = {}, environment = "production", fail = false } = {}) {
+function defaultBudget(overrides = {}) {
+  return {
+    month: "2026-09",
+    currency: "USD",
+    monthlyBudgetUsd: null,
+    configured: false,
+    spent: 0,
+    spentCount: 0,
+    reserved: 0,
+    reservedCount: 0,
+    available: null,
+    ...overrides,
+  };
+}
+
+async function renderFeed({
+  items = [], following = [], counts = {}, environment = "production", fail = false,
+  budget = defaultBudget(), radarPurchase = null,
+} = {}) {
   let html = "";
   const requests = [];
   const root = {
@@ -50,7 +68,7 @@ async function renderFeed({ items = [], following = [], counts = {}, environment
     querySelectorAll() { return []; },
     querySelector() { return null; },
   };
-  const payload = {
+  const feedPayload = {
     version: 1,
     environment,
     generatedAt: "2026-09-11T12:00:00Z",
@@ -61,9 +79,17 @@ async function renderFeed({ items = [], following = [], counts = {}, environment
   const fetchImpl = async (url, options = {}) => {
     requests.push({ url, options });
     if (fail) return { ok: false, status: 503, async json() { return { error: "sin backend" }; } };
-    return { ok: true, status: 200, async json() { return payload; } };
+    if (String(url).includes("/radar/budget")) {
+      return { ok: true, status: 200, async json() { return budget; } };
+    }
+    return { ok: true, status: 200, async json() { return feedPayload; } };
   };
-  const windowStub = {};
+  const windowStub = {
+    RadarPurchase: radarPurchase || {
+      canWriteCollection: (entityType) => entityType === "console",
+      registerPurchase: async () => ({ ok: true, collectionWritten: true }),
+    },
+  };
   const context = vm.createContext({
     window: windowStub,
     document: { getElementById: (id) => (id === "radarFeedRoot" ? root : null) },
@@ -200,4 +226,121 @@ test("clearing a decision deletes it and never touches collection state", async 
   assert.equal(requests[0].options.method, "DELETE");
   assert.match(requests[0].url, /\/radar\/decisions\/ebay-us-1$/);
   assert.equal(requests.filter((entry) => entry.url.includes("/state")).length, 0);
+});
+
+test("an unconfigured budget offers to set it up instead of showing zeros", async () => {
+  const { html } = await renderFeed({ items: [item()], budget: defaultBudget() });
+
+  assert.match(html, /Presupuesto mensual sin configurar/);
+  assert.match(html, /data-edit-budget="1">Configurar/);
+});
+
+test("a configured budget shows spent, reserved and available", async () => {
+  const { html } = await renderFeed({
+    items: [item()],
+    budget: defaultBudget({ monthlyBudgetUsd: 200, configured: true, spent: 60, spentCount: 1, reserved: 30, reservedCount: 1, available: 110 }),
+  });
+
+  assert.match(html, /USD 200/);
+  assert.match(html, /USD 60[\s\S]*gastado \(1\)/);
+  assert.match(html, /USD 30[\s\S]*reservado \(1\)/);
+  assert.match(html, /USD 110[\s\S]*disponible/);
+  assert.doesNotMatch(html, /is-over/);
+});
+
+test("going over budget is shown, not hidden — the budget is context, not a wall", async () => {
+  const { html } = await renderFeed({
+    items: [item()],
+    budget: defaultBudget({ monthlyBudgetUsd: 50, configured: true, spent: 90, spentCount: 1, available: -40 }),
+  });
+
+  assert.match(html, /budget-widget is-over/);
+  assert.match(html, /sobre el presupuesto/);
+});
+
+test("reserving only makes sense once you are already following", async () => {
+  const notFollowing = await renderFeed({ items: [item()] });
+  assert.doesNotMatch(notFollowing.html, /data-reserve=/);
+
+  const following = await renderFeed({ items: [item({ decision: { decision: "following", reserved: false } })] });
+  assert.match(following.html, /data-reserve="ebay-us-1">/);
+  assert.match(following.html, /Reservar en el presupuesto/);
+});
+
+test("an already-reserved listing offers to take it back out", async () => {
+  const { html } = await renderFeed({
+    items: [item({ decision: { decision: "following", reserved: true } })],
+  });
+
+  assert.match(html, /Quitar del presupuesto/);
+});
+
+test("registrar compra only appears when the match names a console it can write", async () => {
+  const withEntity = await renderFeed({
+    items: [item({ matches: [{ searchId: "radar-1", searchName: "PS2", confidence: 0.9, reasons: [], unverified: [], entityType: "console", entityId: "ps2" }] })],
+  });
+  assert.match(withEntity.html, /data-purchase="ebay-us-1">Registrar compra/);
+
+  const withoutEntity = await renderFeed({ items: [item()] }); // el fixture base no trae entityType
+  assert.doesNotMatch(withoutEntity.html, /Registrar compra/);
+});
+
+test("a game or accessory match does not offer registrar compra yet", async () => {
+  const { html } = await renderFeed({
+    items: [item({ matches: [{ searchId: "radar-1", searchName: "Aladdin", confidence: 0.9, reasons: [], unverified: [], entityType: "game", entityId: "aladdin" }] })],
+    radarPurchase: { canWriteCollection: (entityType) => entityType === "console", registerPurchase: async () => ({}) },
+  });
+
+  assert.doesNotMatch(html, /Registrar compra/);
+});
+
+test("an already-purchased listing does not offer to register it again", async () => {
+  const { html } = await renderFeed({
+    items: [
+      item({
+        decision: { decision: "purchased" },
+        matches: [{ searchId: "radar-1", searchName: "PS2", confidence: 0.9, reasons: [], unverified: [], entityType: "console", entityId: "ps2" }],
+      }),
+    ],
+  });
+
+  assert.doesNotMatch(html, /Registrar compra/);
+});
+
+test("recording a purchase goes through the radar endpoint with its write header", async () => {
+  const { repository, requests } = await renderFeed({ items: [item()] });
+  requests.length = 0;
+
+  await repository.recordPurchase({ listingId: "ebay-us-1", entityType: "console", entityId: "ps2", priceAmount: 55 });
+
+  assert.equal(requests[0].options.method, "POST");
+  assert.equal(requests[0].options.headers["X-Consolas-Radar"], "1");
+  assert.match(requests[0].url, /\/radar\/purchases$/);
+  assert.match(requests[0].options.body, /"entityId":"ps2"/);
+});
+
+test("updating the budget goes through the radar endpoint with its write header", async () => {
+  const { repository, requests } = await renderFeed({ items: [item()] });
+  requests.length = 0;
+
+  await repository.updateBudget(300);
+
+  assert.equal(requests[0].options.method, "POST");
+  assert.match(requests[0].url, /\/radar\/preferences$/);
+  assert.match(requests[0].options.body, /"monthlyBudgetUsd":300/);
+});
+
+test("computing a lot valuation goes through the radar endpoint, pieces and all", async () => {
+  const { repository, requests } = await renderFeed({ items: [item()] });
+  requests.length = 0;
+
+  await repository.computeLotValuation({
+    totalCost: 50,
+    pieces: [{ name: "PS2 Slim", comparableValue: 60 }],
+  });
+
+  assert.equal(requests[0].options.method, "POST");
+  assert.equal(requests[0].options.headers["X-Consolas-Radar"], "1");
+  assert.match(requests[0].url, /\/radar\/lot-valuation$/);
+  assert.match(requests[0].options.body, /"comparableValue":60/);
 });

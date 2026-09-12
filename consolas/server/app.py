@@ -15,6 +15,7 @@ import json
 import mimetypes
 import os
 import posixpath
+import re
 import shutil
 import smtplib
 import sqlite3
@@ -32,7 +33,7 @@ from email.utils import format_datetime, make_msgid
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 # El add-on arranca `python3 /app/server/app.py` y los tests importan `server.app`.
 # Poner este directorio en el path deja un único nombre `radar.*` en los dos modos,
@@ -43,6 +44,8 @@ if str(_SERVER_DIR) not in sys.path:
 
 from radar.master import propose_master_searches  # noqa: E402
 from radar.valuation import (  # noqa: E402
+    LotPiece,
+    lot_valuation,
     peer_listing_benchmark,
     pick_benchmark,
     references_from_console_entry,
@@ -54,7 +57,7 @@ from radar.sources import registry as radar_registry  # noqa: E402
 
 
 SERVICE_NAME = "consolas-server"
-SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.33")
+SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.34")
 DEFAULT_DATA_DIR = "/data"
 DEFAULT_STATIC_DIR = "/app/web"
 DATABASE_NAME = "consolas.sqlite"
@@ -552,6 +555,36 @@ def init_db(config: AppConfig) -> None:
               PRIMARY KEY (schedule_date, slot_key)
             );
 
+            -- Fila única (PRD §15 RadarPreferences, recortado a lo que este
+            -- slice necesita: el presupuesto mensual). NULL hasta que el
+            -- owner lo configure — PRD §25: no bloquea nada, el control se
+            -- muestra sin calcular saldo hasta tener un monto.
+            CREATE TABLE IF NOT EXISTS radar_preferences (
+              id TEXT PRIMARY KEY DEFAULT 'default',
+              monthly_budget_usd REAL,
+              updated_at TEXT NOT NULL
+            );
+
+            -- El registro del radar de que "Registrar compra" se ejecutó.
+            -- Esto NO es la colección: es la evidencia para el presupuesto
+            -- (gastado del mes) y el historial. El estado de usuario real
+            -- (tengo/ownershipType/precioPagado) lo escribe el frontend por
+            -- CollectionRepository, nunca esta tabla.
+            CREATE TABLE IF NOT EXISTS radar_purchases (
+              id TEXT PRIMARY KEY,
+              listing_id TEXT NOT NULL,
+              entity_type TEXT NOT NULL,
+              entity_id TEXT NOT NULL,
+              price_amount REAL NOT NULL,
+              currency TEXT NOT NULL DEFAULT 'USD',
+              purchased_at TEXT NOT NULL,
+              created_at TEXT NOT NULL,
+              FOREIGN KEY(listing_id) REFERENCES radar_listings(id) ON DELETE CASCADE
+            );
+
+            CREATE INDEX IF NOT EXISTS radar_purchases_purchased_at_idx
+              ON radar_purchases (purchased_at);
+
             CREATE INDEX IF NOT EXISTS radar_runs_started_idx
               ON radar_runs (started_at DESC);
             CREATE INDEX IF NOT EXISTS radar_searches_status_idx
@@ -609,6 +642,11 @@ def init_db(config: AppConfig) -> None:
         for column_name, column_definition in {
             "previous_price_amount": "REAL",
             "price_changed_at": "TEXT",
+            # Slice 10: ShopGoodwill llega por carga manual (Personal Shopper /
+            # alerta guardada), nunca por scan automático. `requires_verification`
+            # marca que todavía nadie confirmó Add to Cart en la publicación real.
+            "requires_verification": "INTEGER NOT NULL DEFAULT 0",
+            "verified_at": "TEXT",
         }.items():
             if column_name not in listing_columns:
                 conn.execute(f"ALTER TABLE radar_listings ADD COLUMN {column_name} {column_definition}")
@@ -622,6 +660,13 @@ def init_db(config: AppConfig) -> None:
         }.items():
             if column_name not in match_columns:
                 conn.execute(f"ALTER TABLE radar_search_matches ADD COLUMN {column_name} {column_definition}")
+        decision_columns = {
+            str(row["name"]) for row in conn.execute("PRAGMA table_info(radar_decisions)").fetchall()
+        }
+        # "Reservado" es del presupuesto (PRD §10.6): una oportunidad que el
+        # owner ya cuenta como plan probable, separada de sólo "seguirla".
+        if "reserved" not in decision_columns:
+            conn.execute("ALTER TABLE radar_decisions ADD COLUMN reserved INTEGER NOT NULL DEFAULT 0")
         migrate_chasing_games_to_radar(conn)
         migrate_radar_results_to_listings(conn)
         migrate_drop_seller_identity(conn)
@@ -2683,6 +2728,8 @@ def radar_result_row(row: sqlite3.Row) -> dict[str, Any]:
         "reasons": reasons,
         "unverified": unverified,
         "matchedTerms": matched_terms,
+        "requiresVerification": bool(row["requires_verification"]) if "requires_verification" in row.keys() else False,
+        "verifiedAt": row["verified_at"] if "verified_at" in row.keys() else None,
         "firstSeenAt": row["first_seen_at"],
         "lastSeenAt": row["last_seen_at"],
     }
@@ -2716,11 +2763,41 @@ def radar_search_results(conn: sqlite3.Connection, search_id: str, limit: int) -
     return [radar_result_row(row) for row in rows]
 
 
+def radar_full_matches(conn: sqlite3.Connection, listing_id: str) -> list[dict[str, Any]]:
+    """Matches con la forma completa que usa el inventario de búsquedas."""
+    rows = conn.execute(
+        """
+        SELECT m.search_id, m.confidence, m.reasons_json, m.unverified_json,
+               m.matched_terms_json, s.name AS search_name, s.search_type, s.priority
+          FROM radar_search_matches m
+          JOIN radar_searches s ON s.id = m.search_id AND s.deleted_at IS NULL
+         WHERE m.listing_id = ? AND m.is_active = 1
+         ORDER BY m.confidence DESC, s.name
+        """,
+        (listing_id,),
+    ).fetchall()
+    return [
+        {
+            "searchId": row["search_id"],
+            "searchName": row["search_name"],
+            "searchType": row["search_type"],
+            "priority": row["priority"],
+            "confidence": row["confidence"],
+            "reasons": radar_json_field(row["reasons_json"], []),
+            "unverified": radar_json_field(row["unverified_json"], []),
+            "matchedTerms": radar_json_field(row["matched_terms_json"], []),
+        }
+        for row in rows
+    ]
+
+
 def list_radar_listings(config: AppConfig, limit: int = 100) -> dict[str, Any]:
     """Inventario deduplicado: una publicación, una fila, todas sus búsquedas.
 
     Es el criterio de aceptación §21.7 del PRD: una publicación que coincide con
     dos búsquedas se guarda una vez y se muestra una vez, con las dos razones.
+    Eso dedupea por `listing_id`. Dos `itemId` distintos que resultan ser el
+    mismo artículo se agrupan además por `radar_content_fingerprint`.
     """
 
     capped = max(1, min(int(limit or 100), 500))
@@ -2742,18 +2819,9 @@ def list_radar_listings(config: AppConfig, limit: int = 100) -> dict[str, Any]:
             (capped,),
         ).fetchall()
         items: list[dict[str, Any]] = []
-        for row in listing_rows:
-            matches = conn.execute(
-                """
-                SELECT m.search_id, m.confidence, m.reasons_json, m.unverified_json,
-                       m.matched_terms_json, s.name AS search_name, s.search_type, s.priority
-                  FROM radar_search_matches m
-                  JOIN radar_searches s ON s.id = m.search_id AND s.deleted_at IS NULL
-                 WHERE m.listing_id = ? AND m.is_active = 1
-                 ORDER BY m.confidence DESC, s.name
-                """,
-                (row["id"],),
-            ).fetchall()
+        for cluster in group_radar_rows_by_content(listing_rows):
+            row = radar_cluster_representative(cluster)
+            matches = radar_cluster_matches_using(conn, cluster, radar_full_matches)
             items.append(
                 {
                     "id": row["id"],
@@ -2782,22 +2850,13 @@ def list_radar_listings(config: AppConfig, limit: int = 100) -> dict[str, Any]:
                     "score": row["best_score"] if row["best_score"] is not None and row["best_score"] >= 0 else None,
                     "band": row["best_band"],
                     "valuation": radar_json_field(row["best_valuation_json"], {}),
+                    "requiresVerification": bool(row["requires_verification"]),
+                    "verifiedAt": row["verified_at"],
                     "firstSeenAt": row["first_seen_at"],
                     "lastSeenAt": row["last_seen_at"],
-                    "matchCount": row["match_count"],
-                    "matches": [
-                        {
-                            "searchId": match["search_id"],
-                            "searchName": match["search_name"],
-                            "searchType": match["search_type"],
-                            "priority": match["priority"],
-                            "confidence": match["confidence"],
-                            "reasons": radar_json_field(match["reasons_json"], []),
-                            "unverified": radar_json_field(match["unverified_json"], []),
-                            "matchedTerms": radar_json_field(match["matched_terms_json"], []),
-                        }
-                        for match in matches
-                    ],
+                    "matchCount": len(matches),
+                    "duplicateCount": len(cluster) - 1,
+                    "matches": matches,
                 }
             )
     return {
@@ -3352,6 +3411,128 @@ def execute_radar_search(config: AppConfig, target_id: str, run_id: str = "") ->
         "receipts": receipts,
         "runId": run_id,
     }
+
+
+# --- Fuentes de verificación asistida — ShopGoodwill (PRD §12.3, slice 10) --
+#
+# "No permitido en el diseño: crawler o scraper desatendido." ShopGoodwill se
+# integra por Personal Shopper/alertas guardadas: el owner ya vio la
+# publicación (por email o abriéndola) y trae los datos a mano. Se evalúa
+# contra la misma búsqueda y las mismas reglas que un resultado automático —
+# la única diferencia es de dónde vino el dato, no cómo se juzga. Nace
+# `requiresVerification` hasta que alguien confirme Add to Cart/Buy Now en la
+# publicación real; un snippet nunca alcanza (PRD §12.2, aplicado acá también).
+
+
+def normalize_radar_manual_source(value: Any) -> str:
+    source_id = str(value or "shopgoodwill").strip().lower()
+    if radar_registry.get_source(source_id) is None:
+        raise ApiError(HTTPStatus.BAD_REQUEST, f"Unknown source: {source_id}")
+    if not radar_source_capabilities(source_id).get("requiresAssistedVerification"):
+        raise ApiError(
+            HTTPStatus.BAD_REQUEST,
+            "La carga manual es sólo para fuentes de verificación asistida.",
+        )
+    return source_id
+
+
+def create_manual_radar_listing(config: AppConfig, payload: Any) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        raise ApiError(HTTPStatus.BAD_REQUEST, "JSON body must be an object")
+    search_id = normalize_radar_id(payload.get("searchId"))
+    source_id = normalize_radar_manual_source(payload.get("sourceId"))
+    title = normalize_radar_text(payload.get("title"), "title", 300, required=True)
+    listing_url = normalize_radar_text(payload.get("listingUrl"), "listingUrl", 800, required=True)
+    if not listing_url.startswith(("http://", "https://")):
+        raise ApiError(HTTPStatus.BAD_REQUEST, "listingUrl must be an http(s) URL")
+    price_amount = normalize_radar_amount(payload.get("priceAmount"), "priceAmount")
+    if price_amount is None:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "priceAmount is required")
+    shipping_amount = normalize_radar_amount(payload.get("shippingAmount"), "shippingAmount")
+    currency = normalize_radar_text(payload.get("currency"), "currency", 8, required=False).upper() or "USD"
+    condition_label = normalize_radar_text(payload.get("conditionLabel"), "conditionLabel", 200, required=False)
+
+    with _RADAR_LOCK, connect_db(config) as conn:
+        row = load_radar_search(conn, search_id)
+    if str(row["status"]) not in ("active", "paused", "draft"):
+        raise ApiError(HTTPStatus.CONFLICT, "Esta búsqueda no admite nuevas coincidencias en su estado actual")
+    criteria = normalize_radar_criteria(radar_json_field(row["criteria_json"], None))
+
+    listing = MarketplaceListing(
+        source_id=source_id,
+        # Estable por URL: cargar el mismo link dos veces actualiza, no duplica.
+        external_id=f"manual-{hashlib.sha256(listing_url.encode('utf-8')).hexdigest()[:24]}",
+        title=title,
+        listing_url=listing_url,
+        price_amount=price_amount,
+        price_currency=currency,
+        shipping_amount=shipping_amount,
+        shipping_currency=currency if shipping_amount is not None else "",
+        condition_label=condition_label,
+        price_label=f"{currency} {price_amount:.2f}",
+        shipping_label=f"{currency} {shipping_amount:.2f}" if shipping_amount is not None else "",
+        availability="unknown",
+    )
+
+    capabilities = radar_source_capabilities(source_id)
+    verdict = evaluate_match(listing, criteria, capabilities)
+    if not verdict.matched:
+        raise ApiError(
+            HTTPStatus.UNPROCESSABLE_ENTITY,
+            "No cumple los criterios de esta búsqueda todavía.",
+            {"blockers": verdict.blockers},
+        )
+
+    references = radar_entity_references(config, str(row["entity_type"]), str(row["entity_id"]))
+    card = valuate_radar_match(listing, verdict, criteria, references, str(row["entity_type"]))
+    now = utc_now()
+
+    with _RADAR_LOCK, connect_db(config) as conn:
+        listing_id = upsert_radar_listing(conn, listing, now)
+        conn.execute("UPDATE radar_listings SET requires_verification = 1 WHERE id = ?", (listing_id,))
+        conn.execute(
+            """INSERT INTO radar_search_matches (
+                 search_id, listing_id, confidence, reasons_json, blockers_json, unverified_json,
+                 matched_terms_json, score, band, valuation_json, is_active, first_seen_at, last_seen_at
+               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+               ON CONFLICT(search_id, listing_id) DO UPDATE SET
+                 confidence=excluded.confidence, reasons_json=excluded.reasons_json,
+                 blockers_json=excluded.blockers_json, unverified_json=excluded.unverified_json,
+                 matched_terms_json=excluded.matched_terms_json, score=excluded.score,
+                 band=excluded.band, valuation_json=excluded.valuation_json, is_active=1,
+                 last_seen_at=excluded.last_seen_at""",
+            (
+                search_id, listing_id, verdict.confidence,
+                json.dumps(verdict.reasons, ensure_ascii=False),
+                json.dumps(verdict.blockers, ensure_ascii=False),
+                json.dumps(verdict.unverified, ensure_ascii=False),
+                json.dumps(verdict.matched_terms, ensure_ascii=False),
+                card.score, card.band,
+                json.dumps(card.to_dict(), ensure_ascii=False, separators=(",", ":")),
+                now, now,
+            ),
+        )
+
+    return {"ok": True, "listingId": listing_id, "searchId": search_id, "requiresVerification": True}
+
+
+def verify_radar_listing(config: AppConfig, listing_id: Any) -> dict[str, Any]:
+    """Confirma que alguien abrió la publicación real y probó Add to Cart/Buy Now.
+
+    Un snippet de buscador no alcanza (PRD §12.2) — esto es lo que separa
+    "aparece en una alerta" de "está disponible de verdad".
+    """
+
+    target_id = normalize_radar_id(listing_id)
+    now = utc_now()
+    with _RADAR_LOCK, connect_db(config) as conn:
+        cursor = conn.execute(
+            "UPDATE radar_listings SET requires_verification = 0, verified_at = ? WHERE id = ?",
+            (now, target_id),
+        )
+        if cursor.rowcount != 1:
+            raise ApiError(HTTPStatus.NOT_FOUND, "Listing not found")
+    return {"ok": True, "listingId": target_id, "verifiedAt": now}
 
 
 # --------------------------------------------------------------------------- #
@@ -3911,6 +4092,97 @@ def normalize_snooze_until(value: Any) -> str:
     return parsed.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+_RADAR_FINGERPRINT_NOISE = re.compile(r"[^a-z0-9]+")
+
+
+def radar_content_fingerprint(row: sqlite3.Row) -> tuple[Any, ...] | None:
+    """Identidad del artículo real detrás de la publicación, no del `itemId`.
+
+    eBay a veces asigna dos `itemId` distintos al mismo artículo — un relist,
+    o una publicación repetida por el vendedor. Cada `itemId` sigue siendo una
+    fila propia en `radar_listings` (nunca se pisan entre sí), pero mostrar
+    las dos en el feed o en los resultados de una búsqueda es mostrar la misma
+    oportunidad dos veces. El fingerprint agrupa lo que parece ser el mismo
+    artículo: misma fuente, mismo vendedor, mismo precio y un título que
+    normaliza igual. Es deliberadamente estricto — exige las cuatro señales a
+    la vez — para no fusionar dos publicaciones que sólo se parecen.
+    """
+
+    title = row["title"] if "title" in row.keys() else None
+    normalized_title = _RADAR_FINGERPRINT_NOISE.sub(" ", str(title or "").lower()).strip()
+    if not normalized_title:
+        return None
+    seller = str(row["seller_label"] if "seller_label" in row.keys() else "" or "").strip().lower()
+    price = row["price_amount"] if "price_amount" in row.keys() else None
+    return (row["source_id"], normalized_title, price, seller)
+
+
+def group_radar_rows_by_content(rows: list[sqlite3.Row]) -> list[list[sqlite3.Row]]:
+    """Agrupa filas que son, en los hechos, la misma publicación.
+
+    El orden de entrada se preserva: el primer grupo es el que contiene la
+    fila mejor rankeada de la consulta original.
+    """
+
+    order: list[tuple[Any, ...]] = []
+    groups: dict[tuple[Any, ...], list[sqlite3.Row]] = {}
+    for index, row in enumerate(rows):
+        fingerprint = radar_content_fingerprint(row) or ("__row__", row["id"], index)
+        if fingerprint not in groups:
+            groups[fingerprint] = []
+            order.append(fingerprint)
+        groups[fingerprint].append(row)
+    return [groups[key] for key in order]
+
+
+def radar_cluster_representative(cluster: list[sqlite3.Row]) -> sqlite3.Row:
+    """La copia más fresca del artículo: la que mejor describe su estado hoy."""
+    return max(cluster, key=lambda row: str(row["last_seen_at"] or ""))
+
+
+def radar_cluster_decision(
+    cluster: list[sqlite3.Row], decisions: dict[str, dict[str, Any]]
+) -> dict[str, Any] | None:
+    """Si cualquier duplicado del artículo tiene una decisión, el artículo la tiene.
+
+    Descartar un `itemId` y ver su relist sin decisión al día siguiente
+    reabriría exactamente lo que el usuario ya cerró. Con más de una decisión
+    en el grupo (raro: pasa si se decide sobre el duplicado antes de que se
+    fusionen) gana la más reciente.
+    """
+
+    candidates = [decisions[str(row["id"])] for row in cluster if str(row["id"]) in decisions]
+    if not candidates:
+        return None
+    return max(candidates, key=lambda decision: str(decision.get("updatedAt") or ""))
+
+
+def radar_cluster_matches_using(
+    conn: sqlite3.Connection,
+    cluster: list[sqlite3.Row],
+    fetch_matches: Callable[[sqlite3.Connection, str], list[dict[str, Any]]],
+) -> list[dict[str, Any]]:
+    """Unión de las búsquedas que coincidieron con cualquier duplicado del artículo.
+
+    `fetch_matches` trae la forma de match que necesite cada vista (el feed y
+    el inventario de búsquedas no serializan los mismos campos); esta función
+    sólo fusiona por `searchId`, quedándose con la de mayor confianza.
+    """
+
+    merged: dict[str, dict[str, Any]] = {}
+    for row in cluster:
+        for match in fetch_matches(conn, str(row["id"])):
+            key = str(match["searchId"])
+            current = merged.get(key)
+            if current is None or (match["confidence"] or 0) > (current["confidence"] or 0):
+                merged[key] = match
+    return sorted(merged.values(), key=lambda match: -(match["confidence"] or 0))
+
+
+def radar_cluster_matches(conn: sqlite3.Connection, cluster: list[sqlite3.Row]) -> list[dict[str, Any]]:
+    return radar_cluster_matches_using(conn, cluster, radar_match_reasons)
+
+
 def radar_price_drop(row: sqlite3.Row) -> dict[str, Any] | None:
     """Cuánto bajó una publicación desde la última vez que cambió de precio."""
     keys = row.keys()
@@ -3939,6 +4211,7 @@ def radar_decision_row(row: sqlite3.Row) -> dict[str, Any]:
         "note": row["note"],
         "snoozeUntil": row["snooze_until"],
         "priceAtDecision": row["price_at_decision"],
+        "reserved": bool(row["reserved"]) if "reserved" in row.keys() else False,
         "createdAt": row["created_at"],
         "updatedAt": row["updated_at"],
     }
@@ -3953,6 +4226,21 @@ def snooze_is_active(decision: dict[str, Any], now: datetime | None = None) -> b
     return until > (now or datetime.now(timezone.utc))
 
 
+def normalize_radar_reserved(value: Any, decision: str) -> int:
+    """«Reservado» es presupuesto, no seguimiento: sólo tiene sentido sobre
+
+    algo que seguís de verdad. Marcarlo sobre una descartada o dormida sería
+    contar contra el presupuesto algo que ya decidiste que no vas a comprar.
+    """
+
+    if value is None:
+        return 0
+    reserved = bool(value)
+    if reserved and decision != "following":
+        raise ApiError(HTTPStatus.BAD_REQUEST, "reserved only applies to a followed listing")
+    return 1 if reserved else 0
+
+
 def record_radar_decision(config: AppConfig, payload: Any) -> dict[str, Any]:
     """Guarda qué decidiste sobre una publicación. Nunca toca la colección."""
     if not isinstance(payload, dict):
@@ -3962,6 +4250,7 @@ def record_radar_decision(config: AppConfig, payload: Any) -> dict[str, Any]:
     reason = normalize_dismiss_reason(payload.get("reason"))
     note = normalize_radar_text(payload.get("note"), "note", 400, required=False)
     snooze_until = normalize_snooze_until(payload.get("snoozeUntil"))
+    reserved = normalize_radar_reserved(payload.get("reserved"), decision)
     if decision == "snoozed" and not snooze_until:
         raise ApiError(HTTPStatus.BAD_REQUEST, "snoozeUntil is required to snooze a listing")
 
@@ -3972,14 +4261,15 @@ def record_radar_decision(config: AppConfig, payload: Any) -> dict[str, Any]:
             raise ApiError(HTTPStatus.NOT_FOUND, "Listing not found")
         conn.execute(
             """INSERT INTO radar_decisions (
-                 listing_id, decision, reason, note, snooze_until, price_at_decision, created_at, updated_at
-               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                 listing_id, decision, reason, note, snooze_until, price_at_decision, reserved,
+                 created_at, updated_at
+               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(listing_id) DO UPDATE SET
                  decision=excluded.decision, reason=excluded.reason, note=excluded.note,
-                 snooze_until=excluded.snooze_until, updated_at=excluded.updated_at""",
+                 snooze_until=excluded.snooze_until, reserved=excluded.reserved, updated_at=excluded.updated_at""",
             (
                 listing_id, decision, reason, note, snooze_until or None,
-                listing["price_amount"], now, now,
+                listing["price_amount"], reserved, now, now,
             ),
         )
         row = conn.execute("SELECT * FROM radar_decisions WHERE listing_id = ?", (listing_id,)).fetchone()
@@ -3993,6 +4283,222 @@ def clear_radar_decision(config: AppConfig, listing_id: Any) -> dict[str, Any]:
     if cursor.rowcount != 1:
         raise ApiError(HTTPStatus.NOT_FOUND, "Decision not found")
     return {"ok": True, "listingId": target_id}
+
+
+# --- Presupuesto mensual (PRD §10.6) ----------------------------------------
+
+
+def radar_preferences_row(row: sqlite3.Row | None) -> dict[str, Any]:
+    if row is None:
+        return {"monthlyBudgetUsd": None, "currency": "USD", "updatedAt": None}
+    return {
+        "monthlyBudgetUsd": row["monthly_budget_usd"],
+        "currency": "USD",
+        "updatedAt": row["updated_at"],
+    }
+
+
+def get_radar_preferences(config: AppConfig) -> dict[str, Any]:
+    with _RADAR_LOCK, connect_db(config) as conn:
+        row = conn.execute("SELECT * FROM radar_preferences WHERE id = 'default'").fetchone()
+    return radar_preferences_row(row)
+
+
+def update_radar_preferences(config: AppConfig, payload: Any) -> dict[str, Any]:
+    """El monto es una preferencia privada, nunca un campo de colección (PRD §10.6)."""
+    if not isinstance(payload, dict):
+        raise ApiError(HTTPStatus.BAD_REQUEST, "JSON body must be an object")
+    monthly_budget = normalize_radar_amount(payload.get("monthlyBudgetUsd"), "monthlyBudgetUsd")
+    now = utc_now()
+    with _RADAR_LOCK, connect_db(config) as conn:
+        conn.execute(
+            """INSERT INTO radar_preferences (id, monthly_budget_usd, updated_at)
+               VALUES ('default', ?, ?)
+               ON CONFLICT(id) DO UPDATE SET
+                 monthly_budget_usd=excluded.monthly_budget_usd, updated_at=excluded.updated_at""",
+            (monthly_budget, now),
+        )
+        row = conn.execute("SELECT * FROM radar_preferences WHERE id = 'default'").fetchone()
+    return radar_preferences_row(row)
+
+
+def radar_current_month_bounds() -> tuple[str, str, str]:
+    """Devuelve (etiqueta "YYYY-MM", inicio UTC, fin UTC) del mes en curso.
+
+    El mes se cuenta en hora local (`America/Montevideo` por defecto): es
+    cuándo el owner compra, no cuándo gira el reloj de UTC.
+    """
+
+    local_now = radar_now_local()
+    start_local = local_now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    if start_local.month == 12:
+        end_local = start_local.replace(year=start_local.year + 1, month=1)
+    else:
+        end_local = start_local.replace(month=start_local.month + 1)
+    label = start_local.strftime("%Y-%m")
+    start_utc = start_local.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+    end_utc = end_local.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+    return label, start_utc, end_utc
+
+
+def compute_radar_budget(config: AppConfig) -> dict[str, Any]:
+    """Gastado, reservado, disponible e impacto (PRD §10.6).
+
+    El presupuesto da contexto, nunca oculta nada por sí solo — eso lo decide
+    quien mira el feed, no este cálculo.
+    """
+
+    month_label, month_start, month_end = radar_current_month_bounds()
+    with _RADAR_LOCK, connect_db(config) as conn:
+        prefs = radar_preferences_row(conn.execute("SELECT * FROM radar_preferences WHERE id = 'default'").fetchone())
+        spent_row = conn.execute(
+            """SELECT COALESCE(SUM(price_amount), 0) AS total, COUNT(*) AS n
+                 FROM radar_purchases
+                WHERE purchased_at >= ? AND purchased_at < ?""",
+            (month_start, month_end),
+        ).fetchone()
+        reserved_row = conn.execute(
+            """SELECT COALESCE(SUM(l.total_amount), 0) AS total, COUNT(*) AS n
+                 FROM radar_decisions d
+                 JOIN radar_listings l ON l.id = d.listing_id
+                WHERE d.reserved = 1 AND d.decision = 'following'"""
+        ).fetchone()
+
+    spent = round(float(spent_row["total"] or 0), 2)
+    reserved = round(float(reserved_row["total"] or 0), 2)
+    monthly_budget = prefs["monthlyBudgetUsd"]
+    available = round(monthly_budget - spent - reserved, 2) if monthly_budget is not None else None
+
+    return {
+        "month": month_label,
+        "currency": "USD",
+        "monthlyBudgetUsd": monthly_budget,
+        "configured": monthly_budget is not None,
+        "spent": spent,
+        "spentCount": int(spent_row["n"] or 0),
+        "reserved": reserved,
+        "reservedCount": int(reserved_row["n"] or 0),
+        "available": available,
+    }
+
+
+# --- «Registrar compra» (PRD §9, §24, slice 9) ------------------------------
+#
+# Esto NO escribe la colección. Graba la evidencia del radar — para el
+# presupuesto y el historial — y marca la decisión como "purchased". El
+# estado real de usuario (tengo/ownershipType/precioPagado) lo escribe el
+# frontend después, por `CollectionRepository`, la única autoridad de
+# pertenencia. Separar los dos pasos es deliberado: si el segundo paso
+# fallara (por ejemplo el navegador se cierra), la compra ya quedó
+# registrada para el presupuesto y no hay que perder esa evidencia.
+
+RADAR_PURCHASE_ENTITY_TYPES = ("console", "game", "accessory")
+
+
+def normalize_radar_lot_piece(raw: Any, index: int) -> LotPiece:
+    if not isinstance(raw, dict):
+        raise ApiError(HTTPStatus.BAD_REQUEST, f"pieces[{index}] must be an object")
+    name = normalize_radar_text(raw.get("name"), f"pieces[{index}].name", 200, required=True)
+    return LotPiece(
+        name=name,
+        comparable_value=normalize_radar_amount(raw.get("comparableValue"), f"pieces[{index}].comparableValue"),
+        condition_factor=(
+            max(0.0, min(1.0, float(raw["conditionFactor"])))
+            if raw.get("conditionFactor") not in (None, "")
+            else 1.0
+        ),
+        wanted=raw.get("wanted") is not False,
+        already_owned=raw.get("alreadyOwned") is True,
+        is_duplicate=raw.get("isDuplicate") is True,
+    )
+
+
+def compute_radar_lot_valuation(payload: Any) -> dict[str, Any]:
+    """Cálculo puro (PRD §10.5): nada se persiste, nada se infiere del texto
+
+    de la publicación. Las piezas las declara quien mira el lote — el radar
+    no reconoce fotos ni parsea "PS2 + 8 juegos" de un título.
+    """
+
+    if not isinstance(payload, dict):
+        raise ApiError(HTTPStatus.BAD_REQUEST, "JSON body must be an object")
+    raw_pieces = payload.get("pieces")
+    if not isinstance(raw_pieces, list):
+        raise ApiError(HTTPStatus.BAD_REQUEST, "pieces must be an array")
+    if len(raw_pieces) > 100:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "pieces cannot exceed 100 entries")
+    pieces = [normalize_radar_lot_piece(raw, index) for index, raw in enumerate(raw_pieces)]
+    total_cost = normalize_radar_amount(payload.get("totalCost"), "totalCost")
+    result = lot_valuation(pieces, total_cost)
+    return {"ok": True, **result}
+
+
+def record_radar_purchase(config: AppConfig, payload: Any) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        raise ApiError(HTTPStatus.BAD_REQUEST, "JSON body must be an object")
+    listing_id = normalize_radar_id(payload.get("listingId"))
+    entity_type = normalize_radar_enum(payload.get("entityType"), RADAR_PURCHASE_ENTITY_TYPES, "", "entityType")
+    if not entity_type:
+        raise ApiError(
+            HTTPStatus.BAD_REQUEST, f"entityType must be one of: {', '.join(RADAR_PURCHASE_ENTITY_TYPES)}"
+        )
+    entity_id = normalize_radar_text(payload.get("entityId"), "entityId", 120, required=True)
+    price_amount = normalize_radar_amount(payload.get("priceAmount"), "priceAmount")
+    if price_amount is None:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "priceAmount is required")
+    currency = normalize_radar_text(payload.get("currency"), "currency", 8, required=False).upper() or "USD"
+    now = utc_now()
+    # A diferencia de un snooze, una compra puede registrarse con fecha pasada
+    # (la comprás hoy y la cargás mañana) — nunca futura.
+    raw_purchased_at = payload.get("purchasedAt")
+    if raw_purchased_at:
+        parsed = parse_iso_datetime(raw_purchased_at)
+        if parsed is None:
+            raise ApiError(HTTPStatus.BAD_REQUEST, "purchasedAt must be an ISO-8601 timestamp")
+        if parsed > datetime.now(timezone.utc):
+            raise ApiError(HTTPStatus.BAD_REQUEST, "purchasedAt cannot be in the future")
+        purchased_at = parsed.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+    else:
+        purchased_at = now
+
+    with _RADAR_LOCK, connect_db(config) as conn:
+        listing = conn.execute("SELECT * FROM radar_listings WHERE id = ?", (listing_id,)).fetchone()
+        if listing is None:
+            raise ApiError(HTTPStatus.NOT_FOUND, "Listing not found")
+        purchase_id = f"purchase-{uuid.uuid4().hex[:20]}"
+        conn.execute(
+            """INSERT INTO radar_purchases (
+                 id, listing_id, entity_type, entity_id, price_amount, currency, purchased_at, created_at
+               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (purchase_id, listing_id, entity_type, entity_id, price_amount, currency, purchased_at, now),
+        )
+        # Reservado deja de tener sentido una vez comprada: ya no es "plan
+        # probable", es gasto real, y contarlo dos veces infla el presupuesto.
+        conn.execute(
+            """INSERT INTO radar_decisions (
+                 listing_id, decision, reason, note, snooze_until, price_at_decision, reserved,
+                 created_at, updated_at
+               ) VALUES (?, 'purchased', '', '', NULL, ?, 0, ?, ?)
+               ON CONFLICT(listing_id) DO UPDATE SET
+                 decision='purchased', snooze_until=NULL, reserved=0,
+                 price_at_decision=excluded.price_at_decision, updated_at=excluded.updated_at""",
+            (listing_id, price_amount, now, now),
+        )
+        decision_row = conn.execute("SELECT * FROM radar_decisions WHERE listing_id = ?", (listing_id,)).fetchone()
+
+    return {
+        "ok": True,
+        "purchase": {
+            "id": purchase_id,
+            "listingId": listing_id,
+            "entityType": entity_type,
+            "entityId": entity_id,
+            "priceAmount": price_amount,
+            "currency": currency,
+            "purchasedAt": purchased_at,
+        },
+        "decision": radar_decision_row(decision_row),
+    }
 
 
 def radar_feed_item(row: sqlite3.Row, decision: dict[str, Any] | None, matches: list[dict[str, Any]]) -> dict[str, Any]:
@@ -4019,6 +4525,8 @@ def radar_feed_item(row: sqlite3.Row, decision: dict[str, Any] | None, matches: 
         "priceDrop": drop,
         "decision": decision,
         "matches": matches,
+        "requiresVerification": bool(row["requires_verification"]) if "requires_verification" in row.keys() else False,
+        "verifiedAt": row["verified_at"] if "verified_at" in row.keys() else None,
         "firstSeenAt": row["first_seen_at"],
         "lastSeenAt": row["last_seen_at"],
     }
@@ -4036,7 +4544,8 @@ RADAR_FEED_SELECT = """
 
 def radar_match_reasons(conn: sqlite3.Connection, listing_id: str) -> list[dict[str, Any]]:
     rows = conn.execute(
-        """SELECT m.search_id, m.confidence, m.reasons_json, m.unverified_json, s.name AS search_name
+        """SELECT m.search_id, m.confidence, m.reasons_json, m.unverified_json, s.name AS search_name,
+                  s.entity_type, s.entity_id
              FROM radar_search_matches m
              JOIN radar_searches s ON s.id = m.search_id AND s.deleted_at IS NULL
             WHERE m.listing_id = ? AND m.is_active = 1
@@ -4050,6 +4559,10 @@ def radar_match_reasons(conn: sqlite3.Connection, listing_id: str) -> list[dict[
             "confidence": row["confidence"],
             "reasons": radar_json_field(row["reasons_json"], []),
             "unverified": radar_json_field(row["unverified_json"], []),
+            # Qué escribiría "Registrar compra" si se confirma esta oportunidad.
+            # Vacío cuando la búsqueda no está vinculada a nada del catálogo.
+            "entityType": row["entity_type"] or "",
+            "entityId": row["entity_id"] or "",
         }
         for row in rows
     ]
@@ -4075,15 +4588,19 @@ def list_radar_feed(config: AppConfig, limit: int = RADAR_FEED_LIMIT) -> dict[st
     with _RADAR_LOCK, connect_db(config) as conn:
         decisions = read_radar_decisions(conn)
         rows = conn.execute(f"{RADAR_FEED_SELECT} ORDER BY best_score DESC, l.last_seen_at DESC").fetchall()
+        clusters = group_radar_rows_by_content(rows)
 
         feed: list[dict[str, Any]] = []
         following: list[dict[str, Any]] = []
         dismissed = 0
         sleeping = 0
 
-        for row in rows:
-            listing_id = str(row["id"])
-            decision = decisions.get(listing_id)
+        for cluster in clusters:
+            # Dos `itemId` del mismo artículo son una sola oportunidad: se
+            # eligen la copia más fresca, la decisión que ya se tomó sobre
+            # cualquiera de los dos, y la unión de búsquedas que lo encontraron.
+            row = radar_cluster_representative(cluster)
+            decision = radar_cluster_decision(cluster, decisions)
             drop = radar_price_drop(row)
             item = None
 
@@ -4098,7 +4615,7 @@ def list_radar_feed(config: AppConfig, limit: int = RADAR_FEED_LIMIT) -> dict[st
             if decision and decision["decision"] == "purchased":
                 continue
 
-            item = radar_feed_item(row, decision, radar_match_reasons(conn, listing_id))
+            item = radar_feed_item(row, decision, radar_cluster_matches(conn, cluster))
             if decision and decision["decision"] == "following":
                 following.append(item)
             if len(feed) < capped:
@@ -4806,6 +5323,12 @@ class Handler(BaseHTTPRequestHandler):
             limit = (query.get("limit") or ["100"])[0]
             self.send_json(list_radar_listings(config, int(limit) if limit.isdigit() else 100))
             return
+        if path == "/api/radar/preferences":
+            self.send_json(get_radar_preferences(config))
+            return
+        if path == "/api/radar/budget":
+            self.send_json(compute_radar_budget(config))
+            return
         if path.startswith("/api/radar/searches/"):
             search_id = normalize_radar_id(path.removeprefix("/api/radar/searches/"))
             self.send_json(radar_search_payload(config, search_id))
@@ -4892,6 +5415,31 @@ class Handler(BaseHTTPRequestHandler):
             require_radar_write_request(self)
             payload = read_json_body(self, self.config())
             self.send_json(record_radar_decision(self.config(), payload), HTTPStatus.CREATED)
+            return
+        if path == "/api/radar/preferences":
+            require_radar_write_request(self)
+            payload = read_json_body(self, self.config())
+            self.send_json(update_radar_preferences(self.config(), payload))
+            return
+        if path == "/api/radar/purchases":
+            require_radar_write_request(self)
+            payload = read_json_body(self, self.config())
+            self.send_json(record_radar_purchase(self.config(), payload), HTTPStatus.CREATED)
+            return
+        if path == "/api/radar/lot-valuation":
+            require_radar_write_request(self)
+            payload = read_json_body(self, self.config())
+            self.send_json(compute_radar_lot_valuation(payload))
+            return
+        if path == "/api/radar/manual-listings":
+            require_radar_write_request(self)
+            payload = read_json_body(self, self.config())
+            self.send_json(create_manual_radar_listing(self.config(), payload), HTTPStatus.CREATED)
+            return
+        if path.startswith("/api/radar/listings/") and path.endswith("/verify"):
+            require_radar_write_request(self)
+            listing_id = normalize_radar_id(path.removeprefix("/api/radar/listings/").removesuffix("/verify"))
+            self.send_json(verify_radar_listing(self.config(), listing_id))
             return
         if path == "/api/radar/master/regenerate":
             require_radar_write_request(self)

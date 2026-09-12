@@ -294,6 +294,12 @@ COURIER_RATES: dict[str, dict[str, float]] = {
     "europa": {"general": 21.50, "media": 14.50},
 }
 
+# Impuesto de importación en destino (Uruguay). El owner confirmó que da cero
+# en todos los casos con este courier y estos volúmenes — no hay que estimarlo
+# ni preguntarlo por publicación. Se deja explícito en el desglose en vez de
+# simplemente omitirlo, para que no vuelva a leerse como un dato faltante.
+IMPORT_TAX_USD = 0.0
+
 # Pesos estimados en kg, con embalaje. Son estimaciones declaradas, no datos de
 # la publicación: eBay no informa peso de forma confiable. Se eligen del lado
 # alto, porque un costo subestimado es peor que uno prudente.
@@ -370,7 +376,9 @@ def cost_breakdown(
 
     weight = estimate_weight_kg(entity_type, completeness) if include_import else None
     courier = courier_cost(weight, courier_origin, courier_category) if weight is not None else None
-    imported = round(subtotal + courier, 2) if (subtotal is not None and courier is not None) else None
+    imported = (
+        round(subtotal + courier + IMPORT_TAX_USD, 2) if (subtotal is not None and courier is not None) else None
+    )
 
     return {
         "currency": currency or "USD",
@@ -383,9 +391,102 @@ def cost_breakdown(
         "courier": courier,
         "courierOrigin": courier_origin if courier is not None else "",
         "courierCategory": courier_category if courier is not None else "",
+        # Siempre cero, y siempre presente: ver IMPORT_TAX_USD.
+        "importTax": IMPORT_TAX_USD,
         "importedTotal": imported,
         "importedEstimated": imported is not None,
         "exact": bool(price_amount is not None and known_shipping),
+    }
+
+
+@dataclass
+class LotPiece:
+    """Una pieza declarada dentro de un lote, tal como la describe el usuario.
+
+    El radar no puede leer fotos ni parsear "PS2 + 8 juegos + 2 controles" de
+    un título de eBay con confianza — eso es reconocimiento asistido (PRD P2,
+    todavía no construido). Esta pieza es información que alguien puso a
+    mano: nunca se infiere de texto libre.
+    """
+
+    name: str
+    comparable_value: float | None = None  # valor de mercado de esta pieza sola, en condición comparable
+    condition_factor: float = 1.0  # 0..1: castigo por el estado real de ESTA pieza dentro del lote
+    wanted: bool = True  # ¿el usuario la quiere para su colección?
+    already_owned: bool = False  # ¿ya la tiene?
+    is_duplicate: bool = False  # ¿ya apareció otra igual en el mismo lote?
+
+    @property
+    def useful(self) -> bool:
+        """PRD §10.5: piezas deseadas y no poseídas. Un duplicado no es útil acá
+
+        — puede tener valor de reventa, pero eso es un análisis aparte
+        (PRD P2, "reventa opcional y separado") que este cálculo no mezcla.
+        """
+        return self.wanted and not self.already_owned and not self.is_duplicate
+
+
+def lot_valuation(pieces: list[LotPiece], total_cost: float | None) -> dict[str, Any]:
+    """PRD §10.5, la fórmula tal cual está escrita, sin adornos:
+
+        valor conservador = suma de valores comparables × factor de condición
+        valor útil personal = valor conservador de piezas deseadas/no poseídas
+        costo por pieza útil = costo total / cantidad de piezas útiles
+        descuento del lote = 1 - costo total / valor conservador
+
+    Un lote no es bueno porque su suma teórica sea alta — por eso cada número
+    sale con su propia advertencia en vez de fundirse en un solo score.
+    """
+
+    priced = [p for p in pieces if p.comparable_value is not None]
+    useful = [p for p in pieces if p.useful]
+    useful_priced = [p for p in useful if p.comparable_value is not None]
+
+    conservative_value = (
+        round(sum(p.comparable_value * p.condition_factor for p in priced), 2) if priced else None
+    )
+    useful_value = (
+        round(sum(p.comparable_value * p.condition_factor for p in useful_priced), 2) if useful_priced else None
+    )
+    cost_per_useful_piece = (
+        round(total_cost / len(useful), 2) if (total_cost is not None and useful) else None
+    )
+    discount = (
+        round(1 - total_cost / conservative_value, 4)
+        if (total_cost is not None and conservative_value)
+        else None
+    )
+
+    duplicate_count = sum(1 for p in pieces if p.is_duplicate)
+    unpriced_count = len(pieces) - len(priced)
+
+    caveats: list[str] = []
+    if not pieces:
+        caveats.append("Sin piezas declaradas: no hay nada que valuar todavía.")
+    if duplicate_count:
+        caveats.append(
+            f"{duplicate_count} pieza(s) duplicada(s): no suman valor útil "
+            "para tu colección, aunque puedan revenderse — eso es un análisis aparte."
+        )
+    if unpriced_count:
+        caveats.append(
+            f"{unpriced_count} pieza(s) sin referencia de precio propia: el "
+            "valor conservador las excluye, no asume que valen cero."
+        )
+    if pieces and not useful:
+        caveats.append("Ninguna pieza del lote es útil para vos: ya las tenés todas o no las querés.")
+
+    return {
+        "totalCost": total_cost,
+        "pieceCount": len(pieces),
+        "usefulPieceCount": len(useful),
+        "duplicateCount": duplicate_count,
+        "unpricedCount": unpriced_count,
+        "conservativeValue": conservative_value,
+        "usefulValue": useful_value,
+        "costPerUsefulPiece": cost_per_useful_piece,
+        "discount": discount,
+        "caveats": caveats,
     }
 
 
@@ -503,6 +604,7 @@ def score_listing(
 
 __all__ = [
     "COURIER_RATES",
+    "IMPORT_TAX_USD",
     "DECISION_BANDS",
     "billable_weight_kg",
     "courier_cost",
@@ -515,4 +617,6 @@ __all__ = [
     "pick_benchmark",
     "references_from_console_entry",
     "score_listing",
+    "LotPiece",
+    "lot_valuation",
 ]

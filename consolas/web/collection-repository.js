@@ -319,6 +319,69 @@
     return nextState;
   }
 
+  /**
+   * Escritura granular de UN juego de una consola, sin reconstruir la lista
+   * entera a mano en cada llamador.
+   *
+   * `persistGameEntityState` recibe la lista completa de juegos y recalcula
+   * `gameEditsById`/`manualGamesById` desde cero — es correcto siempre que
+   * `nextGames` sea de verdad la lista completa (catálogo + manuales) de esa
+   * consola. Pasarle un subconjunto (por ejemplo, sólo el juego que se está
+   * editando desde una pantalla cross-console como el Franchise Collection
+   * Tracker) borraría en silencio los patches y manuales de todos los demás
+   * juegos de esa consola. Esta función existe para que ningún llamador tenga
+   * que acordarse de esa trampa: siempre lee la lista compuesta actual,
+   * aplica el patch a un solo id, y recién ahí llama a
+   * `persistGameEntityState` con la lista completa.
+   *
+   * Si `gameId` no está ni en `baseGames` ni en las ediciones/manuales ya
+   * persistidas, se agrega como entrada manual nueva (mismo camino que un
+   * alta manual real) en vez de fallar.
+   */
+  function persistGamePatch(consoleId, gameId, patch = {}, baseGames = []) {
+    if (!consoleId || !gameId) return null;
+    const entityState = getConsoleEntityState(consoleId);
+    const currentGames = composeGamesFromEntity(baseGames, entityState);
+    const index = currentGames.findIndex((game) => String(game?.id) === String(gameId));
+    const nextGames =
+      index === -1
+        ? [...currentGames, { ...patch, id: gameId, sourceType: patch.sourceType || "manual" }]
+        : currentGames.map((game, position) => (position === index ? { ...game, ...patch } : game));
+    return persistGameEntityState(consoleId, nextGames, baseGames);
+  }
+
+  /**
+   * Bucket auxiliar keyed por string, para estado del usuario que no es ni
+   * una consola, ni un juego, ni un accesorio de catálogo — hoy sólo el
+   * Franchise Collection Tracker (qué edición especial o pieza de hardware
+   * ya tenés). Sigue siendo `DataStore.detailEditsById`, la misma fuente
+   * única de siempre: `detailEditsById` ya es un mapa por string, y nada en
+   * `DataStore` exige que esa clave sea un id de consola real. No es un
+   * store paralelo — es la clave que hacía falta para algo que no es un
+   * juego, marcada así a propósito para que nunca se confunda con una
+   * consola real ni contamine `console-games.html`.
+   */
+  function franchiseTrackingBucketKey(franchiseId) {
+    return `franchise-tracking:${franchiseId}`;
+  }
+
+  function getFranchiseTrackedItems(franchiseId) {
+    if (!franchiseId) return {};
+    const bucket = getConsoleEditBucket(franchiseTrackingBucketKey(franchiseId));
+    return normalizeRecordMap(bucket.trackedItemsById);
+  }
+
+  function persistFranchiseTrackedItem(franchiseId, itemId, patch = {}) {
+    if (!franchiseId || !itemId) return null;
+    const current = getFranchiseTrackedItems(franchiseId);
+    const next = {
+      ...current,
+      [itemId]: { ...(current[itemId] || {}), ...patch }
+    };
+    replaceConsoleEntitySlice(franchiseTrackingBucketKey(franchiseId), { trackedItemsById: next });
+    return next;
+  }
+
   function composeAccessoriesFromEntity(baseAccessories = [], entityState = {}) {
     const patches = entityState.accessoryEditsById || {};
     const manuals = entityState.manualAccessoriesById || {};
@@ -508,6 +571,9 @@
     hasGameEntityState,
     persistAccessoryEntityState,
     persistGameEntityState,
+    persistGamePatch,
+    getFranchiseTrackedItems,
+    persistFranchiseTrackedItem,
     composeAccessoriesFromEntity,
     composeGamesFromEntity,
     mergeEntityState,

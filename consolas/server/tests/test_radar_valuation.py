@@ -6,10 +6,12 @@ from datetime import date
 import server.app  # noqa: F401  (deja `radar.*` importable)
 from radar.valuation import (
     COURIER_RATES,
+    LotPiece,
     PriceReference,
     billable_weight_kg,
     courier_cost,
     estimate_weight_kg,
+    lot_valuation,
     peer_listing_benchmark,
     cost_breakdown,
     decision_band,
@@ -372,6 +374,13 @@ class ImportedCostTests(unittest.TestCase):
         self.assertIsNone(cost["importedTotal"])
         self.assertFalse(cost["importedEstimated"])
 
+    def test_import_tax_is_explicit_and_zero(self) -> None:
+        # Confirmado por el owner: con este courier y estos volúmenes siempre
+        # da cero. Se declara en el desglose en vez de omitirse en silencio.
+        cost = cost_breakdown(150.0, 12.0, entity_type="console", completeness="loose")
+        self.assertEqual(cost["importTax"], 0.0)
+        self.assertEqual(cost["importedTotal"], round(162.0 + 3.0 * 17.50 + 0.0, 2))
+
     def test_the_imported_total_never_passes_as_exact(self) -> None:
         cost = cost_breakdown(100.0, 10.0, entity_type="game", completeness="cib")
         self.assertTrue(cost["exact"], "artículo y envío sí son exactos")
@@ -432,6 +441,77 @@ class PeerListingBenchmarkTests(unittest.TestCase):
     def test_zero_and_negative_prices_are_ignored(self) -> None:
         ref = peer_listing_benchmark([0, -5, 10.0, 12.0, 14.0, 16.0])
         self.assertEqual(ref.value, 13.0)
+
+
+class LotValuationTests(unittest.TestCase):
+    """PRD §10.5, la fórmula tal cual: valor conservador, valor útil, costo por
+    pieza útil y descuento — nunca un score opaco."""
+
+    def test_the_formula_matches_the_prd_exactly(self) -> None:
+        pieces = [
+            LotPiece("PS2 Slim", comparable_value=60.0, condition_factor=1.0),
+            LotPiece("God of War", comparable_value=20.0, condition_factor=1.0),
+            LotPiece("Sports game nadie quiere", comparable_value=5.0, condition_factor=1.0, wanted=False),
+        ]
+        result = lot_valuation(pieces, total_cost=50.0)
+
+        self.assertEqual(result["conservativeValue"], 85.0)  # 60+20+5
+        self.assertEqual(result["usefulValue"], 80.0)  # 60+20, el que no se quiere queda afuera
+        self.assertEqual(result["usefulPieceCount"], 2)
+        self.assertEqual(result["costPerUsefulPiece"], 25.0)  # 50 / 2
+        self.assertAlmostEqual(result["discount"], round(1 - 50.0 / 85.0, 4))
+
+    def test_a_piece_already_owned_is_not_useful_even_if_wanted(self) -> None:
+        pieces = [LotPiece("Duplicado que ya tengo", comparable_value=30.0, already_owned=True)]
+        result = lot_valuation(pieces, total_cost=25.0)
+
+        self.assertEqual(result["usefulPieceCount"], 0)
+        self.assertIsNone(result["usefulValue"])
+        self.assertIsNone(result["costPerUsefulPiece"], "no hay pieza útil que repartirlo")
+        self.assertTrue(any("ya las tenés todas" in c for c in result["caveats"]))
+
+    def test_condition_factor_discounts_a_rough_piece(self) -> None:
+        pieces = [LotPiece("Caja rota", comparable_value=40.0, condition_factor=0.5)]
+        result = lot_valuation(pieces, total_cost=15.0)
+
+        self.assertEqual(result["conservativeValue"], 20.0)  # 40 * 0.5
+
+    def test_duplicates_are_flagged_and_excluded_from_useful_value(self) -> None:
+        pieces = [
+            LotPiece("Aladdin #1", comparable_value=15.0),
+            LotPiece("Aladdin #2 (duplicado)", comparable_value=15.0, is_duplicate=True),
+        ]
+        result = lot_valuation(pieces, total_cost=20.0)
+
+        self.assertEqual(result["duplicateCount"], 1)
+        self.assertEqual(result["usefulPieceCount"], 1)
+        self.assertTrue(any("duplicada" in c for c in result["caveats"]))
+
+    def test_a_piece_with_no_price_reference_is_excluded_not_zeroed(self) -> None:
+        pieces = [
+            LotPiece("Con referencia", comparable_value=10.0),
+            LotPiece("Sin referencia todavía", comparable_value=None),
+        ]
+        result = lot_valuation(pieces, total_cost=12.0)
+
+        self.assertEqual(result["conservativeValue"], 10.0, "la pieza sin precio no cuenta como cero")
+        self.assertEqual(result["unpricedCount"], 1)
+        self.assertTrue(any("sin referencia" in c for c in result["caveats"]))
+
+    def test_no_pieces_declared_says_so_instead_of_computing_nothing_as_zero(self) -> None:
+        result = lot_valuation([], total_cost=50.0)
+
+        self.assertIsNone(result["conservativeValue"])
+        self.assertIsNone(result["discount"])
+        self.assertTrue(any("Sin piezas" in c for c in result["caveats"]))
+
+    def test_without_a_total_cost_there_is_no_discount_or_cost_per_piece(self) -> None:
+        pieces = [LotPiece("PS2", comparable_value=60.0)]
+        result = lot_valuation(pieces, total_cost=None)
+
+        self.assertIsNone(result["discount"])
+        self.assertIsNone(result["costPerUsefulPiece"])
+        self.assertEqual(result["conservativeValue"], 60.0, "el valor de las piezas no depende del costo")
 
 
 if __name__ == "__main__":
