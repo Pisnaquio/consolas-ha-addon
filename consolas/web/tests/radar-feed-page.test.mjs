@@ -4,6 +4,7 @@ import test from "node:test";
 import vm from "node:vm";
 
 const repositorySource = await readFile(new URL("../radar-repository.js", import.meta.url), "utf8");
+const purchaseSource = await readFile(new URL("../radar-purchase.js", import.meta.url), "utf8");
 const pageSource = await readFile(new URL("../radar-feed.js", import.meta.url), "utf8");
 
 function item(overrides = {}) {
@@ -58,14 +59,24 @@ function defaultBudget(overrides = {}) {
 
 async function renderFeed({
   items = [], following = [], counts = {}, environment = "production", fail = false,
-  budget = defaultBudget(), radarPurchase = null,
+  budget = defaultBudget(), radarPurchase = null, openPurchaseFor = "",
 } = {}) {
   let html = "";
   const requests = [];
+  // Abrir el formulario de compra es un click real sobre `[data-purchase]`:
+  // se le devuelve al binding un botón mínimo y se dispara su handler, en vez
+  // de manipular el estado interno de la página desde afuera.
+  const purchaseClicks = [];
   const root = {
     set innerHTML(value) { html = String(value); },
     get innerHTML() { return html; },
-    querySelectorAll() { return []; },
+    querySelectorAll(selector) {
+      if (!openPurchaseFor || selector !== "[data-purchase]") return [];
+      return [{
+        dataset: { purchase: openPurchaseFor },
+        addEventListener: (_event, handler) => purchaseClicks.push(handler),
+      }];
+    },
     querySelector() { return null; },
   };
   const feedPayload = {
@@ -84,12 +95,10 @@ async function renderFeed({
     }
     return { ok: true, status: 200, async json() { return feedPayload; } };
   };
-  const windowStub = {
-    RadarPurchase: radarPurchase || {
-      canWriteCollection: (entityType) => entityType === "console",
-      registerPurchase: async () => ({ ok: true, collectionWritten: true }),
-    },
-  };
+  // Se carga el módulo real de compra, no un stub: qué entidad se puede
+  // escribir es justamente lo que decide si la card ofrece el botón, y un
+  // stub con la firma vieja haría pasar el test con la UI rota.
+  const windowStub = {};
   const context = vm.createContext({
     window: windowStub,
     document: { getElementById: (id) => (id === "radarFeedRoot" ? root : null) },
@@ -99,9 +108,12 @@ async function renderFeed({
     console: { error() {}, info() {} },
   });
   vm.runInContext(repositorySource, context, { filename: "radar-repository.js" });
+  vm.runInContext(purchaseSource, context, { filename: "radar-purchase.js" });
+  if (radarPurchase) Object.assign(windowStub.RadarPurchase, radarPurchase);
   vm.runInContext(pageSource, context, { filename: "radar-feed.js" });
   await new Promise((resolve) => setImmediate(resolve));
   await new Promise((resolve) => setImmediate(resolve));
+  if (openPurchaseFor) purchaseClicks[0]?.();
   return { html, requests, repository: windowStub.RadarRepository };
 }
 
@@ -285,10 +297,35 @@ test("registrar compra only appears when the match names a console it can write"
   assert.doesNotMatch(withoutEntity.html, /Registrar compra/);
 });
 
-test("a game or accessory match does not offer registrar compra yet", async () => {
+test("a game match whose search has no console behind it does not offer registrar compra", async () => {
   const { html } = await renderFeed({
     items: [item({ matches: [{ searchId: "radar-1", searchName: "Aladdin", confidence: 0.9, reasons: [], unverified: [], entityType: "game", entityId: "aladdin" }] })],
-    radarPurchase: { canWriteCollection: (entityType) => entityType === "console", registerPurchase: async () => ({}) },
+  });
+
+  assert.doesNotMatch(html, /Registrar compra/, "sin consola no se sabe a qué biblioteca escribir");
+});
+
+test("a game match with its console offers registrar compra and says which library it writes", async () => {
+  const { html } = await renderFeed({
+    items: [item({ matches: [{ searchId: "radar-1", searchName: "God of War", confidence: 0.9, reasons: [], unverified: [], entityType: "game", entityId: "god-of-war", entityConsoleId: "ps2" }] })],
+  });
+
+  assert.match(html, /data-purchase="ebay-us-1">Registrar compra/);
+});
+
+test("the purchase form for a game names the console it will write to", async () => {
+  const { html } = await renderFeed({
+    items: [item({ matches: [{ searchId: "radar-1", searchName: "God of War", confidence: 0.9, reasons: [], unverified: [], entityType: "game", entityId: "god-of-war", entityConsoleId: "ps2" }] })],
+    openPurchaseFor: "ebay-us-1",
+  });
+
+  assert.match(html, /data-entity-console-id="ps2"/);
+  assert.match(html, /god-of-war en la biblioteca de ps2/);
+});
+
+test("an accessory match does not offer registrar compra, console or not", async () => {
+  const { html } = await renderFeed({
+    items: [item({ matches: [{ searchId: "radar-1", searchName: "DualShock", confidence: 0.9, reasons: [], unverified: [], entityType: "accessory", entityId: "dualshock", entityConsoleId: "ps2" }] })],
   });
 
   assert.doesNotMatch(html, /Registrar compra/);

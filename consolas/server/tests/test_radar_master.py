@@ -96,6 +96,23 @@ class ProposalTests(unittest.TestCase):
         lots = [p for p in propose_master_searches(payload, CONSOLES) if p["searchType"] == "lot"]
         self.assertEqual([lot["entityId"] for lot in lots], ["ps1"])
 
+    def test_a_game_proposal_keeps_the_console_the_game_belongs_to(self) -> None:
+        # Es el dato que después deja registrar la compra en la biblioteca
+        # correcta: el id del juego solo no alcanza para saber la plataforma.
+        payload = state(
+            detailEditsById={"snes": {"gameEditsById": {"g1": {"nombre": "Chrono Trigger", "loQuiero": True}}}},
+        )
+        games = [p for p in propose_master_searches(payload, CONSOLES) if p["entityType"] == "game"]
+        self.assertTrue(games)
+        self.assertEqual(games[0]["entityConsoleId"], "snes")
+
+    def test_a_console_proposal_carries_no_console_id_of_its_own(self) -> None:
+        payload = state(overridesById={"ps1": {"tengo": True}})
+        for proposal in propose_master_searches(payload, CONSOLES):
+            if proposal["entityType"] == "console":
+                with self.subTest(proposal=proposal["key"]):
+                    self.assertEqual(proposal["entityConsoleId"], "")
+
     def test_every_proposal_explains_why_it_exists(self) -> None:
         payload = state(overridesById={"ps1": {"tengo": True}})
         for proposal in propose_master_searches(payload, CONSOLES):

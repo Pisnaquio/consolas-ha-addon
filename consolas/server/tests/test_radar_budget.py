@@ -185,6 +185,46 @@ class RecordPurchaseTests(RadarBudgetTestCase):
         self.assertEqual(result["purchase"]["entityType"], "console")
         self.assertEqual(result["purchase"]["entityId"], "ps2")
 
+    def test_a_game_purchase_records_which_console_it_belongs_to(self) -> None:
+        # El mismo juego existe en varias plataformas: sin la consola, el
+        # historial no diría cuál se compró y nadie podría aplicarlo después.
+        [listing_id] = self.seed([ebay_summary(price="20.00")])
+
+        result = record_radar_purchase(
+            self.config,
+            {
+                "listingId": listing_id, "entityType": "game", "entityId": "god-of-war",
+                "entityConsoleId": "ps2", "priceAmount": 18.0,
+            },
+        )
+
+        self.assertEqual(result["purchase"]["entityType"], "game")
+        self.assertEqual(result["purchase"]["entityId"], "god-of-war")
+        self.assertEqual(result["purchase"]["entityConsoleId"], "ps2")
+
+    def test_a_game_purchase_without_its_console_is_rejected(self) -> None:
+        [listing_id] = self.seed([ebay_summary()])
+        with self.assertRaises(ApiError) as raised:
+            record_radar_purchase(
+                self.config,
+                {"listingId": listing_id, "entityType": "game", "entityId": "god-of-war", "priceAmount": 18.0},
+            )
+        self.assertEqual(raised.exception.status, 400)
+
+    def test_a_console_purchase_rejects_a_console_id_it_does_not_need(self) -> None:
+        # Una consola ya es la entidad. Aceptar el campo igual dejaría dos
+        # fuentes para el mismo dato, y nada garantiza que coincidan.
+        [listing_id] = self.seed([ebay_summary()])
+        with self.assertRaises(ApiError) as raised:
+            record_radar_purchase(
+                self.config,
+                {
+                    "listingId": listing_id, "entityType": "console", "entityId": "ps2",
+                    "entityConsoleId": "ps3", "priceAmount": 55.0,
+                },
+            )
+        self.assertEqual(raised.exception.status, 400)
+
     def test_an_unknown_listing_is_rejected(self) -> None:
         with self.assertRaises(ApiError) as raised:
             record_radar_purchase(

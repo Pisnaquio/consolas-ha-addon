@@ -771,3 +771,58 @@ test("with no query string at all, the create form stays closed as always", asyn
   const { html } = await renderPage({ items: [] });
   assert.doesNotMatch(html, /chasing-add is-open/);
 });
+
+test("a result can be discarded right where it appears, with a reason", async () => {
+  const { html } = await renderPage({
+    items: [
+      search({
+        results: [
+          {
+            id: "ebay-us-9",
+            sourceId: "ebay-us",
+            title: "God of War PS2 EMPTY CASE ONLY no disc",
+            priceLabel: "USD 9.99",
+            conditionLabel: "Pre-owned",
+            shippingLabel: "",
+            locationLabel: "US",
+            listingType: "Compra directa",
+            listingUrl: "https://www.ebay.com/itm/9",
+            imageUrl: "",
+            lastSeenAt: "2026-09-11T10:00:00Z",
+          },
+        ],
+        resultCount: 1,
+      }),
+    ],
+  });
+
+  assert.match(html, /data-dismiss="ebay-us-9">Descartar/);
+  assert.doesNotMatch(html, /radar-dismiss-form/, "el motivo se pide recién al tocar Descartar");
+});
+
+test("discarding goes through the decisions endpoint, never the collection state", async () => {
+  const { repository, requests } = await renderPage({ items: [search()] });
+  requests.length = 0;
+
+  await repository.decide("ebay-us-9", {
+    decision: "dismissed",
+    reason: "no-es-lo-que-busco",
+    note: "caja suelta",
+  });
+
+  assert.equal(requests[0].options.method, "POST");
+  assert.equal(requests[0].options.headers["X-Consolas-Radar"], "1");
+  assert.match(requests[0].url, /\/radar\/decisions$/);
+  assert.match(requests[0].options.body, /"listingId":"ebay-us-9"/);
+  assert.match(requests[0].options.body, /"decision":"dismissed"/);
+  assert.match(requests[0].options.body, /"reason":"no-es-lo-que-busco"/);
+  assert.doesNotMatch(requests[0].url, /\/api\/state/);
+});
+
+test("both places that discard offer the same reasons, from one shared list", async () => {
+  const { repository } = await renderPage({ items: [search()] });
+
+  const ids = repository.DISMISS_REASONS.map((reason) => reason.id);
+  assert.ok(ids.includes("no-es-lo-que-busco"), "el caso de la caja suelta tiene su motivo");
+  assert.ok(ids.includes("ya-lo-tengo"));
+});

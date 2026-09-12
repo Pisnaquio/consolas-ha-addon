@@ -52,6 +52,11 @@ class MasterProposal:
     entity_id: str
     rationale: str
     criteria: dict[str, Any] = field(default_factory=dict)
+    # Sólo para juegos y accesorios: a qué consola pertenece el `entity_id`.
+    # Un juego no se identifica sólo por su id — el mismo nombre existe en
+    # varias plataformas — así que sin este dato "Registrar compra" no sabría
+    # a qué biblioteca escribir. Vacío para una consola, que ya es la entidad.
+    entity_console_id: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -62,6 +67,7 @@ class MasterProposal:
             "platform": self.platform,
             "entityType": self.entity_type,
             "entityId": self.entity_id,
+            "entityConsoleId": self.entity_console_id,
             "rationale": self.rationale,
             "criteria": dict(self.criteria),
         }
@@ -196,6 +202,7 @@ def game_proposal(game: dict[str, Any]) -> MasterProposal:
         platform="",
         entity_type="game",
         entity_id=game["gameId"],
+        entity_console_id=game["consoleId"],
         rationale=(
             "Lo marcaste como que lo querés."
             if game["explicit"]

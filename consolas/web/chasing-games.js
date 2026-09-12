@@ -31,6 +31,7 @@
   let prefillName = "";
   let prefillPlatform = "";
   let manualEntryId = "";
+  let dismissId = "";
   let lotCalcId = "";
   let lotCalcPieceCount = 3;
   let lotCalcResult = null;
@@ -342,8 +343,32 @@
             : ""
         }
         <button class="btn-link" type="button" data-lot-calc="${escapeHtml(result.id)}">Valorar como lote</button>
+        <button class="btn-link chase-delete" type="button" data-dismiss="${escapeHtml(result.id)}">Descartar</button>
       </div>
-    </article>${lotCalculator(result)}`;
+    </article>${dismissForm(result)}${lotCalculator(result)}`;
+  }
+
+  /**
+   * Descartar es para lo que no era: una caja suelta, una región equivocada,
+   * algo que ya tenés. La decisión se guarda contra la publicación, no contra
+   * el match, así que no vuelve a aparecer aunque la búsqueda se ejecute de
+   * nuevo. El motivo no es burocracia: es lo que después dice si conviene
+   * ajustar los términos excluidos de esa búsqueda.
+   */
+  function dismissForm(result) {
+    if (dismissId !== result.id) return "";
+    const id = escapeHtml(result.id);
+    return `<form class="radar-dismiss-form" id="radarDismiss-${id}">
+      <label for="dismissReason-${id}">Motivo</label>
+      <select id="dismissReason-${id}" name="reason">
+        ${repository.DISMISS_REASONS.map(
+          (reason) => `<option value="${escapeHtml(reason.id)}">${escapeHtml(reason.label)}</option>`
+        ).join("")}
+      </select>
+      <input name="note" maxlength="400" placeholder="Nota opcional" />
+      <button class="btn-link btn-primary" type="submit"${busy ? " disabled" : ""}>Descartar</button>
+      <button class="btn-link" type="button" data-cancel-dismiss="1">Cancelar</button>
+    </form>`;
   }
 
   /**
@@ -741,12 +766,49 @@
       )
     );
 
+    each("[data-dismiss]", (button) =>
+      button.addEventListener("click", () => {
+        dismissId = dismissId === button.dataset.dismiss ? "" : button.dataset.dismiss;
+        lotCalcId = "";
+        render();
+      })
+    );
+
+    each("[data-cancel-dismiss]", (button) =>
+      button.addEventListener("click", () => {
+        dismissId = "";
+        render();
+      })
+    );
+
+    if (dismissId) {
+      const targetId = dismissId;
+      document.getElementById(`radarDismiss-${targetId}`)?.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const data = new FormData(event.currentTarget);
+        await perform(
+          "Descartando…",
+          () =>
+            repository.decide(targetId, {
+              decision: "dismissed",
+              reason: String(data.get("reason") || ""),
+              note: String(data.get("note") || "")
+            }),
+          "Descartada. No vuelve a aparecer en esta búsqueda.",
+          () => {
+            dismissId = "";
+          }
+        );
+      });
+    }
+
     each("[data-lot-calc]", (button) =>
       button.addEventListener("click", () => {
         const opening = lotCalcId !== button.dataset.lotCalc;
         lotCalcId = opening ? button.dataset.lotCalc : "";
         lotCalcPieceCount = 3;
         lotCalcResult = null;
+        dismissId = "";
         render();
       })
     );

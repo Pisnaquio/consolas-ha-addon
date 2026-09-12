@@ -58,6 +58,22 @@
     required: "obligatorio"
   };
 
+  /**
+   * Por qué se descarta algo. Vive acá y no en una página porque se descarta
+   * desde dos lugares — el feed "Para mí" y los resultados de una búsqueda — y
+   * el motivo tiene que significar lo mismo en los dos: es lo que después
+   * explica por qué esa publicación no vuelve a aparecer.
+   */
+  const DISMISS_REASONS = [
+    { id: "caro", label: "Está caro" },
+    { id: "condicion", label: "Por su condición" },
+    { id: "region", label: "Región equivocada" },
+    { id: "ya-lo-tengo", label: "Ya lo tengo" },
+    { id: "no-es-lo-que-busco", label: "No es lo que busco" },
+    { id: "dudoso", label: "Me genera dudas" },
+    { id: "no-me-interesa", label: "No me interesa" }
+  ];
+
   let model = null;
   let listings = null;
   let runs = null;
@@ -400,6 +416,7 @@
     CONDITION_LABELS,
     COMPLETENESS_LABELS,
     REQUIREMENT_LABELS,
+    DISMISS_REASONS,
     load,
     getModel,
     isAvailable,

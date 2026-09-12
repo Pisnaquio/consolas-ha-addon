@@ -7,20 +7,37 @@
    * Dos pasos, deliberadamente separados:
    *  1. El servidor deja evidencia (`RadarRepository.recordPurchase`): cuenta
    *     para el presupuesto y queda en el historial aunque el paso 2 falle.
-   *  2. Acá, si la entidad es una consola, se escribe la colección real.
+   *  2. Acá se escribe la colección real, si la entidad alcanza para saber
+   *     exactamente qué escribir.
    *
-   * v1 alcanza consolas. Un juego o accesorio no tiene todavía una identidad
-   * compuesta {consoleId, gameId} establecida en el resto de la app (ver
-   * docs/BACKLOG.md, Franchise Collection Tracker) — inventar un esquema acá
-   * se pisaría con ese trabajo. El servidor ya acepta esos entityType para
-   * el presupuesto y el historial; falta sólo la escritura de colección,
-   * a propósito.
+   * Una consola es su propia entidad. Un juego, no: el mismo id existe en
+   * varias plataformas, así que su identidad real es el par
+   * {consoleId, gameId} — el mismo `catalogRef` que usa el Franchise Tracker.
+   * Sin la consola no se escribe nada: no se adivina la plataforma.
+   *
+   * Los accesorios todavía no: `persistAccessoryEntityState` existe, pero un
+   * accesorio del radar no tiene id de catálogo con el que casarlo, y crear
+   * uno manual desde acá inventaría entradas que después nadie reconoce.
    */
 
-  const WRITABLE_ENTITY_TYPES = new Set(["console"]);
+  const GAMES_URL = "./data/console-games.json";
 
-  function canWriteCollection(entityType) {
-    return WRITABLE_ENTITY_TYPES.has(entityType);
+  function repo() {
+    const value = window.CollectionRepository;
+    if (!value) throw new Error("CollectionRepository no está disponible.");
+    return value;
+  }
+
+  /**
+   * Qué puede escribir esta versión. Es la única fuente de verdad: la UI
+   * pregunta acá antes de ofrecer el botón, y `registerPurchase` vuelve a
+   * preguntar antes de escribir.
+   */
+  function canWriteCollection(entity) {
+    const { entityType, entityConsoleId } = entity || {};
+    if (entityType === "console") return true;
+    if (entityType === "game") return Boolean(entityConsoleId);
+    return false;
   }
 
   /** El mismo par que usa cualquier ficha de consola al marcar "Tengo" + precio pagado. */
@@ -33,20 +50,61 @@
     });
   }
 
+  async function fetchBaseGames(consoleId) {
+    const response = await fetch(GAMES_URL, { cache: "no-store" });
+    if (!response.ok) throw new Error("No se pudo cargar el catálogo de juegos.");
+    const payload = await response.json();
+    return payload.byConsole?.[consoleId]?.juegosCatalogo || [];
+  }
+
   /**
-   * @param {{listingId:string, entityType:string, entityId:string, priceAmount:number, currency?:string, purchasedAt?:string}} purchase
+   * Exactamente el mismo patch que escribe la ficha de la consola al elegir
+   * "Físico" en un juego, para que el radar no invente una forma distinta de
+   * decir lo mismo. El precio pagado no va acá: vive en el historial de
+   * compras del servidor, que es lo que alimenta el presupuesto. Ninguna
+   * pantalla de juegos lo lee todavía, y escribirlo sería un campo muerto.
+   */
+  async function writeGameOwnership({ entityId, entityConsoleId, entityName }) {
+    const baseGames = await fetchBaseGames(entityConsoleId);
+    const patch = { ownershipType: "physical", loTengo: true, keepInWishlist: false };
+
+    // Normalmente el juego ya existe: el Master arma estas búsquedas a partir
+    // de tu propia wishlist. Si no está, `persistGamePatch` lo crea como
+    // manual — y sin nombre quedaría una entrada anónima en la biblioteca.
+    // El nombre sólo se manda al crear: pisarlo en un juego que ya existe
+    // reemplazaría el nombre real del catálogo por el de la búsqueda.
+    const existing = repo().getGamesForConsole({ [entityConsoleId]: baseGames }, entityConsoleId);
+    const found = existing.some((game) => String(game?.id) === String(entityId));
+    if (!found && entityName) patch.nombre = entityName;
+
+    repo().persistGamePatch(entityConsoleId, entityId, patch, baseGames);
+  }
+
+  /**
+   * @param {{listingId:string, entityType:string, entityId:string, entityConsoleId?:string, priceAmount:number, currency?:string, purchasedAt?:string}} purchase
    * @returns {Promise<{ok:true, purchase:object, decision:object, collectionWritten:boolean}>}
    */
   async function registerPurchase(purchase) {
-    const repo = window.RadarRepository;
-    if (!repo) throw new Error("RadarRepository no está disponible.");
-    const { listingId, entityType, entityId, priceAmount, currency, purchasedAt } = purchase || {};
+    const repository = window.RadarRepository;
+    if (!repository) throw new Error("RadarRepository no está disponible.");
+    const {
+      listingId, entityType, entityId, entityConsoleId, entityName, priceAmount, currency, purchasedAt
+    } = purchase || {};
 
-    const result = await repo.recordPurchase({ listingId, entityType, entityId, priceAmount, currency, purchasedAt });
+    const result = await repository.recordPurchase({
+      listingId,
+      entityType,
+      entityId,
+      entityConsoleId,
+      priceAmount,
+      currency,
+      purchasedAt
+    });
 
     let collectionWritten = false;
-    if (canWriteCollection(entityType) && entityId) {
-      writeConsoleOwnership({ entityId, priceAmount, currency });
+    if (entityId && canWriteCollection({ entityType, entityConsoleId })) {
+      if (entityType === "console") writeConsoleOwnership({ entityId, priceAmount, currency });
+      else await writeGameOwnership({ entityId, entityConsoleId, entityName });
       collectionWritten = true;
     }
 

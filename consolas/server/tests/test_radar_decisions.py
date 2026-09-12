@@ -282,3 +282,42 @@ class FeedTests(DecisionTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DismissedResultsLeaveTheSearchTests(DecisionTestCase):
+    """Descartar tiene que valer también donde la publicación aparece primero.
+
+    El feed "Para mí" ya sacaba lo descartado; los resultados de la búsqueda
+    no, así que una caja suelta volvía en cada corrida por más que el owner ya
+    la hubiera descartado.
+    """
+
+    def search_result_ids(self) -> list[str]:
+        from server.app import radar_search_payload
+
+        payload = radar_search_payload(self.config, self.search["id"])
+        return [result["id"] for result in payload["search"]["results"]]
+
+    def test_a_dismissed_listing_stops_showing_up_in_its_search(self) -> None:
+        [listing_id] = self.seed([ebay_summary()])
+        self.assertIn(listing_id, self.search_result_ids())
+
+        record_radar_decision(
+            self.config,
+            {"listingId": listing_id, "decision": "dismissed", "reason": "no-es-lo-que-busco"},
+        )
+
+        self.assertNotIn(listing_id, self.search_result_ids())
+
+    def test_undoing_the_dismissal_brings_it_back(self) -> None:
+        [listing_id] = self.seed([ebay_summary()])
+        record_radar_decision(self.config, {"listingId": listing_id, "decision": "dismissed"})
+        clear_radar_decision(self.config, listing_id)
+
+        self.assertIn(listing_id, self.search_result_ids())
+
+    def test_a_followed_listing_is_not_swept_away_with_the_dismissed_ones(self) -> None:
+        [listing_id] = self.seed([ebay_summary()])
+        record_radar_decision(self.config, {"listingId": listing_id, "decision": "following"})
+
+        self.assertIn(listing_id, self.search_result_ids())

@@ -57,7 +57,7 @@ from radar.sources import registry as radar_registry  # noqa: E402
 
 
 SERVICE_NAME = "consolas-server"
-SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.34")
+SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.35")
 DEFAULT_DATA_DIR = "/data"
 DEFAULT_STATIC_DIR = "/app/web"
 DATABASE_NAME = "consolas.sqlite"
@@ -634,6 +634,18 @@ def init_db(config: AppConfig) -> None:
             conn.execute("ALTER TABLE radar_searches ADD COLUMN query_custom INTEGER NOT NULL DEFAULT 0")
         if "slots_json" not in radar_search_columns:
             conn.execute("ALTER TABLE radar_searches ADD COLUMN slots_json TEXT NOT NULL DEFAULT ''")
+        # Un juego no se identifica sólo por su id: el mismo nombre existe en
+        # varias plataformas. La identidad real es el par {consoleId, gameId},
+        # igual que `catalogRef` en el Franchise Tracker. El Master ya conocía
+        # la consola al proponer la búsqueda y la tiraba; acá se conserva para
+        # que "Registrar compra" sepa a qué biblioteca escribir.
+        if "entity_console_id" not in radar_search_columns:
+            conn.execute("ALTER TABLE radar_searches ADD COLUMN entity_console_id TEXT NOT NULL DEFAULT ''")
+        purchase_columns = {
+            str(row["name"]) for row in conn.execute("PRAGMA table_info(radar_purchases)").fetchall()
+        }
+        if "entity_console_id" not in purchase_columns:
+            conn.execute("ALTER TABLE radar_purchases ADD COLUMN entity_console_id TEXT NOT NULL DEFAULT ''")
         listing_columns = {
             str(row["name"]) for row in conn.execute("PRAGMA table_info(radar_listings)").fetchall()
         }
@@ -2493,6 +2505,24 @@ def normalize_radar_enum(value: Any, allowed: tuple[str, ...], default: str, fie
     return candidate
 
 
+def normalize_radar_entity_console_id(value: Any, entity_type: str) -> str:
+    """A qué consola pertenece un `entityId` que no es una consola.
+
+    Una consola ya es la entidad, así que no lleva consola aparte: guardarla
+    igual dejaría dos fuentes para el mismo dato. Para un juego o accesorio,
+    en cambio, el id solo es ambiguo — el mismo juego existe en varias
+    plataformas — y sin este dato "Registrar compra" no sabría a qué
+    biblioteca escribir. Se acepta vacío: una búsqueda puede existir sin estar
+    vinculada al catálogo, y en ese caso simplemente no ofrece escribir nada.
+    """
+    console_id = normalize_radar_text(value, "entityConsoleId", 120, required=False)
+    if console_id and entity_type == "console":
+        raise ApiError(
+            HTTPStatus.BAD_REQUEST, "entityConsoleId does not apply when entityType is console"
+        )
+    return console_id
+
+
 def normalize_radar_terms(value: Any, field: str) -> list[str]:
     if value is None:
         return []
@@ -2675,6 +2705,7 @@ def radar_search_row(row: sqlite3.Row, results: list[dict[str, Any]] | None = No
         "platform": row["platform"],
         "entityType": row["entity_type"],
         "entityId": row["entity_id"],
+        "entityConsoleId": (row["entity_console_id"] if "entity_console_id" in row.keys() else ""),
         "searchQuery": row["search_query"],
         "criteria": criteria,
         "sources": sources,
@@ -2754,9 +2785,16 @@ RADAR_MATCH_SELECT = """
 
 
 def radar_search_results(conn: sqlite3.Connection, search_id: str, limit: int) -> list[dict[str, Any]]:
+    # Descartar es definitivo para esta publicación: una caja suelta o algo que
+    # no era lo buscado no tiene que volver a aparecer en cada corrida. El feed
+    # "Para mí" ya se comportaba así; los resultados por búsqueda no, y ahí es
+    # donde aparecen primero. La decisión vive en `radar_decisions`, no en el
+    # match, así que sobrevive a que la búsqueda se vuelva a ejecutar.
     rows = conn.execute(
         f"""{RADAR_MATCH_SELECT}
+            LEFT JOIN radar_decisions d ON d.listing_id = l.id
             WHERE m.search_id = ? AND m.is_active = 1
+              AND COALESCE(d.decision, '') != 'dismissed'
             ORDER BY COALESCE(m.score, -1) DESC, m.confidence DESC, m.last_seen_at DESC LIMIT ?""",
         (search_id, max(1, min(limit, RADAR_MAX_RESULT_LIMIT))),
     ).fetchall()
@@ -2937,6 +2975,7 @@ def create_radar_search(config: AppConfig, payload: Any) -> dict[str, Any]:
     priority = normalize_radar_enum(payload.get("priority"), RADAR_PRIORITIES, "media", "priority")
     entity_type = normalize_radar_enum(payload.get("entityType"), RADAR_ENTITY_TYPES, "", "entityType")
     entity_id = normalize_radar_text(payload.get("entityId"), "entityId", 120, required=False)
+    entity_console_id = normalize_radar_entity_console_id(payload.get("entityConsoleId"), entity_type)
     notes = normalize_radar_text(payload.get("notes"), "notes", 600, required=False)
     criteria = normalize_radar_criteria(payload.get("criteria"))
     sources = normalize_radar_sources(payload.get("sources"))
@@ -2950,12 +2989,12 @@ def create_radar_search(config: AppConfig, payload: Any) -> dict[str, Any]:
         conn.execute(
             """INSERT INTO radar_searches (
                  id, name, search_type, status, origin, priority, platform, entity_type, entity_id,
-                 search_query, query_custom, criteria_json, sources_json, slots_json, notes, created_at,
-                 updated_at, archived_at
-               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                 entity_console_id, search_query, query_custom, criteria_json, sources_json, slots_json,
+                 notes, created_at, updated_at, archived_at
+               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 search_id, name, search_type, status, origin, priority, platform, entity_type, entity_id,
-                search_query, int(custom_query),
+                entity_console_id, search_query, int(custom_query),
                 json.dumps(criteria, ensure_ascii=False, separators=(",", ":")),
                 json.dumps(sources, ensure_ascii=False, separators=(",", ":")),
                 json.dumps(slots, ensure_ascii=False, separators=(",", ":")),
@@ -3001,6 +3040,11 @@ def update_radar_search(config: AppConfig, search_id: Any, payload: Any) -> dict
             if "entityId" in payload
             else str(row["entity_id"])
         )
+        stored_console_id = row["entity_console_id"] if "entity_console_id" in row.keys() else ""
+        entity_console_id = normalize_radar_entity_console_id(
+            payload.get("entityConsoleId") if "entityConsoleId" in payload else stored_console_id,
+            entity_type,
+        )
         notes = (
             normalize_radar_text(payload.get("notes"), "notes", 600, required=False)
             if "notes" in payload
@@ -3034,11 +3078,12 @@ def update_radar_search(config: AppConfig, search_id: Any, payload: Any) -> dict
         conn.execute(
             """UPDATE radar_searches SET
                  name = ?, search_type = ?, priority = ?, platform = ?, entity_type = ?, entity_id = ?,
-                 search_query = ?, query_custom = ?, criteria_json = ?, sources_json = ?, slots_json = ?,
-                 notes = ?, updated_at = ?
+                 entity_console_id = ?, search_query = ?, query_custom = ?, criteria_json = ?,
+                 sources_json = ?, slots_json = ?, notes = ?, updated_at = ?
                WHERE id = ?""",
             (
-                name, search_type, priority, platform, entity_type, entity_id, search_query, int(was_custom),
+                name, search_type, priority, platform, entity_type, entity_id, entity_console_id,
+                search_query, int(was_custom),
                 json.dumps(criteria, ensure_ascii=False, separators=(",", ":")),
                 json.dumps(sources, ensure_ascii=False, separators=(",", ":")),
                 json.dumps(slots, ensure_ascii=False, separators=(",", ":")),
@@ -4027,11 +4072,13 @@ def regenerate_radar_master(config: AppConfig) -> dict[str, Any]:
             conn.execute(
                 """INSERT INTO radar_searches (
                      id, name, search_type, status, origin, priority, platform, entity_type, entity_id,
-                     search_query, criteria_json, sources_json, slots_json, notes, created_at, updated_at
-                   ) VALUES (?, ?, ?, 'draft', 'master', ?, ?, ?, ?, ?, ?, ?, '', ?, ?, ?)""",
+                     entity_console_id, search_query, criteria_json, sources_json, slots_json, notes,
+                     created_at, updated_at
+                   ) VALUES (?, ?, ?, 'draft', 'master', ?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?, ?)""",
                 (
                     search_id, str(proposal["name"]), str(proposal["searchType"]), str(proposal["priority"]),
                     str(proposal["platform"]), str(proposal["entityType"]), str(proposal["entityId"]),
+                    str(proposal.get("entityConsoleId") or ""),
                     build_radar_search_query(str(proposal["name"]), str(proposal["platform"]), criteria),
                     json.dumps(criteria, ensure_ascii=False, separators=(",", ":")),
                     json.dumps([RADAR_DEFAULT_SOURCE], ensure_ascii=False, separators=(",", ":")),
@@ -4443,6 +4490,15 @@ def record_radar_purchase(config: AppConfig, payload: Any) -> dict[str, Any]:
             HTTPStatus.BAD_REQUEST, f"entityType must be one of: {', '.join(RADAR_PURCHASE_ENTITY_TYPES)}"
         )
     entity_id = normalize_radar_text(payload.get("entityId"), "entityId", 120, required=True)
+    entity_console_id = normalize_radar_entity_console_id(payload.get("entityConsoleId"), entity_type)
+    # Un juego o un accesorio siempre pertenecen a una consola. Registrar la
+    # compra sin saber a cuál dejaría una evidencia que nadie puede aplicar
+    # después: el historial diría "compraste God of War" sin decir en qué
+    # plataforma, y el mismo juego existe en varias.
+    if entity_type in {"game", "accessory"} and not entity_console_id:
+        raise ApiError(
+            HTTPStatus.BAD_REQUEST, f"entityConsoleId is required when entityType is {entity_type}"
+        )
     price_amount = normalize_radar_amount(payload.get("priceAmount"), "priceAmount")
     if price_amount is None:
         raise ApiError(HTTPStatus.BAD_REQUEST, "priceAmount is required")
@@ -4468,9 +4524,13 @@ def record_radar_purchase(config: AppConfig, payload: Any) -> dict[str, Any]:
         purchase_id = f"purchase-{uuid.uuid4().hex[:20]}"
         conn.execute(
             """INSERT INTO radar_purchases (
-                 id, listing_id, entity_type, entity_id, price_amount, currency, purchased_at, created_at
-               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (purchase_id, listing_id, entity_type, entity_id, price_amount, currency, purchased_at, now),
+                 id, listing_id, entity_type, entity_id, entity_console_id, price_amount, currency,
+                 purchased_at, created_at
+               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                purchase_id, listing_id, entity_type, entity_id, entity_console_id, price_amount,
+                currency, purchased_at, now,
+            ),
         )
         # Reservado deja de tener sentido una vez comprada: ya no es "plan
         # probable", es gasto real, y contarlo dos veces infla el presupuesto.
@@ -4493,6 +4553,7 @@ def record_radar_purchase(config: AppConfig, payload: Any) -> dict[str, Any]:
             "listingId": listing_id,
             "entityType": entity_type,
             "entityId": entity_id,
+            "entityConsoleId": entity_console_id,
             "priceAmount": price_amount,
             "currency": currency,
             "purchasedAt": purchased_at,
@@ -4545,7 +4606,7 @@ RADAR_FEED_SELECT = """
 def radar_match_reasons(conn: sqlite3.Connection, listing_id: str) -> list[dict[str, Any]]:
     rows = conn.execute(
         """SELECT m.search_id, m.confidence, m.reasons_json, m.unverified_json, s.name AS search_name,
-                  s.entity_type, s.entity_id
+                  s.entity_type, s.entity_id, s.entity_console_id
              FROM radar_search_matches m
              JOIN radar_searches s ON s.id = m.search_id AND s.deleted_at IS NULL
             WHERE m.listing_id = ? AND m.is_active = 1
@@ -4561,8 +4622,11 @@ def radar_match_reasons(conn: sqlite3.Connection, listing_id: str) -> list[dict[
             "unverified": radar_json_field(row["unverified_json"], []),
             # Qué escribiría "Registrar compra" si se confirma esta oportunidad.
             # Vacío cuando la búsqueda no está vinculada a nada del catálogo.
+            # Para un juego hace falta el par completo: sin `entityConsoleId`
+            # no se sabe a qué biblioteca escribirlo, y la UI no lo ofrece.
             "entityType": row["entity_type"] or "",
             "entityId": row["entity_id"] or "",
+            "entityConsoleId": (row["entity_console_id"] or "") if "entity_console_id" in row.keys() else "",
         }
         for row in rows
     ]

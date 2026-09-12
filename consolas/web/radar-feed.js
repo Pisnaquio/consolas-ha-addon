@@ -15,15 +15,7 @@
   const repository = window.RadarRepository;
   const root = document.getElementById("radarFeedRoot");
 
-  const DISMISS_REASONS = [
-    { id: "caro", label: "Está caro" },
-    { id: "condicion", label: "Por su condición" },
-    { id: "region", label: "Región equivocada" },
-    { id: "ya-lo-tengo", label: "Ya lo tengo" },
-    { id: "no-es-lo-que-busco", label: "No es lo que busco" },
-    { id: "dudoso", label: "Me genera dudas" },
-    { id: "no-me-interesa", label: "No me interesa" },
-  ];
+  const DISMISS_REASONS = repository.DISMISS_REASONS;
 
   const SNOOZE_OPTIONS = [
     { days: 7, label: "una semana" },
@@ -134,9 +126,17 @@
   }
 
   /** La búsqueda que matcheó tiene que decir a qué consola escribiría "Registrar compra". */
+  /**
+   * Una publicación puede matchear varias búsquedas. Se ofrece escribir la
+   * primera que alcance para saber exactamente qué escribir — una búsqueda de
+   * juego sin consola vinculada no alcanza, y se saltea en vez de adivinar.
+   */
   function purchasableEntity(item) {
-    const match = (item.matches || []).find((m) => m.entityType && m.entityId);
-    return match && window.RadarPurchase?.canWriteCollection(match.entityType) ? match : null;
+    return (
+      (item.matches || []).find(
+        (match) => match.entityType && match.entityId && window.RadarPurchase?.canWriteCollection(match)
+      ) || null
+    );
   }
 
   function actions(item) {
@@ -175,8 +175,12 @@
     const entity = purchasableEntity(item);
     if (!entity) return "";
     const id = escapeHtml(item.id);
-    return `<form class="purchase-form" data-purchase-form="${id}" data-entity-type="${escapeHtml(entity.entityType)}" data-entity-id="${escapeHtml(entity.entityId)}">
-      <p class="muted">Se va a marcar «Tengo» en ${escapeHtml(entity.entityType === "console" ? "esta consola" : entity.entityId)} con el precio pagado.</p>
+    const target =
+      entity.entityType === "console"
+        ? "esta consola"
+        : `${entity.entityId} en la biblioteca de ${entity.entityConsoleId}`;
+    return `<form class="purchase-form" data-purchase-form="${id}" data-entity-type="${escapeHtml(entity.entityType)}" data-entity-id="${escapeHtml(entity.entityId)}" data-entity-console-id="${escapeHtml(entity.entityConsoleId || "")}" data-entity-name="${escapeHtml(entity.searchName || "")}">
+      <p class="muted">Se va a marcar «Tengo» en ${escapeHtml(target)} con el precio pagado.</p>
       <label class="visually-hidden" for="price-${id}">Precio pagado</label>
       <input id="price-${id}" name="priceAmount" type="number" min="0" step="0.01"
         value="${item.priceAmount != null ? item.priceAmount : ""}" placeholder="Precio pagado" required />
@@ -357,10 +361,21 @@
       const listingId = event.currentTarget.dataset.purchaseForm;
       const entityType = event.currentTarget.dataset.entityType;
       const entityId = event.currentTarget.dataset.entityId;
+      const entityConsoleId = event.currentTarget.dataset.entityConsoleId || "";
+      const entityName = event.currentTarget.dataset.entityName || "";
       const priceAmount = Number(data.get("priceAmount"));
       await perform(
         "Registrando compra…",
-        () => window.RadarPurchase.registerPurchase({ listingId, entityType, entityId, priceAmount, currency: "USD" }),
+        () =>
+          window.RadarPurchase.registerPurchase({
+            listingId,
+            entityType,
+            entityId,
+            entityConsoleId,
+            entityName,
+            priceAmount,
+            currency: "USD"
+          }),
         "Compra registrada. Ya la marcamos como tuya en la colección."
       );
       purchasing = "";
