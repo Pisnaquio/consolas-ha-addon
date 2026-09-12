@@ -692,6 +692,18 @@
   font-size: 0.73rem;
 }
 
+/* Lo pagado es dato propio, no referencia de mercado: se distingue del
+   grid Low/Mid/High en vez de parecer una cuarta cotización. */
+.gba-game-paid {
+  margin: 0;
+  padding: 4px 8px;
+  border-left: 3px solid #4f9d69;
+  background: #f1f9f4;
+  border-radius: 0 8px 8px 0;
+  color: #33613f;
+  font-size: 0.74rem;
+}
+
 .gba-variants {
   display: grid;
   gap: 4px;

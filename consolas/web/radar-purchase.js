@@ -58,15 +58,22 @@
   }
 
   /**
-   * Exactamente el mismo patch que escribe la ficha de la consola al elegir
-   * "Físico" en un juego, para que el radar no invente una forma distinta de
-   * decir lo mismo. El precio pagado no va acá: vive en el historial de
-   * compras del servidor, que es lo que alimenta el presupuesto. Ninguna
-   * pantalla de juegos lo lee todavía, y escribirlo sería un campo muerto.
+   * El mismo patch que escribe la ficha de la consola al elegir "Físico" en un
+   * juego, más lo pagado — que la biblioteca ahora muestra por juego, igual
+   * que la ficha de una consola. El historial de compras del servidor sigue
+   * siendo la fuente del presupuesto; esto es la copia que se ve al lado del
+   * juego.
    */
-  async function writeGameOwnership({ entityId, entityConsoleId, entityName }) {
+  async function writeGameOwnership({ entityId, entityConsoleId, entityName, priceAmount, currency }) {
     const baseGames = await fetchBaseGames(entityConsoleId);
-    const patch = { ownershipType: "physical", loTengo: true, keepInWishlist: false };
+    const patch = {
+      ownershipType: "physical",
+      loTengo: true,
+      keepInWishlist: false,
+      precioPagado: priceAmount,
+      monedaPago: currency || "USD",
+      formaObtencion: "Collection Radar"
+    };
 
     // Normalmente el juego ya existe: el Master arma estas búsquedas a partir
     // de tu propia wishlist. Si no está, `persistGamePatch` lo crea como
@@ -104,7 +111,7 @@
     let collectionWritten = false;
     if (entityId && canWriteCollection({ entityType, entityConsoleId })) {
       if (entityType === "console") writeConsoleOwnership({ entityId, priceAmount, currency });
-      else await writeGameOwnership({ entityId, entityConsoleId, entityName });
+      else await writeGameOwnership({ entityId, entityConsoleId, entityName, priceAmount, currency });
       collectionWritten = true;
     }
 

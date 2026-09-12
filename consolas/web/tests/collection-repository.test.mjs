@@ -194,3 +194,44 @@ test("persistGamePatch never touches accessory edits or other detail-edit fields
   assert.equal(bucket.precioPagado, 450);
   assert.deepEqual(bucket.accessoryEditsById.controller, { tengo: true, cantidad: 2 });
 });
+
+test("what you paid for a game survives being persisted, price currency and all", () => {
+  // Se perdía en silencio: el normalizador de juegos tiene lista blanca de
+  // campos, así que un campo nuevo se descartaba al guardar aunque la UI ya
+  // lo mostrara.
+  const { repository, state } = loadRepository();
+  const baseGames = [{ id: "god-of-war", nombre: "God of War", sourceType: "catalog" }];
+
+  repository.persistGamePatch(
+    "ps2",
+    "god-of-war",
+    { ownershipType: "physical", precioPagado: 34.99, monedaPago: "USD", formaObtencion: "Collection Radar" },
+    baseGames,
+  );
+
+  const stored = state.user.detailEditsById.ps2.gameEditsById["god-of-war"];
+  assert.equal(stored.precioPagado, 34.99);
+  assert.equal(stored.monedaPago, "USD");
+  assert.equal(stored.formaObtencion, "Collection Radar");
+});
+
+test("clearing the paid price stores nothing, never a zero that reads as free", () => {
+  const { repository, state } = loadRepository();
+  const baseGames = [{ id: "god-of-war", nombre: "God of War", sourceType: "catalog" }];
+
+  repository.persistGamePatch("ps2", "god-of-war", { ownershipType: "physical", precioPagado: 20 }, baseGames);
+  repository.persistGamePatch("ps2", "god-of-war", { precioPagado: null }, baseGames);
+
+  const stored = state.user.detailEditsById.ps2.gameEditsById["god-of-war"];
+  assert.equal(stored.precioPagado ?? null, null, "sin dato es null, no 0");
+});
+
+test("a junk paid price is not persisted as a number", () => {
+  const { repository, state } = loadRepository();
+  const baseGames = [{ id: "god-of-war", nombre: "God of War", sourceType: "catalog" }];
+
+  repository.persistGamePatch("ps2", "god-of-war", { ownershipType: "physical", precioPagado: "ni idea" }, baseGames);
+
+  const stored = state.user.detailEditsById.ps2.gameEditsById["god-of-war"];
+  assert.equal(stored.precioPagado ?? null, null);
+});

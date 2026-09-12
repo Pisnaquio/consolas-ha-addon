@@ -1443,6 +1443,9 @@ function renderGbaGamesSection(item) {
         const midValue = priceRange.mid ?? priceGuide.priceCharting ?? null;
         const highValue = priceRange.high ?? priceGuide.cib ?? null;
         const rangeNotes = priceRange.notes || "";
+        // Lo que pagaste es tuyo, no del mercado: se muestra aparte del rango
+        // de referencia y sólo cuando hay un importe real.
+        const paidAmount = Number(game.precioPagado) > 0 ? Number(game.precioPagado) : null;
         const cover =
           game.coverImage ||
           game.coverUrl ||
@@ -1553,6 +1556,9 @@ function renderGbaGamesSection(item) {
                   <article class="gba-price-item mid"><small>Mid</small><strong>${formatPrice(midValue)}</strong></article>
                   <article class="gba-price-item high"><small>High</small><strong>${formatPrice(highValue)}</strong></article>
                 </div>
+                ${paidAmount ? `<p class="gba-game-paid">Pagado: <strong>${formatPrice(paidAmount, game.monedaPago)}</strong>${
+                  game.formaObtencion ? ` · ${escapeHtml(game.formaObtencion)}` : ""
+                }</p>` : ""}
 
                 ${rangeNotes || priceGuide.notes ? `<p class="gba-game-note">${escapeHtml(rangeNotes || priceGuide.notes)}</p>` : ""}
                 ${variantsBlock}
@@ -1570,6 +1576,13 @@ function renderGbaGamesSection(item) {
                       Region
                       <input class="js-game-region" data-index="${originalIdx}" type="text" placeholder="Ej: NTSC, PAL" value="${escapeHtml(
           game.region || ""
+        )}" />
+                    </label>
+                    <label>
+                      Precio pagado
+                      <input class="js-game-precio-pagado" data-index="${originalIdx}" type="number" min="0" step="1"
+                             placeholder="Lo que te salio" value="${escapeHtml(
+          game.precioPagado ?? ""
         )}" />
                     </label>
                     <label>
@@ -2693,6 +2706,21 @@ function bindGbaGameEvents() {
       const idx = Number(input.dataset.index);
       const next = [...(appState.item.juegosCatalogo || [])];
       next[idx] = { ...next[idx], condicion: input.value.trim() };
+      updateGamesCatalog(next);
+    });
+  });
+
+  document.querySelectorAll(".js-game-precio-pagado").forEach((input) => {
+    input.addEventListener("change", () => {
+      const idx = Number(input.dataset.index);
+      const next = [...(appState.item.juegosCatalogo || [])];
+      // Vaciar el campo borra el dato en vez de guardar un cero, que se leería
+      // como "lo conseguiste gratis".
+      const numeric = Number(input.value);
+      next[idx] = {
+        ...next[idx],
+        precioPagado: input.value.trim() && Number.isFinite(numeric) ? numeric : null
+      };
       updateGamesCatalog(next);
     });
   });

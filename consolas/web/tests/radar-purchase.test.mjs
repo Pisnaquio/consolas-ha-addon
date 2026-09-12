@@ -89,7 +89,7 @@ test("a game purchase writes the real game in its own console's library, by comp
 
   const result = await RadarPurchase.registerPurchase({
     listingId: "ebay-us-1", entityType: "game", entityId: "god-of-war", entityConsoleId: "ps2",
-    priceAmount: 15,
+    priceAmount: 15, currency: "USD",
   });
 
   assert.equal(result.collectionWritten, true);
@@ -98,9 +98,24 @@ test("a game purchase writes the real game in its own console's library, by comp
   assert.equal(gamePatchCalls[0].gameId, "god-of-war");
   assert.equal(
     JSON.stringify(gamePatchCalls[0].patch),
-    JSON.stringify({ ownershipType: "physical", loTengo: true, keepInWishlist: false }),
+    JSON.stringify({
+      ownershipType: "physical", loTengo: true, keepInWishlist: false,
+      precioPagado: 15, monedaPago: "USD", formaObtencion: "Collection Radar",
+    }),
   );
   assert.equal(overrideCalls.length, 0, "comprar un juego no marca la consola como tuya");
+});
+
+test("a game bought in another currency keeps the currency it was paid in", async () => {
+  const { RadarPurchase, gamePatchCalls } = load();
+
+  await RadarPurchase.registerPurchase({
+    listingId: "ebay-us-1", entityType: "game", entityId: "god-of-war", entityConsoleId: "ps2",
+    priceAmount: 900, currency: "UYU",
+  });
+
+  assert.equal(gamePatchCalls[0].patch.precioPagado, 900);
+  assert.equal(gamePatchCalls[0].patch.monedaPago, "UYU");
 });
 
 test("the game write carries the console's real catalog as base, never an empty list", async () => {

@@ -122,6 +122,17 @@
     return Object.keys(entityState.gameEditsById || {}).length > 0 || Object.keys(entityState.manualGamesById || {}).length > 0;
   }
 
+  /**
+   * Lo pagado por un juego. `null` cuando no hay dato — distinto de 0, que
+   * significaría que lo conseguiste gratis. Un texto vacío o basura no se
+   * guarda como 0 por descuido.
+   */
+  function normalizePaidAmount(value) {
+    if (value === null || value === undefined || value === "") return null;
+    const numeric = Number(value);
+    return Number.isFinite(numeric) && numeric > 0 ? numeric : null;
+  }
+
   function cleanUndefinedFields(record = {}) {
     return Object.fromEntries(Object.entries(record).filter(([, value]) => value !== undefined));
   }
@@ -201,6 +212,9 @@
       discoCartucho: item.discoCartucho || "",
       caja: item.caja || "",
       manualInsertos: item.manualInsertos || "",
+      precioPagado: normalizePaidAmount(item.precioPagado),
+      monedaPago: item.monedaPago || "",
+      formaObtencion: item.formaObtencion || "",
       entitledPlatforms: Array.isArray(item.entitledPlatforms) ? item.entitledPlatforms : [],
       classificationStatus: item.classificationStatus || "pending"
     });
@@ -235,6 +249,9 @@
       discoCartucho: item.discoCartucho || "",
       caja: item.caja || "",
       manualInsertos: item.manualInsertos || "",
+      precioPagado: normalizePaidAmount(item.precioPagado),
+      monedaPago: item.monedaPago || "",
+      formaObtencion: item.formaObtencion || "",
       entitledPlatforms: Array.isArray(item.entitledPlatforms) ? item.entitledPlatforms : [],
       classificationStatus: item.classificationStatus || "pending",
       orden: Number(item.orden) || 0,
