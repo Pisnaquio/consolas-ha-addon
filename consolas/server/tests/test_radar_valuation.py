@@ -518,14 +518,14 @@ class LotValuationTests(unittest.TestCase):
 
 
 
-class TargetLandedPriceTests(unittest.TestCase):
-    """El objetivo se mide contra el total puesto acá, no contra el artículo."""
+class TargetItemPriceTests(unittest.TestCase):
+    """El objetivo se mide contra el precio publicado, no contra el puesto acá."""
 
     def test_no_target_means_no_verdict_at_all(self) -> None:
         self.assertIsNone(evaluate_target(90.0, None))
         self.assertIsNone(evaluate_target(90.0, 0))
 
-    def test_it_compares_against_the_landed_total(self) -> None:
+    def test_it_compares_against_the_item_price(self) -> None:
         result = evaluate_target(78.0, 80.0)
         self.assertTrue(result["meets"])
         self.assertEqual(result["gap"], -2.0)
@@ -535,11 +535,14 @@ class TargetLandedPriceTests(unittest.TestCase):
         self.assertFalse(result["meets"])
         self.assertEqual(result["gap"], 15.5)
 
-    def test_without_a_landed_cost_there_is_no_verdict(self) -> None:
-        # Un lote no tiene costo puesto acá: decir que cumple sería inventarlo.
-        result = evaluate_target(None, 80.0)
-        self.assertIsNone(result["meets"])
-        self.assertIsNone(result["landedTotal"])
+    def test_a_lot_also_gets_a_verdict_because_it_has_a_price(self) -> None:
+        # A diferencia del costo puesto acá, que depende de un peso estimado,
+        # el precio publicado siempre está.
+        result = evaluate_target(60.0, 80.0)
+        self.assertTrue(result["meets"])
+
+    def test_without_a_price_there_is_nothing_to_compare(self) -> None:
+        self.assertIsNone(evaluate_target(None, 80.0))
 
     def test_the_target_never_changes_the_score(self) -> None:
         common = dict(
@@ -547,7 +550,7 @@ class TargetLandedPriceTests(unittest.TestCase):
             match_confidence=1.0, entity_type="game",
         )
         sin_objetivo = score_listing(**common)
-        con_objetivo = score_listing(**common, target_landed_price=200.0)
+        con_objetivo = score_listing(**common, target_item_price=200.0)
         self.assertEqual(sin_objetivo.score, con_objetivo.score)
         self.assertTrue(con_objetivo.target["meets"], "pero sí queda registrado en la card")
 
@@ -556,7 +559,7 @@ class ListingKindDrivenValuationTests(unittest.TestCase):
     """La pieza se costea y se compara por lo que es, no por lo que se buscaba."""
 
     def criteria(self) -> dict:
-        return {"completeness": "any", "currency": "USD", "targetLandedPrice": 145.0}
+        return {"completeness": "any", "currency": "USD", "targetItemPrice": 145.0}
 
     def verdict(self):
         from radar.matching import MatchVerdict

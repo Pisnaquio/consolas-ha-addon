@@ -116,20 +116,20 @@
   }
 
   /**
-   * El objetivo es el umbral que escribiste vos, así que se muestra tal cual:
-   * cuánto falta, o que ya lo cruzó. Sin costo puesto acá no hay veredicto —
-   * es el caso de un lote, y decir "cumple" ahí sería inventarlo.
+   * El objetivo es el umbral que escribiste vos, sobre el precio publicado:
+   * o lo cruzó, o falta tanto. El costo puesto acá sigue arriba como contexto,
+   * pero no es lo que decide el aviso.
    */
   function targetBadge(item) {
     const target = item.valuation?.target;
     if (!target) return "";
     if (target.meets === true) {
-      return `<p class="feed-target is-met">Cruzó tu objetivo de ${escapeHtml(money(target.value, "USD"))} puestos acá</p>`;
+      return `<p class="feed-target is-met">Cruzó tu objetivo de ${escapeHtml(money(target.value, "USD"))}</p>`;
     }
-    if (target.meets === false && target.gap != null) {
+    if (target.gap != null) {
       return `<p class="feed-target">A ${escapeHtml(money(target.gap, "USD"))} de tu objetivo de ${escapeHtml(money(target.value, "USD"))}</p>`;
     }
-    return `<p class="feed-target is-unknown">Sin costo puesto acá no se puede comparar con tu objetivo de ${escapeHtml(money(target.value, "USD"))}</p>`;
+    return "";
   }
 
   function decisionLine(item) {

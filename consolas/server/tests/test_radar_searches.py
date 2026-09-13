@@ -924,7 +924,7 @@ class DerivedQueryRegenerationTests(RadarSearchTestCase):
 
 
 
-class TargetLandedPriceCriterionTests(RadarSearchTestCase):
+class TargetItemPriceCriterionTests(RadarSearchTestCase):
     """El objetivo se guarda como criterio pero no filtra nada."""
 
     def setUp(self) -> None:
@@ -934,13 +934,13 @@ class TargetLandedPriceCriterionTests(RadarSearchTestCase):
     def test_it_is_stored_and_returned(self) -> None:
         created = create_radar_search(
             self.config,
-            {"name": "PS2 con objetivo", "criteria": {"targetLandedPrice": 80}},
+            {"name": "PS2 con objetivo", "criteria": {"targetItemPrice": 80}},
         )["search"]
-        self.assertEqual(created["criteria"]["targetLandedPrice"], 80.0)
+        self.assertEqual(created["criteria"]["targetItemPrice"], 80.0)
 
     def test_a_search_without_one_simply_has_none(self) -> None:
         created = create_radar_search(self.config, {"name": "PS2 sin objetivo"})["search"]
-        self.assertIsNone(created["criteria"]["targetLandedPrice"])
+        self.assertIsNone(created["criteria"]["targetItemPrice"])
 
     def test_it_never_rejects_a_listing(self) -> None:
         # A diferencia de maxItemPrice, que sí bloquea: una publicación cara
@@ -952,7 +952,7 @@ class TargetLandedPriceCriterionTests(RadarSearchTestCase):
             source_id="ebay-us", external_id="1", title="Sony PlayStation 2 PS2 Console Tested",
             listing_url="https://www.ebay.com/itm/1", price_amount=400.0, price_currency="USD",
         )
-        verdict = evaluate_match(listing, {"targetLandedPrice": 80.0, "includeTerms": []})
+        verdict = evaluate_match(listing, {"targetItemPrice": 80.0, "includeTerms": []})
         self.assertTrue(verdict.matched, verdict.blockers)
 
 

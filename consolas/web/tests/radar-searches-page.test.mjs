@@ -830,15 +830,15 @@ test("both places that discard offer the same reasons, from one shared list", as
 test("the form offers a target price and says it does not filter", async () => {
   const { html } = await renderPage({ items: [], search: "?open=create" });
 
-  assert.match(html, /name="targetLandedPrice"/);
+  assert.match(html, /name="targetItemPrice"/);
   assert.match(html, /No filtra/);
 });
 
 test("an existing target price comes back into the edit form", async () => {
   const withTarget = search();
-  withTarget.criteria = { ...withTarget.criteria, targetLandedPrice: 80 };
+  withTarget.criteria = { ...withTarget.criteria, targetItemPrice: 80 };
   const { html } = await renderPage({ items: [withTarget], search: "?open=create" });
 
   // El alta viene vacía; lo que importa es que el campo exista para cargarlo.
-  assert.match(html, /name="targetLandedPrice"/);
+  assert.match(html, /name="targetItemPrice"/);
 });

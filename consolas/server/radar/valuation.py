@@ -274,28 +274,26 @@ class ScoreCard:
         }
 
 
-def evaluate_target(landed_total: float | None, target: float | None) -> dict[str, Any] | None:
-    """Compara el costo puesto acá contra el precio al que comprarías ya.
+def evaluate_target(item_price: float | None, target: float | None) -> dict[str, Any] | None:
+    """Compara el precio del artículo contra el precio al que comprarías ya.
 
-    El objetivo se mide contra el total puesto acá y no contra el precio del
-    artículo: es el número con el que realmente se decide una compra desde acá,
-    y el único que no cambia de significado según cuánto cobre de envío el
-    vendedor.
+    Se mide contra el precio publicado y no contra el costo puesto acá: es el
+    número sobre el que el owner decide, y el único que no depende de una
+    estimación nuestra. El courier se sigue mostrando en la card como contexto,
+    pero no decide a quién interrumpir — apoyar el aviso en un peso estimado
+    sería apoyarlo en la parte más floja del cálculo.
 
-    Sin costo puesto acá no hay veredicto. Es el caso de un lote, cuyo peso
-    depende de cuántas piezas trae: comparar el objetivo contra un total que no
-    existe daría un "cumple" inventado.
+    Un lote también tiene precio, así que a diferencia del costo puesto acá acá
+    siempre hay veredicto.
     """
 
-    if target is None or target <= 0:
+    if target is None or target <= 0 or item_price is None:
         return None
-    if landed_total is None:
-        return {"value": target, "meets": None, "landedTotal": None, "gap": None}
     return {
         "value": target,
-        "meets": landed_total <= target,
-        "landedTotal": landed_total,
-        "gap": round(landed_total - target, 2),
+        "meets": item_price <= target,
+        "itemPrice": item_price,
+        "gap": round(item_price - target, 2),
     }
 
 
@@ -541,7 +539,7 @@ def score_listing(
     courier_origin: str = "usa",
     courier_category: str = "general",
     weight_kg: float | None = None,
-    target_landed_price: float | None = None,
+    target_item_price: float | None = None,
     today: date | None = None,
 ) -> ScoreCard:
     """Puntúa una publicación que ya pasó los filtros obligatorios."""
@@ -555,7 +553,7 @@ def score_listing(
     )
     # El objetivo no puntúa ni bloquea: es tu umbral de "esto lo compro ya", y
     # sirve para decidir a quién interrumpir.
-    card.target = evaluate_target(card.cost.get("importedTotal"), target_landed_price)
+    card.target = evaluate_target(price_amount, target_item_price)
     reasons = match_reasons or []
     unverified = match_unverified or []
 

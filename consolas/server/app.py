@@ -58,7 +58,7 @@ from radar.sources import registry as radar_registry  # noqa: E402
 
 
 SERVICE_NAME = "consolas-server"
-SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.41")
+SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.42")
 DEFAULT_DATA_DIR = "/data"
 DEFAULT_STATIC_DIR = "/app/web"
 DATABASE_NAME = "consolas.sqlite"
@@ -2474,7 +2474,7 @@ def default_radar_criteria() -> dict[str, Any]:
         "currency": "USD",
         "maxItemPrice": None,
         "maxTotalUsa": None,
-        "targetLandedPrice": None,
+        "targetItemPrice": None,
         "minLotSize": None,
         "resultLimit": RADAR_DEFAULT_RESULT_LIMIT,
     }
@@ -2612,9 +2612,9 @@ def normalize_radar_criteria(value: Any, base: dict[str, Any] | None = None) -> 
         criteria["maxItemPrice"] = normalize_radar_amount(value.get("maxItemPrice"), "maxItemPrice")
     if "maxTotalUsa" in value:
         criteria["maxTotalUsa"] = normalize_radar_amount(value.get("maxTotalUsa"), "maxTotalUsa")
-    if "targetLandedPrice" in value:
-        criteria["targetLandedPrice"] = normalize_radar_amount(
-            value.get("targetLandedPrice"), "targetLandedPrice"
+    if "targetItemPrice" in value:
+        criteria["targetItemPrice"] = normalize_radar_amount(
+            value.get("targetItemPrice"), "targetItemPrice"
         )
     if "minLotSize" in value:
         criteria["minLotSize"] = normalize_radar_count(value.get("minLotSize"), "minLotSize", 500)
@@ -3448,8 +3448,8 @@ def valuate_radar_match(
             if item_kind.kind == "console"
             else None
         ),
-        target_landed_price=(
-            criteria.get("targetLandedPrice") if target_applies_to(item_kind, entity_type) else None
+        target_item_price=(
+            criteria.get("targetItemPrice") if target_applies_to(item_kind, entity_type) else None
         ),
     )
 
@@ -4925,12 +4925,9 @@ def deserves_notification(item: dict[str, Any], previous: dict[str, Any] | None)
     # 79 es un 4% y no movería la aguja general, pero si tu objetivo eran 80 es
     # justo el momento que estabas esperando.
     target = (item.get("valuation") or {}).get("target") or {}
-    landed = target.get("landedTotal")
     goal = target.get("value")
-    if target.get("meets") is True and landed is not None and goal is not None:
-        landed_before = landed - current + before
-        if landed_before > goal:
-            return f"cruzó tu objetivo de USD {goal:g}"
+    if target.get("meets") is True and goal is not None and before > goal:
+        return f"cruzó tu objetivo de USD {goal:g}"
 
     if current < before and (before - current) / before >= RADAR_MATERIAL_DROP:
         return f"bajó {round((before - current) / before * 100)}%"
