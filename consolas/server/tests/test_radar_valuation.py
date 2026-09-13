@@ -750,3 +750,21 @@ def _listing(title: str, price: float = 60.0):
         listing_url="https://www.ebay.com/itm/1", price_amount=price,
         price_currency="USD", shipping_amount=0.0, shipping_currency="USD",
     )
+
+
+class VariablePriceTargetTests(unittest.TestCase):
+    """El precio de un "elegí cuál querés" no puede cruzar un objetivo."""
+
+    def test_a_pick_and_choose_never_crosses(self) -> None:
+        card = valuate_radar_match(
+            _listing("Sony Playstation 3 PS3 Games Pick & Choose", price=1.99),
+            _verdict(), {"completeness": "any", "targetItemPrice": 22.0}, [], "",
+        )
+        self.assertIsNone(card.to_dict()["target"])
+
+    def test_a_real_game_at_that_price_does_cross(self) -> None:
+        card = valuate_radar_match(
+            _listing("Red Dead Redemption Greatest Hits PS3", price=19.6),
+            _verdict(), {"completeness": "any", "targetItemPrice": 22.0}, [], "",
+        )
+        self.assertTrue(card.to_dict()["target"]["meets"])

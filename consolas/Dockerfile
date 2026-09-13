@@ -3,7 +3,7 @@
 FROM ghcr.io/home-assistant/base:latest
 
 ARG BUILD_ARCH=amd64
-ARG BUILD_VERSION=0.1.42
+ARG BUILD_VERSION=0.1.43
 
 LABEL \
   io.hass.name="Consolas" \

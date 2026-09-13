@@ -58,7 +58,7 @@ from radar.sources import registry as radar_registry  # noqa: E402
 
 
 SERVICE_NAME = "consolas-server"
-SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.42")
+SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.43")
 DEFAULT_DATA_DIR = "/data"
 DEFAULT_STATIC_DIR = "/app/web"
 DATABASE_NAME = "consolas.sqlite"
@@ -3410,6 +3410,11 @@ def target_applies_to(item_kind: Any, entity_type: str) -> bool:
     dólares: interrumpir de más entrena a ignorar los avisos.
     """
 
+    # Un "elegí cuál querés" publica el precio de su opción más barata: 1,99 en
+    # una lista donde lo que buscás sale 40. Cruzaría cualquier objetivo sin
+    # que eso signifique nada.
+    if item_kind.variable_price:
+        return False
     if not entity_type:
         return True
     return item_kind.kind == entity_type

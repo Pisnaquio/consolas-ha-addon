@@ -93,3 +93,26 @@ class ClassifyListingItemTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class VariablePriceTests(unittest.TestCase):
+    """Un "elegí cuál querés" publica el precio de su opción más barata."""
+
+    def test_a_pick_and_choose_is_marked_variable(self) -> None:
+        item = classify_listing_item("Sony Playstation 3 PS3 Disc Only Games Pick & Choose")
+        self.assertEqual(item.kind, "lot")
+        self.assertTrue(item.variable_price)
+
+    def test_a_fixed_lot_is_not_variable(self) -> None:
+        # "Lot of 10" tiene un precio real por el conjunto.
+        item = classify_listing_item("Sony PlayStation 2 PS2 Video Games Lot of 10")
+        self.assertEqual(item.kind, "lot")
+        self.assertFalse(item.variable_price)
+
+    def test_a_plain_game_is_never_variable(self) -> None:
+        self.assertFalse(classify_listing_item("Red Dead Redemption Greatest Hits PS3").variable_price)
+
+    def test_empty_cases_sold_by_the_piece_are_an_accessory(self) -> None:
+        self.assert_kind = None  # esta clase no usa el helper
+        item = classify_listing_item("10 PCS New Original PS3 Game Case, Blu-Ray Logo")
+        self.assertEqual(item.kind, "accessory")

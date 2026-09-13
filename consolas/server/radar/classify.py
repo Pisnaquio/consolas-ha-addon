@@ -68,15 +68,24 @@ PART_MARKERS = (
     r"\bdust\s+cover\b",
 )
 
-LOT_MARKERS = (
-    r"\blots?\s+of\b",
-    r"\bgames?\s+lot\b",
-    r"\blot\s+x?\d+\b",
+# "Elegí cuál querés": el precio que muestra la publicación es el de la opción
+# más barata del listado, no el de una pieza concreta. Sirve para saber que el
+# vendedor tiene stock, nunca como precio de algo.
+VARIABLE_PRICE_MARKERS = (
     r"\byou\s+pick\b",
     r"\bpick\s+your\b",
     r"\bpick\s*&?\s*choose\b",
     r"\bchoose\s+(your|from)\b",
     r"\byour\s+choice\b",
+    r"\beach\b",
+    r"\bpick\b",
+)
+
+LOT_MARKERS = (
+    *VARIABLE_PRICE_MARKERS,
+    r"\blots?\s+of\b",
+    r"\bgames?\s+lot\b",
+    r"\blot\s+x?\d+\b",
 )
 
 CONSOLE_MARKERS = (
@@ -100,7 +109,8 @@ ACCESSORY_MARKERS = (
     r"\bmultitap\b",
     r"\blight\s+gun\b",
     r"\bremotes?\b",
-    r"\bgame\s+cases\b",
+    r"\bgame\s+cases?\b",
+    r"\bcase\s+protectors?\b",
     r"\bcables?\b",
     r"\bcords?\b",
     r"\bchargers?\b",
@@ -130,6 +140,9 @@ class ItemKind:
 
     kind: str
     confident: bool
+    # El precio publicado no es el de una pieza concreta: es el de la opción
+    # más barata de un listado "elegí cuál querés".
+    variable_price: bool = False
 
     @property
     def weighable(self) -> str:
@@ -189,7 +202,7 @@ def classify_listing_item(title: str) -> ItemKind:
     if _matches(CONSOLE_MARKERS, residual):
         return ItemKind("console", True)
     if _matches(LOT_MARKERS, residual):
-        return ItemKind("lot", True)
+        return ItemKind("lot", True, _matches(VARIABLE_PRICE_MARKERS, residual))
     if _matches(ACCESSORY_MARKERS, residual):
         return ItemKind("accessory", True)
     if _matches(GAME_MARKERS, residual):
