@@ -58,7 +58,7 @@ from radar.sources import registry as radar_registry  # noqa: E402
 
 
 SERVICE_NAME = "consolas-server"
-SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.48")
+SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.49")
 DEFAULT_DATA_DIR = "/data"
 DEFAULT_STATIC_DIR = "/app/web"
 DATABASE_NAME = "consolas.sqlite"
@@ -4227,8 +4227,16 @@ def load_game_names_by_console(config: AppConfig) -> dict[str, dict[str, str]]:
 
 
 def radar_master_proposals(config: AppConfig) -> list[dict[str, Any]]:
+    # Lo que ya tiene búsqueda no se vuelve a proponer: sin esto el Master
+    # devolvía siempre el mismo puñado y una segunda tanda no agregaba nada.
+    covered_consoles, covered_lots, covered_games = radar_targeted_entities(config, active_only=False)
     return propose_master_searches(
-        read_state(config), load_console_catalog(config), game_names=load_game_names_by_console(config)
+        read_state(config),
+        load_console_catalog(config),
+        game_names=load_game_names_by_console(config),
+        covered_consoles=covered_consoles,
+        covered_lots=covered_lots,
+        covered_games=covered_games,
     )
 
 
@@ -4592,6 +4600,46 @@ def radar_current_month_bounds() -> tuple[str, str, str]:
 DUTY_FREE_MERCHANDISE_USD = 200.0
 
 
+def radar_targeted_entities(
+    config: AppConfig, *, active_only: bool
+) -> tuple[set[str], set[str], set[tuple[str, str]]]:
+    """Qué ya tiene una búsqueda apuntándole: consolas, lotes y juegos.
+
+    Los tres se separan porque son objetivos distintos: buscar una PS2 y buscar
+    un lote de PS2 son cosas diferentes, y tener una no debería tapar la otra.
+
+    `active_only` separa dos preguntas. Para la cobertura interesa lo que el
+    radar está mirando **ahora**: una búsqueda archivada no cubre nada. Para el
+    Master interesa lo que el owner ya vio pasar, archivadas incluidas — volver
+    a proponer algo que archivó a propósito sería no escuchar.
+    """
+
+    query = (
+        "SELECT search_type, entity_type, entity_id, entity_console_id"
+        "  FROM radar_searches WHERE deleted_at IS NULL"
+    )
+    if active_only:
+        query += " AND status = 'active'"
+    with _RADAR_LOCK, connect_db(config) as conn:
+        rows = conn.execute(query).fetchall()
+
+    consoles: set[str] = set()
+    lots: set[str] = set()
+    games: set[tuple[str, str]] = set()
+    for row in rows:
+        entity_id = str(row["entity_id"] or "")
+        console_id = str((row["entity_console_id"] if "entity_console_id" in row.keys() else "") or "")
+        is_console_entity = str(row["entity_type"] or "") == "console" and entity_id
+        if str(row["search_type"] or "") == "lot":
+            if is_console_entity:
+                lots.add(entity_id)
+        elif is_console_entity:
+            consoles.add(entity_id)
+        if console_id and entity_id:
+            games.add((console_id, entity_id))
+    return consoles, lots, games
+
+
 def compute_radar_coverage(config: AppConfig) -> dict[str, Any]:
     """Qué parte de la colección el radar no está mirando.
 
@@ -4611,23 +4659,8 @@ def compute_radar_coverage(config: AppConfig) -> dict[str, Any]:
     overrides = (state.get("user") or {}).get("overridesById") or {}
     owned = {console_id for console_id, value in overrides.items() if (value or {}).get("tengo") is True}
 
-    with _RADAR_LOCK, connect_db(config) as conn:
-        rows = conn.execute(
-            "SELECT entity_type, entity_id, entity_console_id FROM radar_searches"
-            " WHERE deleted_at IS NULL AND status = 'active'"
-        ).fetchall()
-
-    consoles_with_search: set[str] = set()
-    games_with_search: set[tuple[str, str]] = set()
-    for row in rows:
-        entity_id = str(row["entity_id"] or "")
-        console_id = str(row["entity_console_id"] if "entity_console_id" in row.keys() else "" or "")
-        if str(row["entity_type"] or "") == "console" and entity_id:
-            consoles_with_search.add(entity_id)
-        if console_id:
-            consoles_with_search.add(console_id)
-            if entity_id:
-                games_with_search.add((console_id, entity_id))
+    consoles_with_search, lots_with_search, games_with_search = radar_targeted_entities(config, active_only=True)
+    consoles_with_search = consoles_with_search | lots_with_search
 
     wanted = wanted_games(state, load_game_names_by_console(config))
     wanted_by_console: dict[str, list[dict[str, Any]]] = {}

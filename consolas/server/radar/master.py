@@ -234,6 +234,9 @@ def propose_master_searches(
     max_lots: int = 2,
     max_games: int = 4,
     game_names: dict[str, dict[str, str]] | None = None,
+    covered_consoles: set[str] | None = None,
+    covered_lots: set[str] | None = None,
+    covered_games: set[tuple[str, str]] | None = None,
 ) -> list[dict[str, Any]]:
     """Portafolio de propuestas derivado del estado real, acotado por cupos.
 
@@ -243,9 +246,18 @@ def propose_master_searches(
     """
 
     overrides = state.get("user", {}).get("overridesById") or {}
+    # Lo que ya tiene una búsqueda sale del universo antes del cupo. Si se
+    # filtrara después, cada tanda gastaría su cupo en lo mismo de siempre y
+    # nunca avanzaría al resto de la lista.
+    already_consoles = covered_consoles or set()
+    already_lots = covered_lots or set()
+    already_games = covered_games or set()
     proposals: list[MasterProposal] = []
 
-    wanted = wanted_consoles(state, consoles)
+    wanted = [
+        entry for entry in wanted_consoles(state, consoles)
+        if str(entry.get("id") or "") not in already_consoles
+    ]
     for entry in wanted[:max_consoles]:
         proposals.append(console_proposal(entry))
 
@@ -256,10 +268,15 @@ def propose_master_searches(
         for entry in consoles
         if str(entry.get("id") or "") and console_is_owned(str(entry["id"]), overrides, entry)
     ]
+    owned = [entry for entry in owned if str(entry.get("id") or "") not in already_lots]
     for entry in owned[:max_lots]:
         proposals.append(lot_proposal(entry))
 
-    for game in sorted(wanted_games(state, game_names), key=rank_game)[:max_games]:
+    pendientes = [
+        game for game in wanted_games(state, game_names)
+        if (game["consoleId"], game["gameId"]) not in already_games
+    ]
+    for game in sorted(pendientes, key=rank_game)[:max_games]:
         proposals.append(game_proposal(game))
 
     return [proposal.to_dict() for proposal in proposals]

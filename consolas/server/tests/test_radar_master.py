@@ -169,12 +169,15 @@ class RegenerateTests(unittest.TestCase):
                 self.assertFalse(item["canRun"], "una propuesta no puede ejecutarse sola")
                 self.assertTrue(item["notes"], "la card muestra el motivo")
 
-    def test_regenerating_is_idempotent(self) -> None:
+    def test_regenerating_never_duplicates_what_it_already_proposed(self) -> None:
         first = regenerate_radar_master(self.config)
+        antes = len(self.searches())
         second = regenerate_radar_master(self.config)
+        self.assertGreater(first["created"], 0)
+        self.assertEqual(len(self.searches()), antes, "una segunda tanda no duplica nada")
+        # Ya no se proponen para después saltearlas: salen del universo antes
+        # del cupo, que es lo que deja avanzar al resto de la lista.
         self.assertEqual(second["created"], 0)
-        self.assertEqual(second["skipped"], first["created"])
-        self.assertEqual(len(self.searches()), len(self.searches()))
 
     def test_a_proposal_the_user_activated_is_never_overwritten(self) -> None:
         regenerate_radar_master(self.config)
@@ -248,3 +251,67 @@ class CatalogWishlistNamesTests(unittest.TestCase):
         chases = [p for p in proposals if p["searchType"] == "chase"]
         self.assertEqual([p["name"] for p in chases], ["Chrono Trigger"])
         self.assertEqual(chases[0]["entityConsoleId"], "snes")
+
+
+class SuccessiveRoundsTests(unittest.TestCase):
+    """Cada tanda tiene que avanzar, no repetir el mismo puñado.
+
+    El cupo existe para que el Master proponga algo accionable y no
+    cuatrocientas búsquedas. Pero si el filtro se aplicara después del cupo,
+    cada tanda gastaría su cupo en los mismos de siempre y la lista nunca
+    avanzaría — que era exactamente lo que pasaba.
+    """
+
+    def payload(self) -> dict:
+        juegos = {f"g{i}": {"nombre": f"Juego {i:02}", "loQuiero": True} for i in range(10)}
+        return state(detailEditsById={"snes": {"gameEditsById": juegos}})
+
+    def test_a_second_round_proposes_the_next_ones(self) -> None:
+        primera = [
+            p["entityId"]
+            for p in propose_master_searches(self.payload(), CONSOLES, max_games=4)
+            if p["searchType"] == "chase"
+        ]
+        segunda = [
+            p["entityId"]
+            for p in propose_master_searches(
+                self.payload(), CONSOLES, max_games=4,
+                covered_games={("snes", game_id) for game_id in primera},
+            )
+            if p["searchType"] == "chase"
+        ]
+        self.assertEqual(len(primera), 4)
+        self.assertEqual(len(segunda), 4)
+        self.assertFalse(set(primera) & set(segunda), "la segunda tanda no repite la primera")
+
+    def test_rounds_eventually_exhaust_the_list(self) -> None:
+        cubiertos: set[tuple[str, str]] = set()
+        vistos: list[str] = []
+        for _ in range(5):
+            tanda = [
+                p["entityId"]
+                for p in propose_master_searches(
+                    self.payload(), CONSOLES, max_games=4, covered_games=cubiertos
+                )
+                if p["searchType"] == "chase"
+            ]
+            vistos.extend(tanda)
+            cubiertos |= {("snes", game_id) for game_id in tanda}
+        self.assertEqual(len(set(vistos)), 10, "las diez llegan a proponerse, sin repetir")
+
+    def test_a_console_search_does_not_block_its_lot(self) -> None:
+        # Buscar una PS1 y buscar un lote de PS1 son objetivos distintos.
+        payload = state(overridesById={"ps1": {"tengo": True}})
+        lots = [
+            p for p in propose_master_searches(payload, CONSOLES, covered_consoles={"ps1"})
+            if p["searchType"] == "lot"
+        ]
+        self.assertEqual([lot["entityId"] for lot in lots], ["ps1"])
+
+    def test_a_lot_already_searched_is_not_proposed_again(self) -> None:
+        payload = state(overridesById={"ps1": {"tengo": True}})
+        lots = [
+            p for p in propose_master_searches(payload, CONSOLES, covered_lots={"ps1"})
+            if p["searchType"] == "lot"
+        ]
+        self.assertEqual(lots, [])
