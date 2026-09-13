@@ -77,6 +77,7 @@
   let model = null;
   let listings = null;
   let runs = null;
+  let shipment = null;
   let available = false;
 
   async function request(path, options = {}) {
@@ -393,6 +394,23 @@
     return write("/radar/purchases", payload);
   }
 
+  /** Lo que espera en la casilla, contra la franquicia de importación. */
+  async function loadShipment() {
+    shipment = await request("/radar/shipment");
+    return shipment;
+  }
+
+  function getShipment() {
+    return shipment;
+  }
+
+  /** El reenvío lo pide el owner: el radar no puede saber cuándo salió. */
+  async function closeShipment() {
+    const result = await write("/radar/shipment/close", {});
+    shipment = result.shipment || null;
+    return result;
+  }
+
   /**
    * Carga manual de una fuente de verificación asistida (ShopGoodwill, PRD
    * §12.3): nunca un crawler — el owner trae los datos de una publicación
@@ -470,6 +488,9 @@
     updateBudget,
     computeLotValuation,
     recordPurchase,
+    loadShipment,
+    getShipment,
+    closeShipment,
     createManualListing,
     verifyListing
   };

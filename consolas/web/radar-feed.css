@@ -21,6 +21,17 @@
         font:500 .8rem "IBM Plex Mono",monospace; }
 .drop s { color:var(--muted); text-decoration-thickness:1px; }
 
+/* La casilla es el paquete que se está armando, no el mes: por eso vive al
+   lado del presupuesto pero no se mezcla con él. */
+.shipment-widget { display:flex; flex-wrap:wrap; align-items:center; gap:18px; margin-bottom:14px;
+                   padding:12px 16px; border:1px solid var(--line); border-radius:12px; }
+.shipment-widget div { display:flex; flex-direction:column; }
+.shipment-widget strong { font:600 .95rem "IBM Plex Mono",monospace; }
+.shipment-widget span { font-size:.74rem; color:var(--muted); }
+.shipment-widget.is-over { border-color:#ffd68c; }
+.shipment-widget.is-over strong { color:#ffd68c; }
+.shipment-widget button { margin-left:auto; }
+
 /* El objetivo lo fijaste vos: cuando se cruza manda sobre cualquier otra
    señal de la card, y cuando falta se dice cuánto sin dramatizar. */
 .feed-target { margin:0; font:500 .8rem "IBM Plex Mono",monospace; color:var(--muted); }

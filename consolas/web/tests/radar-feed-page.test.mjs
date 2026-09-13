@@ -60,6 +60,7 @@ function defaultBudget(overrides = {}) {
 async function renderFeed({
   items = [], following = [], counts = {}, environment = "production", fail = false,
   budget = defaultBudget(), radarPurchase = null, openPurchaseFor = "",
+  shipment = { currency: "USD", limit: 200, merchandise: 0, headroom: 200, overLimit: false, count: 0, items: [] },
 } = {}) {
   let html = "";
   const requests = [];
@@ -92,6 +93,9 @@ async function renderFeed({
     if (fail) return { ok: false, status: 503, async json() { return { error: "sin backend" }; } };
     if (String(url).includes("/radar/budget")) {
       return { ok: true, status: 200, async json() { return budget; } };
+    }
+    if (String(url).includes("/radar/shipment")) {
+      return { ok: true, status: 200, async json() { return shipment; } };
     }
     return { ok: true, status: 200, async json() { return feedPayload; } };
   };
@@ -411,4 +415,42 @@ test("a lot gets a verdict too, because a lot also has a price", async () => {
 test("with no target set the card says nothing about targets", async () => {
   const { html } = await renderFeed({ items: [item()] });
   assert.doesNotMatch(html, /objetivo/);
+});
+
+
+test("an empty mailbox says nothing: there is no package being assembled", async () => {
+  const { html } = await renderFeed({ items: [item()] });
+  assert.doesNotMatch(html, /en la casilla/);
+});
+
+test("what is waiting in the mailbox is shown against the franchise", async () => {
+  const { html } = await renderFeed({
+    items: [item()],
+    shipment: { currency: "USD", limit: 200, merchandise: 165, headroom: 35, overLimit: false, count: 2, items: [] },
+  });
+
+  assert.match(html, /en la casilla \(2\)/);
+  assert.match(html, /hasta los/);
+  assert.match(html, /data-close-shipment/);
+});
+
+test("going over the franchise is flagged, not hidden", async () => {
+  const { html } = await renderFeed({
+    items: [item()],
+    shipment: { currency: "USD", limit: 200, merchandise: 240, headroom: -40, overLimit: true, count: 3, items: [] },
+  });
+
+  assert.match(html, /shipment-widget is-over/);
+  assert.match(html, /pasado de la franquicia/);
+});
+
+test("closing the shipment goes through the radar endpoint with its write header", async () => {
+  const { repository, requests } = await renderFeed({ items: [item()] });
+  requests.length = 0;
+
+  await repository.closeShipment();
+
+  assert.equal(requests[0].options.method, "POST");
+  assert.equal(requests[0].options.headers["X-Consolas-Radar"], "1");
+  assert.match(requests[0].url, /\/radar\/shipment\/close$/);
 });

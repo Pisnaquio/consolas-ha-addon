@@ -301,3 +301,113 @@ class LotValuationEndpointTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ShipmentFranchiseTests(RadarBudgetTestCase):
+    """La franquicia se mide sobre la mercadería que espera en la casilla.
+
+    Lo comprado no viaja de inmediato: se acumula y se reenvía junto. Mientras
+    la mercadería de ese reenvío quede bajo el límite, no paga impuestos.
+    """
+
+    def comprar(self, listing_id: str, precio: float) -> None:
+        record_radar_purchase(
+            self.config,
+            {"listingId": listing_id, "entityType": "console", "entityId": "ps2", "priceAmount": precio},
+        )
+
+    def test_an_empty_mailbox_offers_the_whole_franchise(self) -> None:
+        from server.app import DUTY_FREE_MERCHANDISE_USD, compute_radar_shipment
+
+        envio = compute_radar_shipment(self.config)
+        self.assertEqual(envio["merchandise"], 0)
+        self.assertEqual(envio["headroom"], DUTY_FREE_MERCHANDISE_USD)
+        self.assertFalse(envio["overLimit"])
+
+    def test_purchases_pile_up_and_eat_the_headroom(self) -> None:
+        from server.app import compute_radar_shipment
+
+        ids = self.seed([ebay_summary("v1|1|0"), ebay_summary("v1|2|0")])
+        self.comprar(ids[0], 120.0)
+        self.comprar(ids[1], 45.0)
+
+        envio = compute_radar_shipment(self.config)
+        self.assertEqual(envio["merchandise"], 165.0)
+        self.assertEqual(envio["headroom"], 35.0)
+        self.assertEqual(envio["count"], 2)
+        self.assertFalse(envio["overLimit"])
+
+    def test_going_over_the_limit_is_reported_not_blocked(self) -> None:
+        # La app no puede impedir una compra que ya se hizo: la declara.
+        from server.app import compute_radar_shipment
+
+        ids = self.seed([ebay_summary("v1|1|0"), ebay_summary("v1|2|0")])
+        self.comprar(ids[0], 180.0)
+        self.comprar(ids[1], 60.0)
+
+        envio = compute_radar_shipment(self.config)
+        self.assertTrue(envio["overLimit"])
+        self.assertLess(envio["headroom"], 0)
+
+    def test_only_merchandise_counts_never_the_shipping(self) -> None:
+        # El envío del vendedor y el courier quedan afuera: la franquicia se
+        # mide sobre lo que valen las cosas.
+        from server.app import compute_radar_shipment
+
+        [listing_id] = self.seed([ebay_summary("v1|1|0", price="50.00")])
+        self.comprar(listing_id, 50.0)
+        self.assertEqual(compute_radar_shipment(self.config)["merchandise"], 50.0)
+
+    def test_closing_a_shipment_empties_the_mailbox(self) -> None:
+        from server.app import close_radar_shipment, compute_radar_shipment
+
+        ids = self.seed([ebay_summary("v1|1|0"), ebay_summary("v1|2|0")])
+        self.comprar(ids[0], 120.0)
+        self.comprar(ids[1], 45.0)
+
+        cerrado = close_radar_shipment(self.config)
+        self.assertEqual(cerrado["merchandise"], 165.0)
+        self.assertEqual(cerrado["count"], 2)
+
+        envio = compute_radar_shipment(self.config)
+        self.assertEqual(envio["merchandise"], 0)
+        self.assertEqual(envio["count"], 0)
+
+    def test_what_already_shipped_never_comes_back_to_the_pile(self) -> None:
+        from server.app import close_radar_shipment, compute_radar_shipment
+
+        ids = self.seed([ebay_summary("v1|1|0"), ebay_summary("v1|2|0")])
+        self.comprar(ids[0], 120.0)
+        close_radar_shipment(self.config)
+        self.comprar(ids[1], 45.0)
+
+        envio = compute_radar_shipment(self.config)
+        self.assertEqual(envio["merchandise"], 45.0, "la pila nueva arranca sola")
+        self.assertEqual(envio["count"], 1)
+
+    def test_closing_an_empty_mailbox_is_refused(self) -> None:
+        from server.app import close_radar_shipment
+
+        with self.assertRaises(ApiError) as raised:
+            close_radar_shipment(self.config)
+        self.assertEqual(raised.exception.status, 409)
+
+    def test_closing_a_shipment_does_not_touch_the_monthly_budget(self) -> None:
+        # Son dos cosas distintas: el presupuesto mide el mes, la franquicia
+        # mide el paquete. Reenviar no devuelve plata.
+        from server.app import close_radar_shipment
+
+        [listing_id] = self.seed([ebay_summary("v1|1|0")])
+        self.comprar(listing_id, 120.0)
+        antes = compute_radar_budget(self.config)["spent"]
+        close_radar_shipment(self.config)
+        self.assertEqual(compute_radar_budget(self.config)["spent"], antes)
+
+    def test_registering_a_purchase_says_how_the_mailbox_looks_after_it(self) -> None:
+        [listing_id] = self.seed([ebay_summary("v1|1|0")])
+        out = record_radar_purchase(
+            self.config,
+            {"listingId": listing_id, "entityType": "console", "entityId": "ps2", "priceAmount": 150.0},
+        )
+        self.assertEqual(out["shipment"]["merchandise"], 150.0)
+        self.assertEqual(out["shipment"]["headroom"], 50.0)

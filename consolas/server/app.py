@@ -58,7 +58,7 @@ from radar.sources import registry as radar_registry  # noqa: E402
 
 
 SERVICE_NAME = "consolas-server"
-SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.43")
+SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.44")
 DEFAULT_DATA_DIR = "/data"
 DEFAULT_STATIC_DIR = "/app/web"
 DATABASE_NAME = "consolas.sqlite"
@@ -647,6 +647,11 @@ def init_db(config: AppConfig) -> None:
         }
         if "entity_console_id" not in purchase_columns:
             conn.execute("ALTER TABLE radar_purchases ADD COLUMN entity_console_id TEXT NOT NULL DEFAULT ''")
+        # Lo comprado no viaja de inmediato: se acumula en la casilla de Estados
+        # Unidos y se reenvía junto. Sin fecha de reenvío, la compra sigue en la
+        # pila que hay que mantener bajo la franquicia.
+        if "shipped_at" not in purchase_columns:
+            conn.execute("ALTER TABLE radar_purchases ADD COLUMN shipped_at TEXT")
         listing_columns = {
             str(row["name"]) for row in conn.execute("PRAGMA table_info(radar_listings)").fetchall()
         }
@@ -4532,6 +4537,83 @@ def radar_current_month_bounds() -> tuple[str, str, str]:
     return label, start_utc, end_utc
 
 
+# Franquicia de importación: un reenvío desde la casilla entra sin impuestos
+# mientras la **mercadería** quede por debajo de este monto. No cuentan ni el
+# envío del vendedor dentro de Estados Unidos ni el courier hasta Uruguay: sólo
+# lo que valen las cosas.
+#
+# El régimen alterno —una compra de hasta 800 pagando IVA— es excluyente con
+# éste, así que no se modela: el owner elige uno u otro fuera de la app.
+#
+# El cupo anual de tres envíos tampoco se lleva acá. El owner puede usar
+# franquicias de familiares, así que contarlas daría una restricción que en la
+# práctica no existe y avisos que no corresponden.
+DUTY_FREE_MERCHANDISE_USD = 200.0
+
+
+def compute_radar_shipment(config: AppConfig) -> dict[str, Any]:
+    """Lo que está esperando en la casilla, contra la franquicia.
+
+    Sólo suma mercadería, que es sobre lo que se mide la franquicia. El courier
+    se calcula sobre el paquete completo y no cambia si entra o no en el cupo,
+    así que no tiene por qué ensuciar este número.
+    """
+
+    with _RADAR_LOCK, connect_db(config) as conn:
+        rows = conn.execute(
+            """SELECT p.*, l.title AS listing_title
+                 FROM radar_purchases p
+                 LEFT JOIN radar_listings l ON l.id = p.listing_id
+                WHERE p.shipped_at IS NULL
+                ORDER BY p.purchased_at"""
+        ).fetchall()
+
+    merchandise = round(sum(float(row["price_amount"] or 0) for row in rows), 2)
+    return {
+        "currency": "USD",
+        "limit": DUTY_FREE_MERCHANDISE_USD,
+        "merchandise": merchandise,
+        "headroom": round(DUTY_FREE_MERCHANDISE_USD - merchandise, 2),
+        "overLimit": merchandise > DUTY_FREE_MERCHANDISE_USD,
+        "count": len(rows),
+        "items": [
+            {
+                "id": row["id"],
+                "title": row["listing_title"] or row["entity_id"],
+                "priceAmount": row["price_amount"],
+                "purchasedAt": row["purchased_at"],
+            }
+            for row in rows
+        ],
+    }
+
+
+def close_radar_shipment(config: AppConfig) -> dict[str, Any]:
+    """Marca como reenviado todo lo que estaba esperando, y abre una pila nueva.
+
+    Es una acción explícita del owner: el radar no puede saber cuándo pidió el
+    reenvío, y adivinarlo haría que la pila se vacíe sola en el peor momento.
+    """
+
+    now = utc_now()
+    with _RADAR_LOCK, connect_db(config) as conn:
+        pending = conn.execute(
+            "SELECT COALESCE(SUM(price_amount), 0) AS total, COUNT(*) AS n"
+            "  FROM radar_purchases WHERE shipped_at IS NULL"
+        ).fetchone()
+        if not int(pending["n"] or 0):
+            raise ApiError(HTTPStatus.CONFLICT, "No hay compras esperando en la casilla.")
+        conn.execute("UPDATE radar_purchases SET shipped_at = ? WHERE shipped_at IS NULL", (now,))
+
+    return {
+        "ok": True,
+        "shippedAt": now,
+        "merchandise": round(float(pending["total"] or 0), 2),
+        "count": int(pending["n"] or 0),
+        "shipment": compute_radar_shipment(config),
+    }
+
+
 def compute_radar_budget(config: AppConfig) -> dict[str, Any]:
     """Gastado, reservado, disponible e impacto (PRD §10.6).
 
@@ -4703,6 +4785,9 @@ def record_radar_purchase(config: AppConfig, payload: Any) -> dict[str, Any]:
             "purchasedAt": purchased_at,
         },
         "decision": radar_decision_row(decision_row),
+        # Cómo queda la casilla después de esta compra: es el momento en que el
+        # dato sirve para decidir si conviene pedir el reenvío antes de seguir.
+        "shipment": compute_radar_shipment(config),
     }
 
 
@@ -5555,6 +5640,9 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/radar/budget":
             self.send_json(compute_radar_budget(config))
             return
+        if path == "/api/radar/shipment":
+            self.send_json(compute_radar_shipment(config))
+            return
         if path.startswith("/api/radar/searches/"):
             search_id = normalize_radar_id(path.removeprefix("/api/radar/searches/"))
             self.send_json(radar_search_payload(config, search_id))
@@ -5651,6 +5739,11 @@ class Handler(BaseHTTPRequestHandler):
             require_radar_write_request(self)
             payload = read_json_body(self, self.config())
             self.send_json(record_radar_purchase(self.config(), payload), HTTPStatus.CREATED)
+            return
+        if path == "/api/radar/shipment/close":
+            require_radar_write_request(self)
+            read_json_body(self, self.config())
+            self.send_json(close_radar_shipment(self.config()))
             return
         if path == "/api/radar/lot-valuation":
             require_radar_write_request(self)

@@ -25,6 +25,7 @@
 
   let feed = null;
   let budget = null;
+  let shipment = null;
   let dismissing = "";
   let purchasing = "";
   let editingBudget = false;
@@ -49,12 +50,14 @@
   }
 
   async function reload() {
-    const [nextFeed, nextBudget] = await Promise.all([
+    const [nextFeed, nextBudget, nextShipment] = await Promise.all([
       repository.loadFeed(),
       repository.loadBudget().catch(() => null), // el presupuesto es complementario: sin él, el feed igual funciona
+      repository.loadShipment().catch(() => null),
     ]);
     feed = nextFeed;
     budget = nextBudget;
+    shipment = nextShipment;
     render();
   }
 
@@ -75,6 +78,24 @@
       render();
       return false;
     }
+  }
+
+  /**
+   * La casilla: lo comprado que todavía no se reenvió, contra la franquicia.
+   * Son dos cosas distintas del presupuesto — el presupuesto mide el mes y la
+   * franquicia mide el paquete, así que reenviar no devuelve plata ni gastar
+   * libera espacio en la caja.
+   */
+  function shipmentWidget() {
+    if (!shipment || !shipment.count) return "";
+    const sobre = shipment.overLimit;
+    return `<div class="shipment-widget${sobre ? " is-over" : ""}">
+      <div><strong>${escapeHtml(money(shipment.merchandise, "USD"))}</strong><span>en la casilla (${shipment.count})</span></div>
+      <div><strong>${escapeHtml(money(shipment.headroom, "USD"))}</strong><span>${
+        sobre ? "pasado de la franquicia" : `hasta los ${escapeHtml(money(shipment.limit, "USD"))}`
+      }</span></div>
+      <button class="btn-link" type="button" data-close-shipment="1"${busy ? " disabled" : ""}>Ya lo reenvié</button>
+    </div>`;
   }
 
   function budgetWidget() {
@@ -272,6 +293,7 @@
         </div>
       </header>
       ${budgetWidget()}
+      ${shipmentWidget()}
       ${feedback ? `<p class="chasing-feedback is-${escapeHtml(feedbackTone)}" role="status">${escapeHtml(feedback)}</p>` : ""}
       <section class="feed-list">${
         items.length
@@ -328,6 +350,16 @@
           isReserved ? "Ya no cuenta como plan probable." : "Cuenta como plan probable en el presupuesto del mes."
         );
       })
+    );
+
+    each("[data-close-shipment]", (button) =>
+      button.addEventListener("click", () =>
+        perform(
+          "Cerrando el envío…",
+          () => repository.closeShipment(),
+          "Casilla vaciada. La próxima compra arranca una pila nueva."
+        )
+      )
     );
 
     each("[data-edit-budget]", (button) =>

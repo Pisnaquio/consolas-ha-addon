@@ -319,10 +319,13 @@ COURIER_RATES: dict[str, dict[str, float]] = {
     "europa": {"general": 21.50, "media": 14.50},
 }
 
-# Impuesto de importación en destino (Uruguay). El owner confirmó que da cero
-# en todos los casos con este courier y estos volúmenes — no hay que estimarlo
-# ni preguntarlo por publicación. Se deja explícito en el desglose en vez de
-# simplemente omitirlo, para que no vuelva a leerse como un dato faltante.
+# Impuesto de importación en destino (Uruguay). Da cero, pero no porque no
+# exista: da cero mientras la mercadería de cada reenvío quede bajo la
+# franquicia. Eso no es una propiedad de la publicación sino del paquete en el
+# que viaje, y el paquete se arma después de comprar — por eso el impuesto no
+# se estima por publicación, y la franquicia se sigue aparte (ver
+# `compute_radar_shipment` en app.py). Se deja explícito en el desglose en vez
+# de omitirlo, para que no vuelva a leerse como un dato faltante.
 IMPORT_TAX_USD = 0.0
 
 # Pesos estimados en kg, con embalaje. Son estimaciones declaradas, no datos de
