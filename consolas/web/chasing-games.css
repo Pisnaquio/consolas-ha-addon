@@ -39,6 +39,21 @@
                                 background:rgba(255,199,92,.1); border:1px solid rgba(255,214,140,.35);
                                 color:#ffd68c; font-size:.78rem; }
 
+/* Plegar una búsqueda: con ochenta apiladas, ver todas desplegadas esconde
+   justo las que están corriendo. */
+.chase-card-head { align-items:start; }
+.chase-card-head > div:not(.radar-card-badges) { flex:1 1 auto; min-width:0; }
+.radar-card-toggle { flex:0 0 auto; align-self:start; margin:2px 10px 0 0; padding:2px 6px;
+                     border:1px solid var(--line); border-radius:8px; background:transparent;
+                     color:var(--muted); font:600 .8rem inherit; cursor:pointer; line-height:1.3; }
+.radar-card-toggle:hover { color:var(--ink); }
+.chase-card.is-collapsed { padding:14px 20px; }
+.chase-card.is-collapsed .chase-card-meta { margin:8px 0 0; }
+.chase-card.is-collapsed h2 { font-size:1.05rem; }
+
+.radar-list-controls { display:flex; flex-wrap:wrap; align-items:end; justify-content:space-between; gap:12px; }
+.radar-sort { display:grid; gap:5px; font-size:.8rem; color:var(--muted); }
+
 /* Filtros por estado */
 .radar-filters { display:flex; flex-wrap:wrap; gap:8px; margin:18px 0 0; }
 .radar-filter { display:inline-flex; align-items:center; gap:8px; border:1px solid var(--line); border-radius:999px; padding:7px 14px; background:transparent; color:var(--muted); font:500 .84rem inherit; cursor:pointer; }

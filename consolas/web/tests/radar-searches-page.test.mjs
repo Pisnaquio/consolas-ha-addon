@@ -68,6 +68,7 @@ function search(overrides = {}) {
 async function renderPage({
   items = [], environment = "production", failLoad = false, runs = null, search = "",
   coverage = { consoles: [], ownedWithoutSearch: [], wantedGames: 0, uncoveredGames: 0, explicitWanted: 0, explicitUncovered: 0 },
+  expanded = null,
 } = {}) {
   let html = "";
   const requests = [];
@@ -104,7 +105,18 @@ async function renderPage({
         : model;
     return { ok: true, status: 200, async json() { return body; } };
   };
-  const windowStub = { location: { search } };
+  // Las preferencias de la vista viven en el navegador, así que el harness
+  // necesita un localStorage para poder probar plegada y desplegada.
+  const guardado = expanded
+    ? JSON.stringify({ sortBy: "default", expanded })
+    : null;
+  const windowStub = {
+    location: { search },
+    localStorage: {
+      getItem: (key) => (key === "consolas.radar.searchView" ? guardado : null),
+      setItem: () => {},
+    },
+  };
   const document = {
     getElementById(id) {
       return id === "chasingGamesRoot" ? root : null;
@@ -143,16 +155,26 @@ test("renders an active search with its status, criteria and run action", async 
 });
 
 test("a draft is shown as a proposal, offers Activar and never offers Buscar ahora", async () => {
+  // Plegada —como arranca— igual tiene que decir qué es y dejar activarla:
+  // con setenta propuestas, activar una no puede costar dos clicks.
   const { html } = await renderPage({
     items: [search({ status: "draft", origin: "master", lastCheckedAt: null })]
   });
 
   assert.match(html, /chase-status is-draft">Propuesta/);
-  assert.match(html, /No va a ejecutarse hasta que la actives/);
-  assert.match(html, /por el Master de colección/);
   assert.match(html, /data-status="radar-1" data-next="active">Activar/);
   assert.doesNotMatch(html, /data-run=/);
   assert.match(html, /todavía no buscado/);
+});
+
+test("once opened, the draft explains why it is not running", async () => {
+  const { html } = await renderPage({
+    items: [search({ status: "draft", origin: "master", lastCheckedAt: null })],
+    expanded: ["radar-1"],
+  });
+
+  assert.match(html, /No va a ejecutarse hasta que la actives/);
+  assert.match(html, /por el Master de colección/);
 });
 
 test("a paused search offers Reanudar and keeps its stored results visible", async () => {
@@ -929,4 +951,30 @@ test("the page still works when coverage cannot be loaded", async () => {
   const { html } = await renderPage({ items: [search()], coverage: null });
   assert.match(html, /Búsquedas del radar/);
   assert.doesNotMatch(html, /radar-coverage/);
+});
+
+test("a search can be folded away, and a draft starts folded", async () => {
+  const borrador = search({ status: "draft" });
+  const { html } = await renderPage({ items: [borrador] });
+
+  assert.match(html, /data-toggle-card="radar-1"/);
+  assert.match(html, /chase-card radar-card is-draft is-collapsed/);
+  // Plegada muestra lo justo: nombre, estado y los números. Nada de criterios.
+  assert.doesNotMatch(html, /radar-chips/);
+});
+
+test("an active search starts open, with everything it had", async () => {
+  const { html } = await renderPage({ items: [search()] });
+
+  assert.doesNotMatch(html, /is-collapsed/);
+  assert.match(html, /radar-chips/);
+  assert.match(html, /aria-expanded="true"/);
+});
+
+test("the order can be chosen, and the default imposes nothing", async () => {
+  const { html } = await renderPage({ items: [search()] });
+
+  assert.match(html, /data-sort="1"/);
+  assert.match(html, /Como las trae el radar/);
+  assert.match(html, /Buscadas hace más tiempo/);
 });

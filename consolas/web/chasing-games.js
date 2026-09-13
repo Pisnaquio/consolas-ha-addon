@@ -33,6 +33,49 @@
   };
   const PRIORITY_OPTIONS = ["alta", "media-alta", "media", "baja"];
 
+  /**
+   * Cómo se ordenan las búsquedas. "Como las trae el radar" es el orden del
+   * servidor —estado y fecha—, y es el default porque es el único que no impone
+   * un criterio propio.
+   */
+  const SORT_OPTIONS = [
+    { id: "default", label: "Como las trae el radar" },
+    { id: "name", label: "Nombre (A-Z)" },
+    { id: "priority", label: "Prioridad" },
+    { id: "results", label: "Más resultados primero" },
+    { id: "checked", label: "Buscadas hace más tiempo" },
+  ];
+
+  /**
+   * Preferencias de la vista, no estado de colección: viven en el navegador y
+   * nunca tocan `/api/state`. Con ochenta búsquedas apiladas, cómo las mirás es
+   * tan tuyo como qué buscás — y tiene que sobrevivir a recargar la página.
+   */
+  const PREFS_KEY = "consolas.radar.searchView";
+
+  function loadPrefs() {
+    try {
+      const raw = JSON.parse(window.localStorage?.getItem(PREFS_KEY) || "{}");
+      return {
+        sortBy: SORT_OPTIONS.some((o) => o.id === raw.sortBy) ? raw.sortBy : "default",
+        expanded: Array.isArray(raw.expanded) ? new Set(raw.expanded) : new Set(),
+      };
+    } catch {
+      return { sortBy: "default", expanded: new Set() };
+    }
+  }
+
+  function savePrefs() {
+    try {
+      window.localStorage?.setItem(
+        PREFS_KEY,
+        JSON.stringify({ sortBy, expanded: [...expanded] })
+      );
+    } catch {
+      // Sin localStorage la vista funciona igual; sólo no recuerda la elección.
+    }
+  }
+
   let statusFilter = "all";
   let editingId = "";
   let prefillName = "";
@@ -43,6 +86,9 @@
   let lotCalcPieceCount = 3;
   let lotCalcResult = null;
   let creating = false;
+  const prefs = loadPrefs();
+  let sortBy = prefs.sortBy;
+  const expanded = prefs.expanded;
   let feedback = "";
   let feedbackTone = "info";
   let busy = false;
@@ -631,14 +677,30 @@
     return `<p class="radar-unlinked-note">Esta búsqueda ${escapeHtml(falta)}: no va a ofrecer «Registrar compra» ni comparar contra un precio de referencia. Se arregla al editarla.</p>`;
   }
 
+  /**
+   * Una propuesta arranca plegada y una búsqueda real abierta. El Master dejó
+   * setenta borradores de una sentada: mostrarlos todos desplegados convierte
+   * la página en un muro y esconde justo lo que sí está corriendo.
+   *
+   * Plegar esconde lo pesado —criterios, resultados, avisos— pero nunca las
+   * acciones: con setenta propuestas para revisar, activar una tiene que seguir
+   * siendo un click y no dos.
+   */
+  function isExpanded(item) {
+    return expanded.has(item.id) ? true : !expanded.has(`!${item.id}`) && item.status !== "draft";
+  }
+
   function searchCard(item) {
     const results = item.results || [];
+    const open = isExpanded(item) || editingId === item.id;
     const chips = repository.describeCriteria(item.criteria || {});
     const blocked = repository.getBlockedSources(item);
     const sourceLabels = (item.sources || []).map((sourceId) => repository.getSourceLabel(sourceId)).join(" · ");
     const isEditing = editingId === item.id;
-    return `<article class="detail-block chase-card radar-card is-${escapeHtml(item.status)}">
+    return `<article class="detail-block chase-card radar-card is-${escapeHtml(item.status)}${open ? "" : " is-collapsed"}">
       <div class="chase-card-head">
+        <button class="radar-card-toggle" type="button" data-toggle-card="${escapeHtml(item.id)}"
+                aria-expanded="${open}" aria-label="${open ? "Plegar" : "Desplegar"} ${escapeHtml(item.name)}">${open ? "▾" : "▸"}</button>
         <div>
           <p class="eyebrow">${escapeHtml(repository.getTypeLabel(item.searchType))} · ${escapeHtml(
             item.platform || "Sin plataforma"
@@ -654,14 +716,14 @@
         </div>
       </div>
       ${
-        item.status === "draft"
+        open && item.status === "draft"
           ? `<p class="radar-draft-note">Propuesta guardada${
               item.origin === "master" ? " por el Master de colección" : ""
             }. No va a ejecutarse hasta que la actives.</p>`
           : ""
       }
-      ${unlinkedNote(item)}
-      ${chips.length ? `<div class="radar-chips">${chips.map((chip) => `<span>${escapeHtml(chip)}</span>`).join("")}</div>` : ""}
+      ${open ? unlinkedNote(item) : ""}
+      ${open && chips.length ? `<div class="radar-chips">${chips.map((chip) => `<span>${escapeHtml(chip)}</span>`).join("")}</div>` : ""}
       <div class="chase-card-meta">
         <span>Última búsqueda: ${escapeHtml(dateLabel(item.lastCheckedAt))}</span>
         <span>${results.length} resultados activos</span>
@@ -673,12 +735,54 @@
       ${searchActions(item)}
       ${isEditing ? searchForm(item, { formId: `radarEdit-${item.id}`, submitLabel: "Guardar cambios", cancelAction: "edit" }) : ""}
       ${manualListingForm(item)}
-      <div class="chase-results">${
-        results.length
-          ? results.map(resultCard).join("")
-          : `<p class="chase-empty-results">${escapeHtml(emptyResultsMessage(item))}</p>`
-      }</div>
+      ${
+        open
+          ? `<div class="chase-results">${
+              results.length
+                ? results.map(resultCard).join("")
+                : `<p class="chase-empty-results">${escapeHtml(emptyResultsMessage(item))}</p>`
+            }</div>`
+          : ""
+      }
     </article>`;
+  }
+
+  /**
+   * El orden elegido se aplica sobre lo ya filtrado. "Como las trae el radar"
+   * no reordena nada: es el orden del servidor, y es el default porque es el
+   * único que no impone un criterio nuestro.
+   */
+  function sortSearches(items) {
+    const copia = [...items];
+    if (sortBy === "name") {
+      return copia.sort((a, b) => a.name.localeCompare(b.name, "es"));
+    }
+    if (sortBy === "priority") {
+      const rank = (item) => {
+        const index = PRIORITY_OPTIONS.indexOf(item.priority);
+        return index === -1 ? PRIORITY_OPTIONS.length : index;
+      };
+      return copia.sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name, "es"));
+    }
+    if (sortBy === "results") {
+      return copia.sort((a, b) => (b.results || []).length - (a.results || []).length);
+    }
+    if (sortBy === "checked") {
+      // Sin buscar nunca es lo más atrasado que hay: va primero.
+      const cuando = (item) => (item.lastCheckedAt ? Date.parse(item.lastCheckedAt) : 0);
+      return copia.sort((a, b) => cuando(a) - cuando(b));
+    }
+    return copia;
+  }
+
+  function sortBar() {
+    return `<label class="radar-sort">Orden
+      <select data-sort="1">${optionList(
+        SORT_OPTIONS.map((option) => option.id),
+        sortBy,
+        (value) => SORT_OPTIONS.find((option) => option.id === value).label
+      )}</select>
+    </label>`;
   }
 
   function filterTabs(counts) {
@@ -738,10 +842,10 @@
       ${feedback ? `<p class="chasing-feedback is-${escapeHtml(feedbackTone)}" role="status">${escapeHtml(feedback)}</p>` : ""}
       ${coveragePanel()}
       ${schedulePanel()}
-      ${filterTabs(counts)}
+      <div class="radar-list-controls">${filterTabs(counts)}${sortBar()}</div>
       <section class="chasing-list">${
         items.length
-          ? items.map(searchCard).join("")
+          ? sortSearches(items).map(searchCard).join("")
           : `<article class="detail-block chasing-empty"><h2>Sin búsquedas</h2><p class="muted">${escapeHtml(
               emptyMessage
             )}</p></article>`
@@ -763,6 +867,29 @@
   }
 
   function bindEvents() {
+    each("[data-toggle-card]", (button) =>
+      button.addEventListener("click", () => {
+        const id = button.dataset.toggleCard;
+        const item = repository.getSearch(id);
+        // Se guarda la decisión, no el estado: "!id" recuerda que la plegaste a
+        // mano aunque su default fuera abierta.
+        const abierta = item ? isExpanded(item) : false;
+        expanded.delete(id);
+        expanded.delete(`!${id}`);
+        expanded.add(abierta ? `!${id}` : id);
+        savePrefs();
+        render();
+      })
+    );
+
+    each("[data-sort]", (select) =>
+      select.addEventListener("change", (event) => {
+        sortBy = event.target.value;
+        savePrefs();
+        render();
+      })
+    );
+
     each("[data-filter]", (button) =>
       button.addEventListener("click", () => {
         statusFilter = button.dataset.filter;
