@@ -368,3 +368,38 @@ class ConsoleSearchWithoutAnEntityTests(unittest.TestCase):
         from server.app import radar_expected_item_kind
 
         self.assertEqual(radar_expected_item_kind("lot", "console"), "")
+
+
+class JapaneseImportRegionTests(unittest.TestCase):
+    """Un cartucho japonés no entra en una consola americana sin adaptador.
+
+    Los títulos reales de eBay lo declaran como "JPN" o nombrando la consola
+    japonesa, y ninguna de las dos formas se detectaba: un Super Famicom pasaba
+    entero por una búsqueda que pedía NTSC-U/C.
+    """
+
+    def test_jpn_marks_a_japanese_region(self) -> None:
+        self.assertEqual(detect_region(normalize("International Superstar Soccer (JPN) import")), "ntsc-j")
+
+    def test_the_japanese_console_name_marks_it_too(self) -> None:
+        self.assertEqual(detect_region(normalize("Chrono Trigger Super Famicom")), "ntsc-j")
+        self.assertEqual(detect_region(normalize("Famicom cartridge")), "ntsc-j")
+
+    def test_a_japanese_cart_is_blocked_from_a_us_search(self) -> None:
+        verdict = evaluate_match(
+            listing("International Superstar Soccer: Deluxe (JPN) Super Famicom"),
+            {"region": "NTSC-U/C"},
+        )
+        self.assertFalse(verdict.matched)
+
+    def test_the_us_carts_still_pass(self) -> None:
+        verdict = evaluate_match(
+            listing("International Superstar Soccer Deluxe SNES Tested & Working"),
+            {"region": "NTSC-U/C"},
+        )
+        self.assertTrue(verdict.matched, verdict.blockers)
+
+    def test_pal_is_still_detected_and_still_blocks(self) -> None:
+        self.assertEqual(detect_region(normalize("Aladdin SNES PAL Europe")), "pal")
+        verdict = evaluate_match(listing("Aladdin SNES PAL Europe"), {"region": "NTSC-U/C"})
+        self.assertFalse(verdict.matched)

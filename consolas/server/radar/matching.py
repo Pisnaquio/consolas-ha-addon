@@ -48,7 +48,15 @@ CASE_ONLY_SIGNALS = ("case only", "box only", "manual only", "empty case", "no d
 REPRODUCTION_SIGNALS = ("reproduction", "repro", "bootleg", "counterfeit", "fake", "pirata")
 
 REGION_SIGNALS = {
-    "ntsc-j": ("ntsc-j", "japan", "japanese", "jp region", "japon", "japonesa"),
+    # "jpn" y el nombre japonés de la consola son las dos formas más comunes de
+    # declarar una importación japonesa en eBay, y ninguna estaba: un cartucho
+    # de Super Famicom pasaba entero por una búsqueda que pedía NTSC-U/C, que es
+    # justo lo que el filtro de región existe para evitar — no entra en una
+    # consola americana sin adaptador.
+    "ntsc-j": (
+        "ntsc-j", "japan", "japanese", "jp region", "jpn", "japon", "japonesa",
+        "super famicom", "famicom",
+    ),
     "pal": ("pal", "europe", "european", "uk region", "australia"),
     "ntsc-u/c": ("ntsc-u", "ntsc u", "usa", "us region", "american", "north america"),
 }
