@@ -51,13 +51,14 @@ from radar.valuation import (  # noqa: E402
     references_from_console_entry,
     score_listing,
 )
+from radar.classify import classify_listing_item  # noqa: E402
 from radar.matching import evaluate_match  # noqa: E402
 from radar.model import MarketplaceListing  # noqa: E402
 from radar.sources import registry as radar_registry  # noqa: E402
 
 
 SERVICE_NAME = "consolas-server"
-SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.36")
+SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.37")
 DEFAULT_DATA_DIR = "/data"
 DEFAULT_STATIC_DIR = "/app/web"
 DATABASE_NAME = "consolas.sqlite"
@@ -3302,13 +3303,47 @@ def radar_entity_references(config: AppConfig, entity_type: str, entity_id: str)
     return []
 
 
+def radar_expected_item_kind(search_type: str, entity_type: str) -> str:
+    """Qué tipo de pieza puede aceptar esta búsqueda, o vacío si acepta cualquiera.
+
+    Un lote busca justamente cosas mezcladas, y una búsqueda de descubrimiento
+    existe para traer lo que no estabas buscando: a esas no se les exige nada.
+    El resto, cuando declara a qué entidad del catálogo apunta, sí — una
+    búsqueda de consolas traía diez juegos sueltos de catorce resultados.
+    """
+
+    if search_type in {"lot", "discovery"}:
+        return ""
+    return entity_type if entity_type in {"console", "game", "accessory"} else ""
+
+
+def usable_radar_references(references: list[Any], entity_type: str, item_kind: Any) -> list[Any]:
+    """Las referencias curadas valen sólo si la publicación es esa entidad.
+
+    Una búsqueda de Dreamcast trae el precio de la consola Dreamcast. Medir con
+    esa vara un VMU de 34 dólares lo convertía en "ganga real" y lo ponía
+    primero en el feed. Cuando la pieza no es la entidad de la búsqueda se cae
+    a las referencias genéricas (las publicaciones pares de la misma corrida),
+    que no dependen de qué entidad se buscaba.
+    """
+
+    if not entity_type or not item_kind.confident or item_kind.kind == entity_type:
+        return references
+    return [reference for reference in references if reference.source == "peer-listings"]
+
+
 def valuate_radar_match(
     listing: MarketplaceListing, verdict: Any, criteria: dict[str, Any], references: list[Any],
     entity_type: str = "",
 ) -> Any:
     """Puntúa una coincidencia que ya pasó los filtros obligatorios."""
     completeness = str(criteria.get("completeness") or "any")
-    benchmark = pick_benchmark(references, completeness=completeness if completeness != "any" else "loose")
+    # Qué es la pieza lo dice su propio título, no la entidad de la búsqueda que
+    # la encontró: un juego capturado por una búsqueda de consola se costeaba
+    # con 3 kg de courier encima.
+    item_kind = classify_listing_item(listing.title)
+    scoped = usable_radar_references(references, entity_type, item_kind)
+    benchmark = pick_benchmark(scoped, completeness=completeness if completeness != "any" else "loose")
     return score_listing(
         price_amount=listing.price_amount,
         shipping_amount=listing.shipping_amount,
@@ -3319,9 +3354,9 @@ def valuate_radar_match(
         match_unverified=verdict.unverified,
         completeness=completeness if completeness != "any" else "loose",
         seller_known=bool(listing.seller_label),
-        # El tipo de entidad decide el peso estimado del courier. Un lote no
-        # declara entidad y por eso no recibe un costo importado inventado.
-        entity_type=entity_type,
+        # Un lote no recibe costo importado inventado: su peso depende de
+        # cuántas piezas trae, y eso el título no lo dice.
+        entity_type=item_kind.weighable,
     )
 
 
@@ -3375,6 +3410,7 @@ def execute_radar_search(config: AppConfig, target_id: str, run_id: str = "") ->
         raise ApiError(HTTPStatus.BAD_GATEWAY, message, {"id": target_id, "receipts": receipts})
 
     capabilities_by_source = {source_id: radar_source_capabilities(source_id) for source_id in sources}
+    expected_kind = radar_expected_item_kind(str(row["search_type"]), str(row["entity_type"]))
     references = radar_entity_references(config, str(row["entity_type"]), str(row["entity_id"]))
     # Sin catálogo de precios para esta entidad, las publicaciones de esta misma
     # corrida son la única referencia disponible. Entra al final de la lista: la
@@ -3393,7 +3429,9 @@ def execute_radar_search(config: AppConfig, target_id: str, run_id: str = "") ->
     with _RADAR_LOCK, connect_db(config) as conn:
         for page in pages:
             for listing in page.listings:
-                verdict = evaluate_match(listing, criteria, capabilities_by_source.get(listing.source_id, {}))
+                verdict = evaluate_match(
+                    listing, criteria, capabilities_by_source.get(listing.source_id, {}), expected_kind
+                )
                 if not verdict.matched:
                     rejected += 1
                     continue

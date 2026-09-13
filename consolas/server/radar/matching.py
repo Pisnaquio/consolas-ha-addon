@@ -22,7 +22,16 @@ import unicodedata
 from dataclasses import dataclass, field
 from typing import Any
 
+from .classify import classify_listing_item
 from .model import MarketplaceListing
+
+
+ITEM_KIND_LABELS = {
+    "console": "una consola",
+    "game": "un juego",
+    "accessory": "un accesorio",
+    "lot": "un lote",
+}
 
 
 # Señales léxicas. Son heurísticas declaradas, no verdad: por eso alimentan
@@ -106,8 +115,14 @@ def evaluate_match(
     listing: MarketplaceListing,
     criteria: dict[str, Any],
     capabilities: dict[str, Any] | None = None,
+    expected_kind: str = "",
 ) -> MatchVerdict:
-    """Aplica los criterios de una búsqueda a una publicación normalizada."""
+    """Aplica los criterios de una búsqueda a una publicación normalizada.
+
+    `expected_kind` es qué tipo de pieza tiene que ser para que esta búsqueda la
+    acepte. Quien llama decide si corresponde exigirlo: una búsqueda de lotes o
+    de descubrimiento no lo manda, porque justamente busca cosas mezcladas.
+    """
 
     verdict = MatchVerdict()
     capabilities = capabilities or {}
@@ -117,6 +132,17 @@ def evaluate_match(
     signals_hit = 0
 
     # --- Filtros obligatorios: un bloqueo alcanza para descartar ---------------
+
+    # Una búsqueda de consolas no tiene por qué traer juegos sueltos. Sólo
+    # bloquea cuando el título lo dice con todas las letras: una deducción por
+    # descarte sirve para estimar peso, no para tirar una publicación.
+    if expected_kind:
+        item = classify_listing_item(listing.title)
+        if item.confident and item.kind != expected_kind:
+            verdict.blockers.append(
+                f"Es {ITEM_KIND_LABELS.get(item.kind, item.kind)} y esta búsqueda pide "
+                f"{ITEM_KIND_LABELS.get(expected_kind, expected_kind)}"
+            )
 
     for term in criteria.get("excludeTerms") or []:
         if contains_term(haystack, term):

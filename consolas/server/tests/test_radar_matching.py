@@ -295,3 +295,57 @@ class UntrustedContentTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ExpectedItemKindTests(unittest.TestCase):
+    """Una búsqueda tipada no acepta cualquier cosa que mencione la plataforma.
+
+    En producción, "PS2 consola lista para usar" devolvió 14 publicaciones y
+    sólo 4 eran consolas: el resto eran juegos sueltos que además heredaban el
+    peso de una consola al costear el envío.
+    """
+
+    def test_a_console_search_does_not_accept_a_loose_game(self) -> None:
+        verdict = evaluate_match(
+            listing("Metal Gear Solid 2 Sons Of Liberty Sony Playstation 2 PS2 CIB"),
+            {"includeTerms": ["PlayStation 2"]},
+            expected_kind="console",
+        )
+        self.assertFalse(verdict.matched)
+        self.assertTrue(any("un juego" in blocker for blocker in verdict.blockers), verdict.blockers)
+
+    def test_a_console_search_still_accepts_a_console(self) -> None:
+        verdict = evaluate_match(
+            listing("Sony PlayStation 2 PS2 Slim Silver Console Complete Tested"),
+            {"includeTerms": ["PlayStation 2"]},
+            expected_kind="console",
+        )
+        self.assertTrue(verdict.matched, verdict.blockers)
+
+    def test_a_console_search_rejects_an_empty_case(self) -> None:
+        verdict = evaluate_match(
+            listing("God of War PS2 EMPTY CASE ONLY no disc"),
+            {"includeTerms": ["PS2"]},
+            expected_kind="console",
+        )
+        self.assertFalse(verdict.matched)
+
+    def test_a_guess_is_not_enough_to_reject(self) -> None:
+        # Sin marcadores el clasificador deduce "juego", y una deducción no
+        # puede tirar una publicación: una consola descrita sin la palabra
+        # consola seguiría entrando.
+        verdict = evaluate_match(
+            listing("Kingdom Hearts (PlayStation 2) PS2 Tested"),
+            {"includeTerms": ["PlayStation 2"]},
+            expected_kind="console",
+        )
+        self.assertTrue(verdict.matched, verdict.blockers)
+
+    def test_without_an_expected_kind_nothing_is_filtered(self) -> None:
+        # Es el caso de un lote o una búsqueda de descubrimiento: traer cosas
+        # mezcladas es justamente para lo que existen.
+        verdict = evaluate_match(
+            listing("Sony PlayStation 2 PS2 Games Pick Your Game Tested"),
+            {"includeTerms": ["PlayStation 2"]},
+        )
+        self.assertTrue(verdict.matched, verdict.blockers)

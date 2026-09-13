@@ -4,6 +4,7 @@ import unittest
 from datetime import date
 
 import server.app  # noqa: F401  (deja `radar.*` importable)
+from server.app import valuate_radar_match
 from radar.valuation import (
     COURIER_RATES,
     LotPiece,
@@ -512,6 +513,83 @@ class LotValuationTests(unittest.TestCase):
         self.assertIsNone(result["discount"])
         self.assertIsNone(result["costPerUsefulPiece"])
         self.assertEqual(result["conservativeValue"], 60.0, "el valor de las piezas no depende del costo")
+
+
+class ListingKindDrivenValuationTests(unittest.TestCase):
+    """La pieza se costea y se compara por lo que es, no por lo que se buscaba."""
+
+    def criteria(self) -> dict:
+        return {"completeness": "any", "currency": "USD"}
+
+    def verdict(self):
+        from radar.matching import MatchVerdict
+
+        v = MatchVerdict()
+        v.confidence = 1.0
+        return v
+
+    def listing(self, title: str, price: float = 49.99):
+        from radar.model import MarketplaceListing
+
+        return MarketplaceListing(
+            source_id="ebay-us", external_id="1", title=title,
+            listing_url="https://www.ebay.com/itm/1", price_amount=price,
+            price_currency="USD", shipping_amount=0.0, shipping_currency="USD",
+        )
+
+    def test_a_game_is_not_shipped_at_the_weight_of_a_console(self) -> None:
+        # El bug medido en producción: un juego de USD 49,99 capturado por una
+        # búsqueda de consola se costeaba con 3 kg y llegaba a USD 102,49.
+        card = valuate_radar_match(
+            self.listing("Metal Gear Solid 2 Sony Playstation 2 PS2 CIB"),
+            self.verdict(), self.criteria(), [], "console",
+        )
+        cost = card.to_dict()["cost"]
+        self.assertLess(cost["billableWeightKg"], 1.0, "un juego suelto no pesa como una consola")
+        self.assertLess(cost["courier"], 10.0)
+
+    def test_a_console_still_ships_as_a_console(self) -> None:
+        card = valuate_radar_match(
+            self.listing("Sony PlayStation 2 PS2 Slim Console Tested"),
+            self.verdict(), self.criteria(), [], "console",
+        )
+        self.assertGreaterEqual(card.to_dict()["cost"]["billableWeightKg"], 3.0)
+
+    def test_a_lot_gets_no_invented_shipping_cost(self) -> None:
+        card = valuate_radar_match(
+            self.listing("Sony PlayStation 2 PS2 Games Pick Your Game"),
+            self.verdict(), self.criteria(), [], "console",
+        )
+        self.assertIsNone(card.to_dict()["cost"]["courier"])
+
+    def test_an_accessory_is_not_priced_against_the_console(self) -> None:
+        # El VMU de Dreamcast a USD 34 salía "ganga real" y primero en el feed
+        # porque se comparaba contra los USD 141 de la consola.
+        console_reference = PriceReference("dreamcast", "pricecharting", 141.0, confidence=0.8)
+        card = valuate_radar_match(
+            self.listing("Sega Dreamcast VMU HKT-7000 Tested OEM Memory Card", price=34.49),
+            self.verdict(), self.criteria(), [console_reference], "console",
+        )
+        self.assertIsNone(card.to_dict()["benchmark"], "sin vara propia, mejor ninguna que la equivocada")
+
+    def test_the_console_itself_keeps_its_reference(self) -> None:
+        console_reference = PriceReference("ps2", "pricecharting", 120.0, confidence=0.8)
+        card = valuate_radar_match(
+            self.listing("Sony PlayStation 2 PS2 Slim Console Tested", price=60.0),
+            self.verdict(), self.criteria(), [console_reference], "console",
+        )
+        self.assertEqual(card.to_dict()["benchmark"]["source"], "pricecharting")
+
+    def test_peer_listings_survive_even_when_the_kind_does_not_match(self) -> None:
+        # Las publicaciones pares no dependen de qué entidad se buscaba, así que
+        # siguen sirviendo de vara para un accesorio.
+        console_reference = PriceReference("dreamcast", "pricecharting", 141.0, confidence=0.8)
+        peers = PriceReference("dreamcast", "peer-listings", 30.0, confidence=0.3)
+        card = valuate_radar_match(
+            self.listing("Sega Dreamcast VMU Memory Card", price=34.49),
+            self.verdict(), self.criteria(), [console_reference, peers], "console",
+        )
+        self.assertEqual(card.to_dict()["benchmark"]["source"], "peer-listings")
 
 
 if __name__ == "__main__":
