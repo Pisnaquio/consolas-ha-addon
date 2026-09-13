@@ -91,10 +91,6 @@ class ClassifyListingItemTests(unittest.TestCase):
         self.assertEqual(item.weighable, "")
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class VariablePriceTests(unittest.TestCase):
     """Un "elegí cuál querés" publica el precio de su opción más barata."""
 
@@ -113,6 +109,9 @@ class VariablePriceTests(unittest.TestCase):
         self.assertFalse(classify_listing_item("Red Dead Redemption Greatest Hits PS3").variable_price)
 
     def test_empty_cases_sold_by_the_piece_are_an_accessory(self) -> None:
-        self.assert_kind = None  # esta clase no usa el helper
         item = classify_listing_item("10 PCS New Original PS3 Game Case, Blu-Ray Logo")
         self.assertEqual(item.kind, "accessory")
+
+
+if __name__ == "__main__":
+    unittest.main()

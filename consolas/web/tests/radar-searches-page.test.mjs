@@ -65,7 +65,10 @@ function search(overrides = {}) {
   };
 }
 
-async function renderPage({ items = [], environment = "production", failLoad = false, runs = null, search = "" } = {}) {
+async function renderPage({
+  items = [], environment = "production", failLoad = false, runs = null, search = "",
+  coverage = { consoles: [], ownedWithoutSearch: [], wantedGames: 0, uncoveredGames: 0, explicitWanted: 0, explicitUncovered: 0 },
+} = {}) {
   let html = "";
   const requests = [];
   const root = {
@@ -94,7 +97,11 @@ async function renderPage({ items = [], environment = "production", failLoad = f
   const fetchImpl = async (url, options = {}) => {
     requests.push({ url, options });
     if (failLoad) return { ok: false, status: 503, async json() { return { error: "sin backend" }; } };
-    const body = url.includes("/radar/runs") ? runs || { slots: [], runs: [] } : model;
+    const body = url.includes("/radar/coverage")
+      ? coverage
+      : url.includes("/radar/runs")
+        ? runs || { slots: [], runs: [] }
+        : model;
     return { ok: true, status: 200, async json() { return body; } };
   };
   const windowStub = { location: { search } };
@@ -885,4 +892,41 @@ test("the form lets you link the entity, so the note is actionable", async () =>
   assert.match(html, /name="entityType"/);
   assert.match(html, /name="entityId"/);
   assert.match(html, /name="entityConsoleId"/);
+});
+
+test("what the radar is not watching is spelled out, with the real denominator", async () => {
+  const { html } = await renderPage({
+    items: [search()],
+    coverage: {
+      consoles: [
+        { id: "snes", name: "Super Nintendo", owned: true, hasSearch: true, wantedGames: 15, uncoveredGames: 14, explicitUncovered: 9, examples: ["Chrono Trigger", "Super Metroid"] },
+        { id: "ps1", name: "PlayStation", owned: true, hasSearch: false, wantedGames: 11, uncoveredGames: 11, explicitUncovered: 6, examples: ["Silent Hill"] },
+      ],
+      ownedWithoutSearch: ["ps1"],
+      wantedGames: 26,
+      uncoveredGames: 25,
+      explicitWanted: 16,
+      explicitUncovered: 15,
+    },
+  });
+
+  assert.match(html, /15 de los 16 juegos que marcaste/);
+  assert.match(html, /10 recomendaciones conservadas/);
+  assert.match(html, /Consolas tuyas sin ninguna búsqueda: PlayStation/);
+  assert.match(html, /Chrono Trigger/);
+});
+
+test("full coverage says nothing at all", async () => {
+  const { html } = await renderPage({
+    items: [search()],
+    coverage: { consoles: [{ id: "snes", name: "Super Nintendo", owned: true, hasSearch: true, wantedGames: 2, uncoveredGames: 0, explicitUncovered: 0, examples: [] }], ownedWithoutSearch: [], wantedGames: 2, uncoveredGames: 0, explicitWanted: 2, explicitUncovered: 0 },
+  });
+
+  assert.doesNotMatch(html, /radar-coverage/);
+});
+
+test("the page still works when coverage cannot be loaded", async () => {
+  const { html } = await renderPage({ items: [search()], coverage: null });
+  assert.match(html, /Búsquedas del radar/);
+  assert.doesNotMatch(html, /radar-coverage/);
 });

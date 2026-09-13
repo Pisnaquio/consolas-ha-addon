@@ -42,7 +42,7 @@ _SERVER_DIR = Path(__file__).resolve().parent
 if str(_SERVER_DIR) not in sys.path:
     sys.path.insert(0, str(_SERVER_DIR))
 
-from radar.master import propose_master_searches  # noqa: E402
+from radar.master import propose_master_searches, rank_game, wanted_games  # noqa: E402
 from radar.valuation import (  # noqa: E402
     LotPiece,
     lot_valuation,
@@ -58,7 +58,7 @@ from radar.sources import registry as radar_registry  # noqa: E402
 
 
 SERVICE_NAME = "consolas-server"
-SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.47")
+SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.48")
 DEFAULT_DATA_DIR = "/data"
 DEFAULT_STATIC_DIR = "/app/web"
 DATABASE_NAME = "consolas.sqlite"
@@ -4200,8 +4200,36 @@ def load_console_catalog(config: AppConfig) -> list[dict[str, Any]]:
     return [entry for entry in entries or [] if isinstance(entry, dict)]
 
 
+def load_game_names_by_console(config: AppConfig) -> dict[str, dict[str, str]]:
+    """Nombres de los juegos del catálogo, por consola.
+
+    Un juego de catálogo marcado "lo quiero" guarda sólo el patch —`loQuiero`,
+    `keepInWishlist`— porque el nombre ya vive en el catálogo versionado. Sin
+    resolverlo contra el catálogo, un deseo de catálogo es indistinguible de
+    una entrada vacía, y no se puede ni nombrar ni buscar.
+    """
+
+    path = config.static_dir / "data" / "console-games.json"
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    by_console = payload.get("byConsole") if isinstance(payload, dict) else None
+    names: dict[str, dict[str, str]] = {}
+    for console_id, bucket in (by_console or {}).items():
+        entries = (bucket or {}).get("juegosCatalogo") if isinstance(bucket, dict) else None
+        names[str(console_id)] = {
+            str(entry.get("id")): str(entry.get("nombre") or "")
+            for entry in entries or []
+            if isinstance(entry, dict) and entry.get("id")
+        }
+    return names
+
+
 def radar_master_proposals(config: AppConfig) -> list[dict[str, Any]]:
-    return propose_master_searches(read_state(config), load_console_catalog(config))
+    return propose_master_searches(
+        read_state(config), load_console_catalog(config), game_names=load_game_names_by_console(config)
+    )
 
 
 def master_search_id(key: str) -> str:
@@ -4562,6 +4590,80 @@ def radar_current_month_bounds() -> tuple[str, str, str]:
 # franquicias de familiares, así que contarlas daría una restricción que en la
 # práctica no existe y avisos que no corresponden.
 DUTY_FREE_MERCHANDISE_USD = 200.0
+
+
+def compute_radar_coverage(config: AppConfig) -> dict[str, Any]:
+    """Qué parte de la colección el radar no está mirando.
+
+    El Master propone, pero nadie audita el hueco: propone de a puñados —los
+    cupos existen para no generar cuatrocientas búsquedas— así que lo que queda
+    afuera es invisible salvo que alguien lo cuente.
+
+    Una consola está cubierta si alguna búsqueda activa la nombra como entidad,
+    sea una búsqueda de esa consola o de un juego suyo. Un juego deseado está
+    cubierto sólo si alguna búsqueda persigue ese juego en esa consola: el
+    mismo juego existe en varias plataformas, y una búsqueda de SNES no cubre
+    la versión de Genesis.
+    """
+
+    state = read_state(config)
+    catalog = {str(entry.get("id") or ""): entry for entry in load_console_catalog(config)}
+    overrides = (state.get("user") or {}).get("overridesById") or {}
+    owned = {console_id for console_id, value in overrides.items() if (value or {}).get("tengo") is True}
+
+    with _RADAR_LOCK, connect_db(config) as conn:
+        rows = conn.execute(
+            "SELECT entity_type, entity_id, entity_console_id FROM radar_searches"
+            " WHERE deleted_at IS NULL AND status = 'active'"
+        ).fetchall()
+
+    consoles_with_search: set[str] = set()
+    games_with_search: set[tuple[str, str]] = set()
+    for row in rows:
+        entity_id = str(row["entity_id"] or "")
+        console_id = str(row["entity_console_id"] if "entity_console_id" in row.keys() else "" or "")
+        if str(row["entity_type"] or "") == "console" and entity_id:
+            consoles_with_search.add(entity_id)
+        if console_id:
+            consoles_with_search.add(console_id)
+            if entity_id:
+                games_with_search.add((console_id, entity_id))
+
+    wanted = wanted_games(state, load_game_names_by_console(config))
+    wanted_by_console: dict[str, list[dict[str, Any]]] = {}
+    for game in wanted:
+        wanted_by_console.setdefault(game["consoleId"], []).append(game)
+
+    consoles: list[dict[str, Any]] = []
+    for console_id in sorted(owned | set(wanted_by_console)):
+        games = sorted(wanted_by_console.get(console_id, []), key=rank_game)
+        uncovered = [game for game in games if (console_id, game["gameId"]) not in games_with_search]
+        explicit_uncovered = [game for game in uncovered if game["explicit"]]
+        consoles.append(
+            {
+                "id": console_id,
+                "name": str((catalog.get(console_id) or {}).get("nombre") or console_id),
+                "owned": console_id in owned,
+                "hasSearch": console_id in consoles_with_search,
+                "wantedGames": len(games),
+                "uncoveredGames": len(uncovered),
+                # Marcar "lo quiero" es un objetivo de compra; una recomendación
+                # conservada es mucho más débil. Mezclarlas exageraría el hueco.
+                "explicitUncovered": len(explicit_uncovered),
+                # Unos pocos nombres alcanzan para decidir; la lista entera sería
+                # el inventario, que ya vive en la ficha de cada consola.
+                "examples": [game["name"] for game in (explicit_uncovered or uncovered)[:3]],
+            }
+        )
+
+    return {
+        "consoles": consoles,
+        "ownedWithoutSearch": sorted(console_id for console_id in owned if console_id not in consoles_with_search),
+        "wantedGames": len(wanted),
+        "uncoveredGames": sum(entry["uncoveredGames"] for entry in consoles),
+        "explicitWanted": sum(1 for game in wanted if game["explicit"]),
+        "explicitUncovered": sum(entry["explicitUncovered"] for entry in consoles),
+    }
 
 
 def compute_radar_shipment(config: AppConfig) -> dict[str, Any]:
@@ -5659,6 +5761,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/radar/shipment":
             self.send_json(compute_radar_shipment(config))
+            return
+        if path == "/api/radar/coverage":
+            self.send_json(compute_radar_coverage(config))
             return
         if path.startswith("/api/radar/searches/"):
             search_id = normalize_radar_id(path.removeprefix("/api/radar/searches/"))

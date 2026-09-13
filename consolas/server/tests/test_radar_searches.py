@@ -1006,3 +1006,102 @@ class ConsoleShippingWeightTests(unittest.TestCase):
         from server.app import radar_console_shipping_weight
 
         self.assertIsNone(radar_console_shipping_weight(self.config, ""))
+
+
+class CoverageTests(RadarSearchTestCase):
+    """Qué parte de la colección el radar no está mirando.
+
+    El Master propone de a puñados a propósito, así que sin esta cuenta el
+    hueco es invisible: se ven las búsquedas que hay, nunca las que faltan.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        init_db(self.config)
+        (self.config.static_dir / "data").mkdir(parents=True, exist_ok=True)
+        (self.config.static_dir / "data" / "consoles.json").write_text(
+            json.dumps({"consolas": [{"id": "snes", "nombre": "Super Nintendo"}, {"id": "ps1", "nombre": "PlayStation"}]}),
+            encoding="utf-8",
+        )
+
+    def escribir_estado(self, overrides: dict, detail: dict) -> None:
+        from server.app import write_state
+
+        write_state(self.config, {"user": {"overridesById": overrides, "detailEditsById": detail}})
+
+    def test_a_console_you_own_with_no_search_is_reported(self) -> None:
+        from server.app import compute_radar_coverage
+
+        self.escribir_estado({"snes": {"tengo": True}}, {})
+        coverage = compute_radar_coverage(self.config)
+        self.assertIn("snes", coverage["ownedWithoutSearch"])
+
+    def test_a_console_with_a_search_is_not_reported(self) -> None:
+        from server.app import compute_radar_coverage
+
+        self.escribir_estado({"snes": {"tengo": True}}, {})
+        create_radar_search(self.config, {"name": "SNES", "entityType": "console", "entityId": "snes"})
+        self.assertEqual(compute_radar_coverage(self.config)["ownedWithoutSearch"], [])
+
+    def test_wanted_games_without_a_search_are_counted(self) -> None:
+        from server.app import compute_radar_coverage
+
+        self.escribir_estado(
+            {"snes": {"tengo": True}},
+            {"snes": {"gameEditsById": {
+                "aladdin": {"nombre": "Aladdin", "loQuiero": True},
+                "chrono": {"nombre": "Chrono Trigger", "loQuiero": True},
+            }}},
+        )
+        coverage = compute_radar_coverage(self.config)
+        self.assertEqual(coverage["wantedGames"], 2)
+        self.assertEqual(coverage["uncoveredGames"], 2)
+
+    def test_a_game_with_its_own_search_stops_counting(self) -> None:
+        from server.app import compute_radar_coverage
+
+        self.escribir_estado(
+            {"snes": {"tengo": True}},
+            {"snes": {"gameEditsById": {
+                "aladdin": {"nombre": "Aladdin", "loQuiero": True},
+                "chrono": {"nombre": "Chrono Trigger", "loQuiero": True},
+            }}},
+        )
+        create_radar_search(
+            self.config,
+            {"name": "Aladdin", "entityType": "game", "entityId": "aladdin", "entityConsoleId": "snes"},
+        )
+        coverage = compute_radar_coverage(self.config)
+        self.assertEqual(coverage["uncoveredGames"], 1)
+
+    def test_the_same_game_on_another_console_is_not_covered(self) -> None:
+        # El mismo juego existe en varias plataformas: una búsqueda de SNES no
+        # cubre la versión de Genesis.
+        from server.app import compute_radar_coverage
+
+        self.escribir_estado(
+            {},
+            {"genesis": {"gameEditsById": {"aladdin": {"nombre": "Aladdin", "loQuiero": True}}}},
+        )
+        create_radar_search(
+            self.config,
+            {"name": "Aladdin SNES", "entityType": "game", "entityId": "aladdin", "entityConsoleId": "snes"},
+        )
+        self.assertEqual(compute_radar_coverage(self.config)["uncoveredGames"], 1)
+
+    def test_a_game_you_already_own_is_never_a_gap(self) -> None:
+        from server.app import compute_radar_coverage
+
+        self.escribir_estado(
+            {"snes": {"tengo": True}},
+            {"snes": {"gameEditsById": {"aladdin": {"nombre": "Aladdin", "ownershipType": "physical"}}}},
+        )
+        self.assertEqual(compute_radar_coverage(self.config)["wantedGames"], 0)
+
+    def test_an_archived_search_does_not_count_as_coverage(self) -> None:
+        from server.app import compute_radar_coverage, set_radar_search_status
+
+        self.escribir_estado({"snes": {"tengo": True}}, {})
+        created = create_radar_search(self.config, {"name": "SNES", "entityType": "console", "entityId": "snes"})["search"]
+        set_radar_search_status(self.config, created["id"], "archived")
+        self.assertIn("snes", compute_radar_coverage(self.config)["ownedWithoutSearch"])

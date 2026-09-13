@@ -101,14 +101,22 @@ def wanted_consoles(state: dict[str, Any], consoles: list[dict[str, Any]]) -> li
     return wanted
 
 
-def wanted_games(state: dict[str, Any]) -> list[dict[str, Any]]:
+def wanted_games(
+    state: dict[str, Any], game_names: dict[str, dict[str, str]] | None = None
+) -> list[dict[str, Any]]:
     """Juegos que el usuario marcó explícitamente, no recomendaciones del catálogo.
 
     `keepInWishlist` sin `loQuiero` es una recomendación conservada, no un
     objetivo de compra: entra con la prioridad más baja y nunca por delante de
     un chase explícito.
+
+    Un juego de catálogo guarda sólo el patch: marcarlo "lo quiero" no copia su
+    nombre, que ya vive en el catálogo versionado. Por eso `game_names` resuelve
+    el nombre cuando el patch no lo trae — sin eso, un deseo de catálogo quedaba
+    invisible y el Master no podía proponerlo nunca.
     """
 
+    names_by_console = game_names or {}
     detail_edits = state.get("user", {}).get("detailEditsById") or {}
     games: list[dict[str, Any]] = []
     for console_id, bucket in detail_edits.items():
@@ -128,6 +136,8 @@ def wanted_games(state: dict[str, Any]) -> list[dict[str, Any]]:
                 if not explicit and not kept:
                     continue
                 name = str(game.get("nombre") or game.get("titulo") or "").strip()
+                if not name:
+                    name = str(names_by_console.get(str(console_id), {}).get(str(game_id)) or "").strip()
                 if not name:
                     continue
                 games.append(
@@ -223,6 +233,7 @@ def propose_master_searches(
     max_consoles: int = 4,
     max_lots: int = 2,
     max_games: int = 4,
+    game_names: dict[str, dict[str, str]] | None = None,
 ) -> list[dict[str, Any]]:
     """Portafolio de propuestas derivado del estado real, acotado por cupos.
 
@@ -248,7 +259,7 @@ def propose_master_searches(
     for entry in owned[:max_lots]:
         proposals.append(lot_proposal(entry))
 
-    for game in sorted(wanted_games(state), key=rank_game)[:max_games]:
+    for game in sorted(wanted_games(state, game_names), key=rank_game)[:max_games]:
         proposals.append(game_proposal(game))
 
     return [proposal.to_dict() for proposal in proposals]

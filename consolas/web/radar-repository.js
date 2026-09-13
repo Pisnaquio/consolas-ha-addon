@@ -78,6 +78,7 @@
   let listings = null;
   let runs = null;
   let shipment = null;
+  let coverage = null;
   let available = false;
 
   async function request(path, options = {}) {
@@ -394,6 +395,16 @@
     return write("/radar/purchases", payload);
   }
 
+  /** Qué parte de la colección el radar no está mirando. */
+  async function loadCoverage() {
+    coverage = await request("/radar/coverage");
+    return coverage;
+  }
+
+  function getCoverage() {
+    return coverage;
+  }
+
   /** Lo que espera en la casilla, contra la franquicia de importación. */
   async function loadShipment() {
     shipment = await request("/radar/shipment");
@@ -488,6 +499,8 @@
     updateBudget,
     computeLotValuation,
     recordPurchase,
+    loadCoverage,
+    getCoverage,
     loadShipment,
     getShipment,
     closeShipment,

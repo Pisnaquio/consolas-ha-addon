@@ -66,7 +66,11 @@
   }
 
   async function reload() {
-    await Promise.all([repository.load(), repository.loadRuns().catch(() => null)]);
+    await Promise.all([
+      repository.load(),
+      repository.loadRuns().catch(() => null),
+      repository.loadCoverage().catch(() => null), // complementario: sin esto el inventario igual sirve
+    ]);
     render();
   }
 
@@ -511,6 +515,58 @@
   }
 
   /** Franja del scheduler: qué corrió hoy, qué viene y una corrida manual. */
+  /**
+   * Qué parte de la colección el radar no está mirando.
+   *
+   * El Master propone de a puñados —los cupos existen para no generar
+   * cuatrocientas búsquedas—, así que sin este panel el hueco es invisible: se
+   * ven las búsquedas que hay, nunca las que faltan.
+   */
+  function coveragePanel() {
+    const coverage = repository.getCoverage();
+    if (!coverage) return "";
+    const sinBusqueda = coverage.ownedWithoutSearch || [];
+    const conHuecos = (coverage.consoles || [])
+      .filter((c) => c.explicitUncovered > 0)
+      .sort((a, b) => b.explicitUncovered - a.explicitUncovered);
+    if (!sinBusqueda.length && !conHuecos.length) return "";
+
+    const nombre = (id) => (coverage.consoles || []).find((c) => c.id === id)?.name || id;
+    return `<section class="detail-block radar-coverage">
+      <div>
+        <p class="eyebrow">Cobertura</p>
+        <h2>Qué no está mirando el radar</h2>
+        <p class="muted">${coverage.explicitUncovered} de los ${coverage.explicitWanted} juegos que marcaste «lo quiero» no tienen ninguna búsqueda que los persiga${
+          coverage.uncoveredGames > coverage.explicitUncovered
+            ? `, más ${coverage.uncoveredGames - coverage.explicitUncovered} recomendaciones conservadas`
+            : ""
+        }.</p>
+      </div>
+      ${
+        sinBusqueda.length
+          ? `<p class="radar-coverage-consoles">Consolas tuyas sin ninguna búsqueda: ${sinBusqueda
+              .map((id) => escapeHtml(nombre(id)))
+              .join(" · ")}</p>`
+          : ""
+      }
+      ${
+        conHuecos.length
+          ? `<ul class="radar-coverage-list">${conHuecos
+              .slice(0, 8)
+              .map(
+                (c) => `<li>
+                  <strong>${escapeHtml(c.name)}</strong>
+                  <span>${c.explicitUncovered} sin cubrir</span>
+                  ${c.examples.length ? `<em>${c.examples.map((n) => escapeHtml(n)).join(", ")}…</em>` : ""}
+                </li>`
+              )
+              .join("")}</ul>`
+          : ""
+      }
+      <p class="muted">El Master propone de a pocas por vez, a propósito. Pedile que proponga otra tanda, o creá la búsqueda a mano.</p>
+    </section>`;
+  }
+
   function schedulePanel() {
     const slots = repository.getSlots();
     if (!slots.length) return "";
@@ -680,6 +736,7 @@
         }
       </section>
       ${feedback ? `<p class="chasing-feedback is-${escapeHtml(feedbackTone)}" role="status">${escapeHtml(feedback)}</p>` : ""}
+      ${coveragePanel()}
       ${schedulePanel()}
       ${filterTabs(counts)}
       <section class="chasing-list">${

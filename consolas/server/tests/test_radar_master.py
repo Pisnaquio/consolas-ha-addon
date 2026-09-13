@@ -207,3 +207,44 @@ class RegenerateTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CatalogWishlistNamesTests(unittest.TestCase):
+    """Un juego de catálogo marcado "lo quiero" guarda sólo el patch.
+
+    El nombre vive en el catálogo versionado, así que sin resolverlo el Master
+    no veía ni uno solo de los deseos de catálogo: la propuesta de chases
+    quedaba muerta sin que nada lo dijera.
+    """
+
+    def wish(self) -> dict:
+        return state(detailEditsById={"snes": {"gameEditsById": {"chrono-trigger": {"loQuiero": True}}}})
+
+    def test_a_catalog_patch_without_a_name_is_invisible_on_its_own(self) -> None:
+        self.assertEqual(wanted_games(self.wish()), [])
+
+    def test_the_catalog_supplies_the_name(self) -> None:
+        games = wanted_games(self.wish(), {"snes": {"chrono-trigger": "Chrono Trigger"}})
+        self.assertEqual([game["name"] for game in games], ["Chrono Trigger"])
+        self.assertTrue(games[0]["explicit"])
+
+    def test_a_manual_game_still_carries_its_own_name(self) -> None:
+        payload = state(detailEditsById={"snes": {"manualGamesById": {"x": {"nombre": "Rendering Ranger", "loQuiero": True}}}})
+        self.assertEqual([game["name"] for game in wanted_games(payload)], ["Rendering Ranger"])
+
+    def test_a_name_in_the_patch_wins_over_the_catalog(self) -> None:
+        payload = state(detailEditsById={"snes": {"gameEditsById": {"x": {"nombre": "Mi copia rara", "loQuiero": True}}}})
+        games = wanted_games(payload, {"snes": {"x": "Nombre de catálogo"}})
+        self.assertEqual(games[0]["name"], "Mi copia rara")
+
+    def test_an_unknown_id_is_still_skipped(self) -> None:
+        # Sin nombre en ningún lado no hay nada que buscar.
+        self.assertEqual(wanted_games(self.wish(), {"snes": {"otro": "Otro"}}), [])
+
+    def test_the_master_can_finally_propose_a_catalog_wish(self) -> None:
+        proposals = propose_master_searches(
+            self.wish(), CONSOLES, game_names={"snes": {"chrono-trigger": "Chrono Trigger"}}
+        )
+        chases = [p for p in proposals if p["searchType"] == "chase"]
+        self.assertEqual([p["name"] for p in chases], ["Chrono Trigger"])
+        self.assertEqual(chases[0]["entityConsoleId"], "snes")
