@@ -654,3 +654,96 @@ class ListingKindDrivenValuationTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DeclaredConsoleWeightTests(unittest.TestCase):
+    """Cada consola pesa lo suyo; un solo número erraba en las dos direcciones."""
+
+    def test_a_declared_weight_beats_the_generic_estimate(self) -> None:
+        generico = cost_breakdown(100.0, 0.0, entity_type="console")
+        declarado = cost_breakdown(100.0, 0.0, entity_type="console", weight_kg=0.6)
+        self.assertEqual(generico["billableWeightKg"], 3.0)
+        self.assertEqual(declarado["billableWeightKg"], 0.6)
+        self.assertLess(declarado["courier"], generico["courier"])
+
+    def test_a_heavier_console_is_costed_heavier(self) -> None:
+        # Una PS3 Fat pesa más que la estimación genérica: el peso declarado
+        # también sirve para no subestimar.
+        declarado = cost_breakdown(100.0, 0.0, entity_type="console", weight_kg=5.6)
+        self.assertGreater(declarado["courier"], cost_breakdown(100.0, 0.0, entity_type="console")["courier"])
+
+    def test_without_a_declared_weight_nothing_changes(self) -> None:
+        self.assertEqual(
+            cost_breakdown(100.0, 0.0, entity_type="console", weight_kg=None),
+            cost_breakdown(100.0, 0.0, entity_type="console"),
+        )
+
+    def test_a_lot_still_gets_no_cost_even_with_a_declared_weight(self) -> None:
+        # El peso declarado es de la consola, no del lote que la menciona.
+        card = valuate_radar_match(
+            _listing("Sony PlayStation 2 PS2 Games Pick Your Game"),
+            _verdict(), {"completeness": "any"}, [], "console", _peso(),
+        )
+        self.assertIsNone(card.to_dict()["cost"]["courier"])
+
+    def test_a_game_in_a_console_search_is_not_given_the_console_weight(self) -> None:
+        card = valuate_radar_match(
+            _listing("Metal Gear Solid 2 Sony Playstation 2 PS2 CIB"),
+            _verdict(), {"completeness": "any"}, [], "console", _peso(),
+        )
+        self.assertLess(card.to_dict()["cost"]["billableWeightKg"], 1.0)
+
+    def test_the_title_picks_the_variant_weight(self) -> None:
+        # Una PS3 Slim no paga el courier de una Fat: son 31 dólares.
+        peso = _peso(5.6, {"slim": {"kg": 3.8}, "fat": {"kg": 5.6}})
+        slim = valuate_radar_match(
+            _listing("Sony PlayStation 3 PS3 Slim Console Tested"),
+            _verdict(), {"completeness": "any"}, [], "console", peso,
+        )
+        fat = valuate_radar_match(
+            _listing("Sony PlayStation 3 PS3 Fat Console Tested"),
+            _verdict(), {"completeness": "any"}, [], "console", peso,
+        )
+        self.assertEqual(slim.to_dict()["cost"]["billableWeightKg"], 3.8)
+        self.assertEqual(fat.to_dict()["cost"]["billableWeightKg"], 5.6)
+
+    def test_a_title_that_does_not_say_gets_the_heavier_one(self) -> None:
+        peso = _peso(5.6, {"slim": {"kg": 3.8}, "fat": {"kg": 5.6}})
+        card = valuate_radar_match(
+            _listing("Sony PlayStation 3 PS3 Console Tested Working"),
+            _verdict(), {"completeness": "any"}, [], "console", peso,
+        )
+        self.assertEqual(card.to_dict()["cost"]["billableWeightKg"], 5.6)
+
+    def test_the_console_itself_uses_the_declared_weight(self) -> None:
+        card = valuate_radar_match(
+            _listing("Sony PlayStation 2 PS2 Slim Console Tested"),
+            _verdict(), {"completeness": "any"}, [], "console", _peso(),
+        )
+        self.assertEqual(card.to_dict()["cost"]["billableWeightKg"], 2.5)
+
+
+def _peso(kg: float = 2.5, variantes: dict | None = None) -> dict:
+    """Una declaración de peso como la que trae el catálogo."""
+    peso = {"kg": kg, "aparatoKg": kg - 0.5}
+    if variantes:
+        peso["variantes"] = variantes
+    return peso
+
+
+def _verdict():
+    from radar.matching import MatchVerdict
+
+    v = MatchVerdict()
+    v.confidence = 1.0
+    return v
+
+
+def _listing(title: str, price: float = 60.0):
+    from radar.model import MarketplaceListing
+
+    return MarketplaceListing(
+        source_id="ebay-us", external_id="1", title=title,
+        listing_url="https://www.ebay.com/itm/1", price_amount=price,
+        price_currency="USD", shipping_amount=0.0, shipping_currency="USD",
+    )

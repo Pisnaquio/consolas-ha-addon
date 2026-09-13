@@ -51,14 +51,14 @@ from radar.valuation import (  # noqa: E402
     references_from_console_entry,
     score_listing,
 )
-from radar.classify import classify_listing_item  # noqa: E402
+from radar.classify import classify_listing_item, detect_console_variant  # noqa: E402
 from radar.matching import evaluate_match  # noqa: E402
 from radar.model import MarketplaceListing  # noqa: E402
 from radar.sources import registry as radar_registry  # noqa: E402
 
 
 SERVICE_NAME = "consolas-server"
-SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.40")
+SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.41")
 DEFAULT_DATA_DIR = "/data"
 DEFAULT_STATIC_DIR = "/app/web"
 DATABASE_NAME = "consolas.sqlite"
@@ -3343,6 +3343,58 @@ def usable_radar_references(references: list[Any], entity_type: str, item_kind: 
     return [reference for reference in references if reference.source == "peer-listings"]
 
 
+def radar_console_shipping_weight(config: AppConfig, entity_id: str, variant: str = "") -> float | None:
+    """Peso de envío declarado para esta consola, o `None` si no hay dato.
+
+    Una consola no pesa lo mismo que otra: la PSP son 0,19 kg y una PS3 Fat 5.
+    Con un único número para "consola" el courier se equivocaba en las dos
+    direcciones — quince veces de más en la PSP, de menos en la PS3 Fat.
+
+    Sólo aplica cuando la búsqueda apunta a una consola concreta del catálogo.
+    Sin esa vinculación queda la estimación genérica, que sigue siendo el
+    supuesto prudente de siempre.
+    """
+
+    if not entity_id:
+        return None
+    for entry in load_console_catalog(config):
+        if str(entry.get("id") or "") != entity_id:
+            continue
+        return radar_console_weight_entry(entry.get("pesoEnvio"), variant)
+    return None
+
+
+def radar_console_weight_declaration(config: AppConfig, entity_id: str) -> Any:
+    """La declaración de peso de esta consola, sin resolver todavía la revisión.
+
+    Se resuelve una vez por corrida y no por publicación: la revisión la decide
+    después el título de cada una.
+    """
+
+    if not entity_id:
+        return None
+    for entry in load_console_catalog(config):
+        if str(entry.get("id") or "") == entity_id:
+            return entry.get("pesoEnvio")
+    return None
+
+
+def radar_console_weight_entry(peso: Any, variant: str = "") -> float | None:
+    """El peso declarado, de la revisión que corresponda.
+
+    Sin revisión declarada en el título queda el peso general de la consola, que
+    es el de la variante más pesada: subestimar el courier sorprende con un
+    costo mayor al anunciado, y sobreestimarlo sólo posterga una compra.
+    """
+
+    if not isinstance(peso, dict):
+        return None
+    candidate = (peso.get("variantes") or {}).get(variant, {}).get("kg") if variant else None
+    if not isinstance(candidate, (int, float)) or candidate <= 0:
+        candidate = peso.get("kg")
+    return float(candidate) if isinstance(candidate, (int, float)) and candidate > 0 else None
+
+
 def target_applies_to(item_kind: Any, entity_type: str) -> bool:
     """Si el objetivo de esta búsqueda puede medirse contra esta pieza.
 
@@ -3365,7 +3417,7 @@ def target_applies_to(item_kind: Any, entity_type: str) -> bool:
 
 def valuate_radar_match(
     listing: MarketplaceListing, verdict: Any, criteria: dict[str, Any], references: list[Any],
-    entity_type: str = "",
+    entity_type: str = "", console_weight: Any = None,
 ) -> Any:
     """Puntúa una coincidencia que ya pasó los filtros obligatorios."""
     completeness = str(criteria.get("completeness") or "any")
@@ -3388,6 +3440,14 @@ def valuate_radar_match(
         # Un lote no recibe costo importado inventado: su peso depende de
         # cuántas piezas trae, y eso el título no lo dice.
         entity_type=item_kind.weighable,
+        # El peso declarado es el de esa consola: sólo vale si la pieza es una
+        # consola. Un juego que cayó en la misma búsqueda pesa lo que pesa un
+        # juego, no lo que pesa la consola que se estaba buscando.
+        weight_kg=(
+            radar_console_weight_entry(console_weight, detect_console_variant(listing.title))
+            if item_kind.kind == "console"
+            else None
+        ),
         target_landed_price=(
             criteria.get("targetLandedPrice") if target_applies_to(item_kind, entity_type) else None
         ),
@@ -3445,6 +3505,7 @@ def execute_radar_search(config: AppConfig, target_id: str, run_id: str = "") ->
 
     capabilities_by_source = {source_id: radar_source_capabilities(source_id) for source_id in sources}
     expected_kind = radar_expected_item_kind(str(row["search_type"]), str(row["entity_type"]))
+    console_weight = radar_console_weight_declaration(config, str(row["entity_id"]))
     references = radar_entity_references(config, str(row["entity_type"]), str(row["entity_id"]))
     # Sin catálogo de precios para esta entidad, las publicaciones de esta misma
     # corrida son la única referencia disponible. Entra al final de la lista: la
@@ -3470,7 +3531,9 @@ def execute_radar_search(config: AppConfig, target_id: str, run_id: str = "") ->
                     rejected += 1
                     continue
                 listing_id = upsert_radar_listing(conn, listing, now)
-                card = valuate_radar_match(listing, verdict, criteria, references, expected_kind)
+                card = valuate_radar_match(
+                    listing, verdict, criteria, references, expected_kind, console_weight
+                )
                 conn.execute(
                     """
                     INSERT INTO radar_search_matches (
@@ -3604,6 +3667,7 @@ def create_manual_radar_listing(config: AppConfig, payload: Any) -> dict[str, An
     card = valuate_radar_match(
         listing, verdict, criteria, references,
         radar_expected_item_kind(str(row["search_type"]), str(row["entity_type"])),
+        radar_console_weight_declaration(config, str(row["entity_id"])),
     )
     now = utc_now()
 

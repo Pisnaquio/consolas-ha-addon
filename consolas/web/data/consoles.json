@@ -56,6 +56,24 @@
           "Slim"
         ],
         "pendiente": "Faltan PriceCharting, eBay sold y CIB por revisión y variante (Fat / Slim)."
+      },
+      "pesoEnvio": {
+        "kg": 2.5,
+        "aparatoKg": 1.93,
+        "variante": "Fat (SCPH-30001)",
+        "verificadoEn": "2026-09-13",
+        "fuente": "eBay/PawnAmerica (Fat), Gametrog + ficha técnica SCPH-70004 (Slim)",
+        "nota": "Peso por revisión: sin declaración explícita en el título se asume la más pesada. Peso de envío = aparato + embalaje; la previsión de embalaje es una estimación declarada, no un dato medido.",
+        "variantes": {
+          "fat": {
+            "kg": 2.5,
+            "aparatoKg": 1.93
+          },
+          "slim": {
+            "kg": 1.4,
+            "aparatoKg": 0.9
+          }
+        }
       }
     },
     {
@@ -405,6 +423,14 @@
           "precioObjetivoCompra": "Regla interna: 70% de la referencia más baja entre PriceChart/eBaySold/GameStop"
         },
         "match": "Sega Dreamcast Console"
+      },
+      "pesoEnvio": {
+        "kg": 2.1,
+        "aparatoKg": 1.5,
+        "variante": "HKT-3020",
+        "verificadoEn": "2026-09-13",
+        "fuente": "Wikipedia (Dreamcast)",
+        "nota": "Las fuentes van de 1,5 a 1,9 kg; se toma 1,5 de Wikipedia como aparato. Peso de envío = aparato + embalaje, caja y relleno. La previsión de embalaje es una estimación declarada, no un dato medido."
       }
     },
     {
@@ -537,6 +563,14 @@
         "gamestopManual": {
           "valor": 150
         }
+      },
+      "pesoEnvio": {
+        "kg": 1.5,
+        "aparatoKg": 0.96,
+        "variante": "SNS-001",
+        "verificadoEn": "2026-09-13",
+        "fuente": "Dimensions.com (SNES)",
+        "nota": "Modelo original; la Jr. es más liviana. Peso de envío = aparato + embalaje, caja y relleno. La previsión de embalaje es una estimación declarada, no un dato medido."
       }
     },
     {
@@ -592,6 +626,24 @@
           "Super Slim"
         ],
         "pendiente": "Faltan PriceCharting, eBay sold y CIB por revisión."
+      },
+      "pesoEnvio": {
+        "kg": 5.6,
+        "aparatoKg": 5.0,
+        "variante": "Fat (CECHA/60 GB)",
+        "verificadoEn": "2026-09-13",
+        "fuente": "Classic PlayStation 3 Wiki (Fat y Slim)",
+        "nota": "Peso por revisión: sin declaración explícita en el título se asume la más pesada. Peso de envío = aparato + embalaje; la previsión de embalaje es una estimación declarada, no un dato medido.",
+        "variantes": {
+          "fat": {
+            "kg": 5.6,
+            "aparatoKg": 5.0
+          },
+          "slim": {
+            "kg": 3.8,
+            "aparatoKg": 3.2
+          }
+        }
       }
     },
     {
@@ -617,6 +669,14 @@
           "PSP Go"
         ],
         "pendiente": "Faltan PriceCharting, eBay sold y CIB por revisión."
+      },
+      "pesoEnvio": {
+        "kg": 0.6,
+        "aparatoKg": 0.189,
+        "variante": "PSP-3000",
+        "verificadoEn": "2026-09-13",
+        "fuente": "Retro Catalog / versus.com (PSP-3000)",
+        "nota": "Portátil: el embalaje y el cargador pesan más que la consola. Peso de envío = aparato + embalaje, caja y relleno. La previsión de embalaje es una estimación declarada, no un dato medido."
       }
     },
     {

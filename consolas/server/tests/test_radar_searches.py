@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -953,3 +954,55 @@ class TargetLandedPriceCriterionTests(RadarSearchTestCase):
         )
         verdict = evaluate_match(listing, {"targetLandedPrice": 80.0, "includeTerms": []})
         self.assertTrue(verdict.matched, verdict.blockers)
+
+
+class ConsoleShippingWeightTests(unittest.TestCase):
+    """El peso sale del catálogo versionado cuando la búsqueda apunta a una consola real."""
+
+    class Config:
+        """Sólo necesita apuntar al catálogo que se publica de verdad."""
+
+        def __init__(self) -> None:
+            self.static_dir = Path(__file__).resolve().parents[2] / "web"
+
+    def setUp(self) -> None:
+        self.config = self.Config()
+
+    def test_every_console_with_a_declared_weight_is_readable(self) -> None:
+        from server.app import radar_console_shipping_weight
+
+        for console_id in ("ps2", "ps3", "psp", "dreamcast", "snes"):
+            with self.subTest(console=console_id):
+                peso = radar_console_shipping_weight(self.config, console_id)
+                self.assertIsNotNone(peso, f"{console_id} sin peso declarado")
+                self.assertGreater(peso, 0)
+
+    def test_the_psp_is_not_costed_like_a_home_console(self) -> None:
+        from server.app import radar_console_shipping_weight
+
+        psp = radar_console_shipping_weight(self.config, "psp")
+        ps3 = radar_console_shipping_weight(self.config, "ps3")
+        self.assertLess(psp, 1.0, "una portátil no pesa como una consola de mesa")
+        self.assertGreater(ps3, psp * 5)
+
+    def test_every_declared_weight_states_its_source(self) -> None:
+        # Un peso sin procedencia no es evidencia, igual que un precio.
+        catalogo = json.loads((self.config.static_dir / "data" / "consoles.json").read_text(encoding="utf-8"))
+        for entry in catalogo["consolas"]:
+            peso = entry.get("pesoEnvio")
+            if not peso:
+                continue
+            with self.subTest(console=entry["id"]):
+                self.assertTrue(peso.get("fuente"))
+                self.assertTrue(peso.get("verificadoEn"))
+                self.assertGreater(peso["kg"], peso["aparatoKg"], "el envío pesa más que el aparato solo")
+
+    def test_a_console_without_a_declared_weight_falls_back(self) -> None:
+        from server.app import radar_console_shipping_weight
+
+        self.assertIsNone(radar_console_shipping_weight(self.config, "ps4"))
+
+    def test_an_unlinked_search_has_no_declared_weight(self) -> None:
+        from server.app import radar_console_shipping_weight
+
+        self.assertIsNone(radar_console_shipping_weight(self.config, ""))

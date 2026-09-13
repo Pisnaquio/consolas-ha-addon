@@ -147,6 +147,32 @@ def _strip_platforms(text: str) -> str:
     return text
 
 
+CONSOLE_VARIANTS = (
+    ("super-slim", (r"\bsuper\s*slim\b",)),
+    ("slim", (r"\bslim\b",)),
+    ("fat", (r"\bfat\b", r"\bphat\b", r"\boriginal\b")),
+)
+
+
+def detect_console_variant(title: str) -> str:
+    """Qué revisión de consola declara el título, o vacío si no lo dice.
+
+    La diferencia no es cosmética: una PS3 Fat pesa 5 kg y una Slim 3,2, que
+    son 31 dólares de courier. Guardar una sola por consola obligaba a elegir
+    entre subestimar la pesada o encarecer la liviana, y en el mercado real las
+    que aparecen son casi todas Slim.
+
+    Sin declaración explícita no se adivina: quien llama decide qué hacer con
+    la duda, y lo prudente es asumir la variante más pesada.
+    """
+
+    text = f" {str(title or '').lower()} "
+    for variant, patterns in CONSOLE_VARIANTS:
+        if any(re.search(pattern, text) for pattern in patterns):
+            return variant
+    return ""
+
+
 def classify_listing_item(title: str) -> ItemKind:
     """Clasifica una publicación por su título.
 
@@ -176,4 +202,4 @@ def classify_listing_item(title: str) -> ItemKind:
     return ItemKind("", False)
 
 
-__all__ = ["ItemKind", "ITEM_KINDS", "classify_listing_item"]
+__all__ = ["ItemKind", "ITEM_KINDS", "classify_listing_item", "detect_console_variant"]

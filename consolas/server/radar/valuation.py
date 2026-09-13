@@ -387,6 +387,7 @@ def cost_breakdown(
     completeness: str = "loose",
     courier_origin: str = "usa",
     courier_category: str = "general",
+    weight_kg: float | None = None,
     include_import: bool = True,
 ) -> dict[str, Any]:
     """Artículo, envío interno y courier, cada uno declarando si es exacto.
@@ -401,7 +402,15 @@ def cost_breakdown(
     if price_amount is not None:
         subtotal = round(price_amount + (shipping_amount or 0), 2)
 
-    weight = estimate_weight_kg(entity_type, completeness) if include_import else None
+    # Un peso declarado para esta consola en particular gana sobre la tabla
+    # genérica: una PSP pesa 0,19 kg y una PS3 Fat 5 — un solo número para
+    # "consola" se equivoca en las dos direcciones.
+    if not include_import:
+        weight = None
+    elif weight_kg is not None:
+        weight = weight_kg
+    else:
+        weight = estimate_weight_kg(entity_type, completeness)
     courier = courier_cost(weight, courier_origin, courier_category) if weight is not None else None
     imported = (
         round(subtotal + courier + IMPORT_TAX_USD, 2) if (subtotal is not None and courier is not None) else None
@@ -531,6 +540,7 @@ def score_listing(
     entity_type: str = "",
     courier_origin: str = "usa",
     courier_category: str = "general",
+    weight_kg: float | None = None,
     target_landed_price: float | None = None,
     today: date | None = None,
 ) -> ScoreCard:
@@ -541,6 +551,7 @@ def score_listing(
         price_amount, shipping_amount, currency,
         entity_type=entity_type, completeness=completeness,
         courier_origin=courier_origin, courier_category=courier_category,
+        weight_kg=weight_kg,
     )
     # El objetivo no puntúa ni bloquea: es tu umbral de "esto lo compro ya", y
     # sirve para decidir a quién interrumpir.
