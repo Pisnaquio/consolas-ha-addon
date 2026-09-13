@@ -349,3 +349,22 @@ class ExpectedItemKindTests(unittest.TestCase):
             {"includeTerms": ["PlayStation 2"]},
         )
         self.assertTrue(verdict.matched, verdict.blockers)
+
+
+class ConsoleSearchWithoutAnEntityTests(unittest.TestCase):
+    """El tipo de búsqueda ya declara la intención, haya entidad vinculada o no."""
+
+    def test_a_console_search_expects_consoles_even_with_no_entity_linked(self) -> None:
+        from server.app import radar_expected_item_kind
+
+        self.assertEqual(radar_expected_item_kind("console", ""), "console")
+
+    def test_a_chase_without_an_entity_still_expects_nothing(self) -> None:
+        from server.app import radar_expected_item_kind
+
+        self.assertEqual(radar_expected_item_kind("chase", ""), "")
+
+    def test_a_lot_never_expects_a_kind_even_with_an_entity(self) -> None:
+        from server.app import radar_expected_item_kind
+
+        self.assertEqual(radar_expected_item_kind("lot", "console"), "")

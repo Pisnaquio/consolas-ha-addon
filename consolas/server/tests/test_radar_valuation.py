@@ -556,7 +556,7 @@ class ListingKindDrivenValuationTests(unittest.TestCase):
     """La pieza se costea y se compara por lo que es, no por lo que se buscaba."""
 
     def criteria(self) -> dict:
-        return {"completeness": "any", "currency": "USD"}
+        return {"completeness": "any", "currency": "USD", "targetLandedPrice": 145.0}
 
     def verdict(self):
         from radar.matching import MatchVerdict
@@ -598,6 +598,29 @@ class ListingKindDrivenValuationTests(unittest.TestCase):
             self.verdict(), self.criteria(), [], "console",
         )
         self.assertIsNone(card.to_dict()["cost"]["courier"])
+
+    def test_a_game_in_a_console_search_never_crosses_the_console_target(self) -> None:
+        # 145 es lo que pagarias por una PS2, no por un juego de PS2. Sin esta
+        # regla, todo juego barato que se cuela dispara un aviso.
+        card = valuate_radar_match(
+            self.listing("Shrek 2 - Sony Playstation 2 PS2 Pristine Tested", price=39.99),
+            self.verdict(), self.criteria(), [], "console",
+        )
+        self.assertIsNone(card.to_dict()["target"])
+
+    def test_a_console_in_a_console_search_does_cross_it(self) -> None:
+        card = valuate_radar_match(
+            self.listing("Sony PlayStation 2 PS2 Slim Console Tested", price=60.0),
+            self.verdict(), self.criteria(), [], "console",
+        )
+        self.assertTrue(card.to_dict()["target"]["meets"])
+
+    def test_a_search_with_no_entity_measures_everything_it_finds(self) -> None:
+        card = valuate_radar_match(
+            self.listing("Grand Theft Auto III Sony Playstation 2 PS2", price=12.0),
+            self.verdict(), self.criteria(), [], "",
+        )
+        self.assertTrue(card.to_dict()["target"]["meets"])
 
     def test_an_accessory_is_not_priced_against_the_console(self) -> None:
         # El VMU de Dreamcast a USD 34 salía "ganga real" y primero en el feed

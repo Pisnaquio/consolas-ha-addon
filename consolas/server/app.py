@@ -58,7 +58,7 @@ from radar.sources import registry as radar_registry  # noqa: E402
 
 
 SERVICE_NAME = "consolas-server"
-SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.38")
+SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.39")
 DEFAULT_DATA_DIR = "/data"
 DEFAULT_STATIC_DIR = "/app/web"
 DATABASE_NAME = "consolas.sqlite"
@@ -3319,7 +3319,13 @@ def radar_expected_item_kind(search_type: str, entity_type: str) -> str:
 
     if search_type in {"lot", "discovery"}:
         return ""
-    return entity_type if entity_type in {"console", "game", "accessory"} else ""
+    if entity_type in {"console", "game", "accessory"}:
+        return entity_type
+    # Una búsqueda de tipo consola persigue consolas aunque nadie haya vinculado
+    # la entidad del catálogo: el tipo ya declara la intención. Sin esto, "PS3
+    # consola lista para usar" devolvía un NBA Jam y un control, y ambos
+    # cruzaban el objetivo de 160 dólares pensado para la consola.
+    return "console" if search_type == "console" else ""
 
 
 def usable_radar_references(references: list[Any], entity_type: str, item_kind: Any) -> list[Any]:
@@ -3335,6 +3341,26 @@ def usable_radar_references(references: list[Any], entity_type: str, item_kind: 
     if not entity_type or not item_kind.confident or item_kind.kind == entity_type:
         return references
     return [reference for reference in references if reference.source == "peer-listings"]
+
+
+def target_applies_to(item_kind: Any, entity_type: str) -> bool:
+    """Si el objetivo de esta búsqueda puede medirse contra esta pieza.
+
+    El objetivo pertenece a la entidad que la búsqueda persigue: 145 dólares es
+    lo que pagarías por una PS2, no por un juego de PS2. Sin esta regla, todo
+    juego barato que se cuela en una búsqueda de consola cruza el objetivo al
+    instante y dispara un aviso — y de los seis primeros que cruzaban en la base
+    real, cinco eran juegos o un control metidos en búsquedas de consola.
+
+    Se exige que la pieza parezca del tipo buscado, incluso cuando la
+    clasificación es una deducción. Perder el aviso de una consola descrita sin
+    la palabra consola es mucho más barato que avisar por cada juego de 40
+    dólares: interrumpir de más entrena a ignorar los avisos.
+    """
+
+    if not entity_type:
+        return True
+    return item_kind.kind == entity_type
 
 
 def valuate_radar_match(
@@ -3362,7 +3388,9 @@ def valuate_radar_match(
         # Un lote no recibe costo importado inventado: su peso depende de
         # cuántas piezas trae, y eso el título no lo dice.
         entity_type=item_kind.weighable,
-        target_landed_price=criteria.get("targetLandedPrice"),
+        target_landed_price=(
+            criteria.get("targetLandedPrice") if target_applies_to(item_kind, entity_type) else None
+        ),
     )
 
 
@@ -3442,7 +3470,7 @@ def execute_radar_search(config: AppConfig, target_id: str, run_id: str = "") ->
                     rejected += 1
                     continue
                 listing_id = upsert_radar_listing(conn, listing, now)
-                card = valuate_radar_match(listing, verdict, criteria, references, str(row["entity_type"]))
+                card = valuate_radar_match(listing, verdict, criteria, references, expected_kind)
                 conn.execute(
                     """
                     INSERT INTO radar_search_matches (
@@ -3573,7 +3601,10 @@ def create_manual_radar_listing(config: AppConfig, payload: Any) -> dict[str, An
         )
 
     references = radar_entity_references(config, str(row["entity_type"]), str(row["entity_id"]))
-    card = valuate_radar_match(listing, verdict, criteria, references, str(row["entity_type"]))
+    card = valuate_radar_match(
+        listing, verdict, criteria, references,
+        radar_expected_item_kind(str(row["search_type"]), str(row["entity_type"])),
+    )
     now = utc_now()
 
     with _RADAR_LOCK, connect_db(config) as conn:
