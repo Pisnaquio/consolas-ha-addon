@@ -58,7 +58,7 @@ from radar.sources import registry as radar_registry  # noqa: E402
 
 
 SERVICE_NAME = "consolas-server"
-SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.49")
+SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.50")
 DEFAULT_DATA_DIR = "/data"
 DEFAULT_STATIC_DIR = "/app/web"
 DATABASE_NAME = "consolas.sqlite"
@@ -4229,7 +4229,7 @@ def load_game_names_by_console(config: AppConfig) -> dict[str, dict[str, str]]:
 def radar_master_proposals(config: AppConfig) -> list[dict[str, Any]]:
     # Lo que ya tiene búsqueda no se vuelve a proponer: sin esto el Master
     # devolvía siempre el mismo puñado y una segunda tanda no agregaba nada.
-    covered_consoles, covered_lots, covered_games = radar_targeted_entities(config, active_only=False)
+    covered_consoles, covered_lots, covered_games = radar_targeted_entities(config, include_deleted=True)
     return propose_master_searches(
         read_state(config),
         load_console_catalog(config),
@@ -4601,25 +4601,29 @@ DUTY_FREE_MERCHANDISE_USD = 200.0
 
 
 def radar_targeted_entities(
-    config: AppConfig, *, active_only: bool
+    config: AppConfig, *, active_only: bool = False, include_deleted: bool = False
 ) -> tuple[set[str], set[str], set[tuple[str, str]]]:
     """Qué ya tiene una búsqueda apuntándole: consolas, lotes y juegos.
 
     Los tres se separan porque son objetivos distintos: buscar una PS2 y buscar
     un lote de PS2 son cosas diferentes, y tener una no debería tapar la otra.
 
-    `active_only` separa dos preguntas. Para la cobertura interesa lo que el
-    radar está mirando **ahora**: una búsqueda archivada no cubre nada. Para el
-    Master interesa lo que el owner ya vio pasar, archivadas incluidas — volver
-    a proponer algo que archivó a propósito sería no escuchar.
+    Las dos banderas separan preguntas distintas. Para la cobertura interesa lo
+    que el radar está mirando **ahora**: una búsqueda archivada no cubre nada.
+    Para el Master interesa todo lo que el owner ya vio pasar y decidió —
+    archivadas y borradas incluidas. Volver a proponer algo que borró no sólo es
+    no escuchar: `regenerate` igual lo saltea por id, así que la propuesta se
+    come el cupo de la tanda sin crear nada.
     """
 
-    query = (
-        "SELECT search_type, entity_type, entity_id, entity_console_id"
-        "  FROM radar_searches WHERE deleted_at IS NULL"
-    )
+    query = "SELECT search_type, entity_type, entity_id, entity_console_id FROM radar_searches"
+    conditions = []
+    if not include_deleted:
+        conditions.append("deleted_at IS NULL")
     if active_only:
-        query += " AND status = 'active'"
+        conditions.append("status = 'active'")
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
     with _RADAR_LOCK, connect_db(config) as conn:
         rows = conn.execute(query).fetchall()
 

@@ -315,3 +315,54 @@ class SuccessiveRoundsTests(unittest.TestCase):
             if p["searchType"] == "lot"
         ]
         self.assertEqual(lots, [])
+
+
+class DeletedProposalsTests(unittest.TestCase):
+    """Lo que el owner borró no vuelve a proponerse ni gasta cupo.
+
+    `regenerate` ya saltea por id una propuesta borrada, así que volver a
+    proponerla no creaba nada — pero igual consumía un lugar de la tanda, y con
+    cinco borradas la mitad del cupo se iba en fantasmas.
+    """
+
+    def setUp(self) -> None:
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp_dir.cleanup)
+        self.config = TestConfig(Path(self.temp_dir.name))
+        (self.config.static_dir / "data").mkdir(parents=True)
+        (self.config.static_dir / "data" / "consoles.json").write_text(
+            json.dumps({"consolas": CONSOLES}), encoding="utf-8"
+        )
+        init_db(self.config)
+        write_state(self.config, state())
+
+    def test_a_deleted_proposal_is_not_offered_again(self) -> None:
+        from server.app import delete_radar_search, radar_master_proposals
+
+        regenerate_radar_master(self.config)
+        propuesta = next(
+            item for item in list_radar_searches(self.config)["items"] if item["searchType"] == "console"
+        )
+        delete_radar_search(self.config, propuesta["id"])
+
+        vuelven = [p["entityId"] for p in radar_master_proposals(self.config) if p["searchType"] == "console"]
+        self.assertNotIn(propuesta["entityId"], vuelven)
+
+    def test_the_quota_goes_to_something_new_instead(self) -> None:
+        # Con más consolas que cupo, borrar las primeras tiene que dejar entrar
+        # a las siguientes en vez de gastarse en repetir lo descartado.
+        from server.app import delete_radar_search, radar_master_proposals
+
+        muchas = [{"id": f"c{i}", "nombre": f"Consola {i}"} for i in range(12)]
+        (self.config.static_dir / "data" / "consoles.json").write_text(
+            json.dumps({"consolas": muchas}), encoding="utf-8"
+        )
+
+        regenerate_radar_master(self.config)
+        primeras = [i for i in list_radar_searches(self.config)["items"] if i["searchType"] == "console"]
+        for item in primeras:
+            delete_radar_search(self.config, item["id"])
+
+        siguientes = [p["entityId"] for p in radar_master_proposals(self.config) if p["searchType"] == "console"]
+        self.assertTrue(siguientes, "quedan consolas por proponer")
+        self.assertFalse(set(siguientes) & {item["entityId"] for item in primeras})
