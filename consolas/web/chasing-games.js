@@ -24,6 +24,13 @@
   const COMPLETENESS_OPTIONS = ["any", "loose", "boxed", "cib", "sealed"];
   const REQUIREMENT_OPTIONS = ["any", "preferred", "required"];
   const TYPE_OPTIONS = ["chase", "console", "lot", "upgrade", "discovery", "master"];
+  const ENTITY_TYPE_OPTIONS = ["", "console", "game", "accessory"];
+  const ENTITY_TYPE_LABELS = {
+    "": "Sin vincular",
+    console: "Una consola",
+    game: "Un juego",
+    accessory: "Un accesorio",
+  };
   const PRIORITY_OPTIONS = ["alta", "media-alta", "media", "baja"];
 
   let statusFilter = "all";
@@ -168,6 +175,19 @@
           <label>Región
             <input name="region" maxlength="60" value="${escapeHtml(criteria.region || "")}" placeholder="NTSC-U/C" />
           </label>
+          <label>Qué persigue
+            <select name="entityType">${optionList(ENTITY_TYPE_OPTIONS, item.entityType || "", (value) =>
+              ENTITY_TYPE_LABELS[value]
+            )}</select>
+          </label>
+          <label>Id en el catálogo
+            <input name="entityId" maxlength="120" value="${escapeHtml(item.entityId || "")}" placeholder="ps2, aladdin" />
+            <small class="radar-field-hint">El id del catálogo, no el nombre. Con esto aparece «Registrar compra».</small>
+          </label>
+          <label>Consola de ese juego
+            <input name="entityConsoleId" maxlength="120" value="${escapeHtml(item.entityConsoleId || "")}" placeholder="snes" />
+            <small class="radar-field-hint">Sólo para juegos y accesorios: el mismo juego existe en varias plataformas.</small>
+          </label>
           <label>Condición
             <select name="condition">${optionList(
               CONDITION_OPTIONS,
@@ -272,6 +292,9 @@
       slots,
       name: text("name"),
       platform: text("platform"),
+      entityType: text("entityType"),
+      entityId: text("entityId"),
+      entityConsoleId: text("entityConsoleId"),
       searchType: text("searchType") || "chase",
       priority: text("priority") || "media",
       notes: text("notes"),
@@ -533,6 +556,25 @@
     return "Todavía no hay resultados guardados. Usá “Buscar ahora” o esperá la próxima revisión.";
   }
 
+  /**
+   * Una búsqueda sin entidad del catálogo funciona, pero calla tres cosas que
+   * el owner no tiene cómo adivinar: no puede ofrecer "Registrar compra"
+   * porque no sabe qué escribir, no tiene referencia de precio curada, y una
+   * consola se costea con el peso genérico en vez del suyo.
+   *
+   * Los lotes y las búsquedas de descubrimiento no lo declaran: existen para
+   * traer cosas mezcladas, así que para ellas no estar vinculadas es lo normal.
+   */
+  function unlinkedNote(item) {
+    if (["lot", "discovery"].includes(item.searchType)) return "";
+    if (item.entityId && (item.entityType !== "game" || item.entityConsoleId)) return "";
+    const falta =
+      item.entityType === "game" && item.entityId && !item.entityConsoleId
+        ? "no dice de qué consola es ese juego"
+        : "no apunta a nada del catálogo";
+    return `<p class="radar-unlinked-note">Esta búsqueda ${escapeHtml(falta)}: no va a ofrecer «Registrar compra» ni comparar contra un precio de referencia. Se arregla al editarla.</p>`;
+  }
+
   function searchCard(item) {
     const results = item.results || [];
     const chips = repository.describeCriteria(item.criteria || {});
@@ -562,6 +604,7 @@
             }. No va a ejecutarse hasta que la actives.</p>`
           : ""
       }
+      ${unlinkedNote(item)}
       ${chips.length ? `<div class="radar-chips">${chips.map((chip) => `<span>${escapeHtml(chip)}</span>`).join("")}</div>` : ""}
       <div class="chase-card-meta">
         <span>Última búsqueda: ${escapeHtml(dateLabel(item.lastCheckedAt))}</span>

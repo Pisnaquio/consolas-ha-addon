@@ -57,6 +57,12 @@
 .radar-form-checks label,.radar-source-option { display:flex; align-items:center; gap:8px; font-size:.84rem; color:var(--muted); }
 
 /* Valuación de lotes (PRD §10.5): calculadora de bolsillo, nada se persiste. */
+/* Una búsqueda sin vincular funciona, pero calla lo que no puede ofrecer.
+   Se avisa sin alarmar: no es un error, es una capacidad que falta. */
+.radar-unlinked-note { margin:10px 0 0; padding:8px 12px; border-left:3px solid #8fb8dc;
+                       background:rgba(143,184,220,.08); border-radius:0 8px 8px 0;
+                       font-size:.8rem; color:var(--muted); }
+
 .radar-dismiss-form { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:10px;
                       padding:12px; border:1px solid var(--line); border-radius:10px; }
 .radar-dismiss-form label { font:500 .74rem "IBM Plex Mono",monospace; color:var(--muted); }

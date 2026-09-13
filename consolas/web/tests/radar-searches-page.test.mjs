@@ -842,3 +842,47 @@ test("an existing target price comes back into the edit form", async () => {
   // El alta viene vacía; lo que importa es que el campo exista para cargarlo.
   assert.match(html, /name="targetItemPrice"/);
 });
+
+test("a search that points at nothing says what it cannot do", async () => {
+  const item = search();
+  item.entityType = "";
+  item.entityId = "";
+  const { html } = await renderPage({ items: [item] });
+
+  assert.match(html, /radar-unlinked-note/);
+  assert.match(html, /no apunta a nada del catálogo/);
+  assert.match(html, /Registrar compra/);
+});
+
+test("a game search without its console says exactly that", async () => {
+  const item = search();
+  item.entityType = "game";
+  item.entityId = "aladdin";
+  item.entityConsoleId = "";
+  const { html } = await renderPage({ items: [item] });
+
+  assert.match(html, /no dice de qué consola es ese juego/);
+});
+
+test("a linked search says nothing about linking", async () => {
+  const { html } = await renderPage({ items: [search()] });
+  assert.doesNotMatch(html, /radar-unlinked-note/);
+});
+
+test("a lot search is not nagged: it exists to bring mixed things", async () => {
+  const item = search();
+  item.searchType = "lot";
+  item.entityType = "";
+  item.entityId = "";
+  const { html } = await renderPage({ items: [item] });
+
+  assert.doesNotMatch(html, /radar-unlinked-note/);
+});
+
+test("the form lets you link the entity, so the note is actionable", async () => {
+  const { html } = await renderPage({ items: [], search: "?open=create" });
+
+  assert.match(html, /name="entityType"/);
+  assert.match(html, /name="entityId"/);
+  assert.match(html, /name="entityConsoleId"/);
+});
