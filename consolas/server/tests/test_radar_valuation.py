@@ -12,6 +12,7 @@ from radar.valuation import (
     billable_weight_kg,
     courier_cost,
     estimate_weight_kg,
+    evaluate_target,
     lot_valuation,
     peer_listing_benchmark,
     cost_breakdown,
@@ -513,6 +514,42 @@ class LotValuationTests(unittest.TestCase):
         self.assertIsNone(result["discount"])
         self.assertIsNone(result["costPerUsefulPiece"])
         self.assertEqual(result["conservativeValue"], 60.0, "el valor de las piezas no depende del costo")
+
+
+
+
+class TargetLandedPriceTests(unittest.TestCase):
+    """El objetivo se mide contra el total puesto acá, no contra el artículo."""
+
+    def test_no_target_means_no_verdict_at_all(self) -> None:
+        self.assertIsNone(evaluate_target(90.0, None))
+        self.assertIsNone(evaluate_target(90.0, 0))
+
+    def test_it_compares_against_the_landed_total(self) -> None:
+        result = evaluate_target(78.0, 80.0)
+        self.assertTrue(result["meets"])
+        self.assertEqual(result["gap"], -2.0)
+
+    def test_above_the_target_reports_how_far(self) -> None:
+        result = evaluate_target(95.5, 80.0)
+        self.assertFalse(result["meets"])
+        self.assertEqual(result["gap"], 15.5)
+
+    def test_without_a_landed_cost_there_is_no_verdict(self) -> None:
+        # Un lote no tiene costo puesto acá: decir que cumple sería inventarlo.
+        result = evaluate_target(None, 80.0)
+        self.assertIsNone(result["meets"])
+        self.assertIsNone(result["landedTotal"])
+
+    def test_the_target_never_changes_the_score(self) -> None:
+        common = dict(
+            price_amount=40.0, shipping_amount=0.0, benchmark=None,
+            match_confidence=1.0, entity_type="game",
+        )
+        sin_objetivo = score_listing(**common)
+        con_objetivo = score_listing(**common, target_landed_price=200.0)
+        self.assertEqual(sin_objetivo.score, con_objetivo.score)
+        self.assertTrue(con_objetivo.target["meets"], "pero sí queda registrado en la card")
 
 
 class ListingKindDrivenValuationTests(unittest.TestCase):

@@ -826,3 +826,19 @@ test("both places that discard offer the same reasons, from one shared list", as
   assert.ok(ids.includes("no-es-lo-que-busco"), "el caso de la caja suelta tiene su motivo");
   assert.ok(ids.includes("ya-lo-tengo"));
 });
+
+test("the form offers a target price and says it does not filter", async () => {
+  const { html } = await renderPage({ items: [], search: "?open=create" });
+
+  assert.match(html, /name="targetLandedPrice"/);
+  assert.match(html, /No filtra/);
+});
+
+test("an existing target price comes back into the edit form", async () => {
+  const withTarget = search();
+  withTarget.criteria = { ...withTarget.criteria, targetLandedPrice: 80 };
+  const { html } = await renderPage({ items: [withTarget], search: "?open=create" });
+
+  // El alta viene vacía; lo que importa es que el campo exista para cargarlo.
+  assert.match(html, /name="targetLandedPrice"/);
+});

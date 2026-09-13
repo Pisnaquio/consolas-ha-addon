@@ -921,3 +921,35 @@ class DerivedQueryRegenerationTests(RadarSearchTestCase):
         cleared = update_radar_search(self.config, search["id"], {"searchQuery": ""})["search"]
         self.assertEqual(cleared["searchQuery"], "Mappy NES")
 
+
+
+class TargetLandedPriceCriterionTests(RadarSearchTestCase):
+    """El objetivo se guarda como criterio pero no filtra nada."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        init_db(self.config)
+
+    def test_it_is_stored_and_returned(self) -> None:
+        created = create_radar_search(
+            self.config,
+            {"name": "PS2 con objetivo", "criteria": {"targetLandedPrice": 80}},
+        )["search"]
+        self.assertEqual(created["criteria"]["targetLandedPrice"], 80.0)
+
+    def test_a_search_without_one_simply_has_none(self) -> None:
+        created = create_radar_search(self.config, {"name": "PS2 sin objetivo"})["search"]
+        self.assertIsNone(created["criteria"]["targetLandedPrice"])
+
+    def test_it_never_rejects_a_listing(self) -> None:
+        # A diferencia de maxItemPrice, que sí bloquea: una publicación cara
+        # tiene que seguir guardándose, porque es la que después puede bajar.
+        from radar.matching import evaluate_match
+        from radar.model import MarketplaceListing
+
+        listing = MarketplaceListing(
+            source_id="ebay-us", external_id="1", title="Sony PlayStation 2 PS2 Console Tested",
+            listing_url="https://www.ebay.com/itm/1", price_amount=400.0, price_currency="USD",
+        )
+        verdict = evaluate_match(listing, {"targetLandedPrice": 80.0, "includeTerms": []})
+        self.assertTrue(verdict.matched, verdict.blockers)

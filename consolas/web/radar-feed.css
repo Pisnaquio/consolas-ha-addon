@@ -21,6 +21,13 @@
         font:500 .8rem "IBM Plex Mono",monospace; }
 .drop s { color:var(--muted); text-decoration-thickness:1px; }
 
+/* El objetivo lo fijaste vos: cuando se cruza manda sobre cualquier otra
+   señal de la card, y cuando falta se dice cuánto sin dramatizar. */
+.feed-target { margin:0; font:500 .8rem "IBM Plex Mono",monospace; color:var(--muted); }
+.feed-target.is-met { padding:6px 11px; border-radius:10px; color:#63d8aa;
+                      background:rgba(99,216,170,.13); border:1px solid rgba(99,216,170,.4); }
+.feed-target.is-unknown { color:#8fb8dc; font-style:italic; }
+
 .feed-why { margin:0; padding-left:16px; display:grid; gap:2px; font-size:.82rem; color:var(--muted); }
 .feed-why li.u { color:#ffd68c; }
 .feed-match { font:500 .74rem "IBM Plex Mono",monospace; color:var(--muted); }

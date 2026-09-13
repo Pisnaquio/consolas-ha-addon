@@ -322,3 +322,52 @@ class AlertTests(NotificationTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TargetPriceAlertTests(unittest.TestCase):
+    """El objetivo es el único umbral que escribe el propio usuario.
+
+    Por eso interrumpe: cuando dijo "a 80 puestos acá lo compro", cruzar los 80
+    es exactamente el aviso que pidió, sin depender de ninguna heurística.
+    """
+
+    def item(self, *, landed: float, target: float | None, **extra: object) -> dict:
+        valuation: dict = {}
+        if target is not None:
+            valuation["target"] = {
+                "value": target,
+                "meets": landed <= target,
+                "landedTotal": landed,
+                "gap": round(landed - target, 2),
+            }
+        valuation.update(extra.pop("valuation", {}))
+        return {"priceAmount": extra.pop("priceAmount", landed), "valuation": valuation, **extra}
+
+    def test_crossing_the_target_interrupts(self) -> None:
+        self.assertTrue(is_exceptional(self.item(landed=78.0, target=80.0)))
+
+    def test_being_above_the_target_does_not_interrupt(self) -> None:
+        self.assertFalse(is_exceptional(self.item(landed=95.0, target=80.0)))
+
+    def test_a_lot_without_a_landed_cost_never_claims_to_meet_the_target(self) -> None:
+        item = {"priceAmount": 40.0, "valuation": {"target": {"value": 80.0, "meets": None, "landedTotal": None}}}
+        self.assertFalse(is_exceptional(item), "sin costo puesto acá no hay veredicto que interrumpa")
+
+    def test_a_small_drop_that_crosses_the_target_notifies_again(self) -> None:
+        # De 82 a 79 es 4%: no mueve la aguja general, pero si tu objetivo eran
+        # 80 es justo el momento que estabas esperando.
+        why = deserves_notification(self.item(landed=79.0, target=80.0, priceAmount=79.0), {"price": 82.0})
+        self.assertIn("objetivo", why)
+
+    def test_a_small_drop_that_stays_above_the_target_stays_quiet(self) -> None:
+        why = deserves_notification(self.item(landed=95.0, target=80.0, priceAmount=95.0), {"price": 98.0})
+        self.assertEqual(why, "")
+
+    def test_something_already_below_target_does_not_re_notify_forever(self) -> None:
+        # Ya estaba por debajo cuando se avisó: cruzar es un evento, no un estado.
+        why = deserves_notification(self.item(landed=78.0, target=80.0, priceAmount=78.0), {"price": 79.0})
+        self.assertEqual(why, "")
+
+    def test_without_a_target_the_old_rules_still_govern(self) -> None:
+        self.assertTrue(is_exceptional({"valuation": {"ratio": 0.4}}))
+        self.assertFalse(is_exceptional({"valuation": {"ratio": 0.9}}))

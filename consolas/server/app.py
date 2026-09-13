@@ -58,7 +58,7 @@ from radar.sources import registry as radar_registry  # noqa: E402
 
 
 SERVICE_NAME = "consolas-server"
-SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.37")
+SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.38")
 DEFAULT_DATA_DIR = "/data"
 DEFAULT_STATIC_DIR = "/app/web"
 DATABASE_NAME = "consolas.sqlite"
@@ -2474,6 +2474,7 @@ def default_radar_criteria() -> dict[str, Any]:
         "currency": "USD",
         "maxItemPrice": None,
         "maxTotalUsa": None,
+        "targetLandedPrice": None,
         "minLotSize": None,
         "resultLimit": RADAR_DEFAULT_RESULT_LIMIT,
     }
@@ -2611,6 +2612,10 @@ def normalize_radar_criteria(value: Any, base: dict[str, Any] | None = None) -> 
         criteria["maxItemPrice"] = normalize_radar_amount(value.get("maxItemPrice"), "maxItemPrice")
     if "maxTotalUsa" in value:
         criteria["maxTotalUsa"] = normalize_radar_amount(value.get("maxTotalUsa"), "maxTotalUsa")
+    if "targetLandedPrice" in value:
+        criteria["targetLandedPrice"] = normalize_radar_amount(
+            value.get("targetLandedPrice"), "targetLandedPrice"
+        )
     if "minLotSize" in value:
         criteria["minLotSize"] = normalize_radar_count(value.get("minLotSize"), "minLotSize", 500)
     if "resultLimit" in value:
@@ -3357,6 +3362,7 @@ def valuate_radar_match(
         # Un lote no recibe costo importado inventado: su peso depende de
         # cuántas piezas trae, y eso el título no lo dice.
         entity_type=item_kind.weighable,
+        target_landed_price=criteria.get("targetLandedPrice"),
     )
 
 
@@ -4819,6 +4825,18 @@ def deserves_notification(item: dict[str, Any], previous: dict[str, Any] | None)
     current = item.get("priceAmount")
     if before is None or current is None or before <= 0:
         return ""
+
+    # Cruzar el objetivo vuelve a avisar aunque la baja sea chica: pasar de 82 a
+    # 79 es un 4% y no movería la aguja general, pero si tu objetivo eran 80 es
+    # justo el momento que estabas esperando.
+    target = (item.get("valuation") or {}).get("target") or {}
+    landed = target.get("landedTotal")
+    goal = target.get("value")
+    if target.get("meets") is True and landed is not None and goal is not None:
+        landed_before = landed - current + before
+        if landed_before > goal:
+            return f"cruzó tu objetivo de USD {goal:g}"
+
     if current < before and (before - current) / before >= RADAR_MATERIAL_DROP:
         return f"bajó {round((before - current) / before * 100)}%"
     return ""
@@ -4833,13 +4851,22 @@ def is_exceptional(item: dict[str, Any]) -> bool:
     la parte más floja del sistema. Interrumpir de más es peor que no
     interrumpir: entrena a ignorar los avisos.
 
-    Dos hechos bastan:
+    Tres hechos bastan:
 
-    1. un descuento profundo contra el benchmark comparable;
-    2. una baja fuerte sobre algo que el usuario ya venía siguiendo, que es el
+    1. cruzó el precio objetivo que el propio usuario fijó para esa búsqueda;
+    2. un descuento profundo contra el benchmark comparable;
+    3. una baja fuerte sobre algo que el usuario ya venía siguiendo, que es el
        cambio exacto que estaba esperando.
+
+    El objetivo va primero porque es el único de los tres que el usuario
+    escribió con la mano: cuando dijo "a 80 puestos acá lo compro", cruzar los
+    80 es exactamente el aviso que pidió, y no depende de ninguna heurística
+    nuestra.
     """
 
+    target = (item.get("valuation") or {}).get("target") or {}
+    if target.get("meets") is True:
+        return True
     ratio = ((item.get("valuation") or {}).get("ratio"))
     if isinstance(ratio, (int, float)) and 0 < ratio <= RADAR_ALERT_RATIO:
         return True

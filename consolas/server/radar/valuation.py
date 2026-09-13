@@ -257,6 +257,7 @@ class ScoreCard:
     contributions: list[dict[str, Any]] = field(default_factory=list)
     penalties: list[dict[str, Any]] = field(default_factory=list)
     caveats: list[str] = field(default_factory=list)
+    target: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -269,7 +270,33 @@ class ScoreCard:
             "contributions": list(self.contributions),
             "penalties": list(self.penalties),
             "caveats": list(self.caveats),
+            "target": dict(self.target) if self.target else None,
         }
+
+
+def evaluate_target(landed_total: float | None, target: float | None) -> dict[str, Any] | None:
+    """Compara el costo puesto acá contra el precio al que comprarías ya.
+
+    El objetivo se mide contra el total puesto acá y no contra el precio del
+    artículo: es el número con el que realmente se decide una compra desde acá,
+    y el único que no cambia de significado según cuánto cobre de envío el
+    vendedor.
+
+    Sin costo puesto acá no hay veredicto. Es el caso de un lote, cuyo peso
+    depende de cuántas piezas trae: comparar el objetivo contra un total que no
+    existe daría un "cumple" inventado.
+    """
+
+    if target is None or target <= 0:
+        return None
+    if landed_total is None:
+        return {"value": target, "meets": None, "landedTotal": None, "gap": None}
+    return {
+        "value": target,
+        "meets": landed_total <= target,
+        "landedTotal": landed_total,
+        "gap": round(landed_total - target, 2),
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -504,6 +531,7 @@ def score_listing(
     entity_type: str = "",
     courier_origin: str = "usa",
     courier_category: str = "general",
+    target_landed_price: float | None = None,
     today: date | None = None,
 ) -> ScoreCard:
     """Puntúa una publicación que ya pasó los filtros obligatorios."""
@@ -514,6 +542,9 @@ def score_listing(
         entity_type=entity_type, completeness=completeness,
         courier_origin=courier_origin, courier_category=courier_category,
     )
+    # El objetivo no puntúa ni bloquea: es tu umbral de "esto lo compro ya", y
+    # sirve para decidir a quién interrumpir.
+    card.target = evaluate_target(card.cost.get("importedTotal"), target_landed_price)
     reasons = match_reasons or []
     unverified = match_unverified or []
 

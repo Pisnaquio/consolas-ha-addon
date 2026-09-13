@@ -200,6 +200,11 @@
             <input name="maxItemPrice" type="number" min="0" step="1"
                    value="${escapeHtml(criteria.maxItemPrice ?? "")}" placeholder="300" />
           </label>
+          <label>Precio objetivo, puesto acá
+            <input name="targetLandedPrice" type="number" min="0" step="1"
+                   value="${escapeHtml(criteria.targetLandedPrice ?? "")}" placeholder="80" />
+            <small class="radar-field-hint">No filtra: es el precio al que comprás sin pensarlo. Cuando algo lo cruza, te avisa en el momento.</small>
+          </label>
           <label>Mínimo de piezas del lote
             <input name="minLotSize" type="number" min="1" step="1"
                    value="${escapeHtml(criteria.minLotSize ?? "")}" placeholder="6" />
@@ -283,6 +288,7 @@
         returnsRequired: data.get("returnsRequired") !== null,
         freeShippingOnly: data.get("freeShippingOnly") !== null,
         maxItemPrice: number("maxItemPrice"),
+        targetLandedPrice: number("targetLandedPrice"),
         minLotSize: number("minLotSize")
       }
     };

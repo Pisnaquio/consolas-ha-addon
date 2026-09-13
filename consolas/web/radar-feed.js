@@ -115,6 +115,23 @@
     </span>`;
   }
 
+  /**
+   * El objetivo es el umbral que escribiste vos, así que se muestra tal cual:
+   * cuánto falta, o que ya lo cruzó. Sin costo puesto acá no hay veredicto —
+   * es el caso de un lote, y decir "cumple" ahí sería inventarlo.
+   */
+  function targetBadge(item) {
+    const target = item.valuation?.target;
+    if (!target) return "";
+    if (target.meets === true) {
+      return `<p class="feed-target is-met">Cruzó tu objetivo de ${escapeHtml(money(target.value, "USD"))} puestos acá</p>`;
+    }
+    if (target.meets === false && target.gap != null) {
+      return `<p class="feed-target">A ${escapeHtml(money(target.gap, "USD"))} de tu objetivo de ${escapeHtml(money(target.value, "USD"))}</p>`;
+    }
+    return `<p class="feed-target is-unknown">Sin costo puesto acá no se puede comparar con tu objetivo de ${escapeHtml(money(target.value, "USD"))}</p>`;
+  }
+
   function decisionLine(item) {
     const decision = item.decision;
     if (!decision) return "";
@@ -223,6 +240,7 @@
           ${imported != null ? `<span>≈ ${escapeHtml(money(imported, item.priceCurrency))} puesto acá</span>` : ""}
         </div>
       </div>
+      ${targetBadge(item)}
       ${item.priceDrop ? dropBadge(item.priceDrop) : ""}
       ${reasons || unverified ? `<ul class="feed-why">${reasons}${unverified}</ul>` : ""}
       ${decisionLine(item)}

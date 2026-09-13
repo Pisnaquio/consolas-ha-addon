@@ -381,3 +381,35 @@ test("computing a lot valuation goes through the radar endpoint, pieces and all"
   assert.match(requests[0].url, /\/radar\/lot-valuation$/);
   assert.match(requests[0].options.body, /"comparableValue":60/);
 });
+
+test("crossing your own target is said plainly on the card", async () => {
+  const { html } = await renderFeed({
+    items: [item({ valuation: { target: { value: 80, meets: true, landedTotal: 78, gap: -2 } } })],
+  });
+
+  assert.match(html, /Cruzó tu objetivo de/);
+  assert.match(html, /feed-target is-met/);
+});
+
+test("still above the target says how far, without drama", async () => {
+  const { html } = await renderFeed({
+    items: [item({ valuation: { target: { value: 80, meets: false, landedTotal: 95.5, gap: 15.5 } } })],
+  });
+
+  assert.match(html, /de tu objetivo de/);
+  assert.doesNotMatch(html, /is-met/);
+});
+
+test("a lot with no landed cost does not pretend to meet the target", async () => {
+  const { html } = await renderFeed({
+    items: [item({ valuation: { target: { value: 80, meets: null, landedTotal: null, gap: null } } })],
+  });
+
+  assert.match(html, /Sin costo puesto acá/);
+  assert.doesNotMatch(html, /Cruzó tu objetivo/);
+});
+
+test("with no target set the card says nothing about targets", async () => {
+  const { html } = await renderFeed({ items: [item()] });
+  assert.doesNotMatch(html, /objetivo/);
+});
