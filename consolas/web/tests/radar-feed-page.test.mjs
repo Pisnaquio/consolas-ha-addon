@@ -454,3 +454,50 @@ test("closing the shipment goes through the radar endpoint with its write header
   assert.equal(requests[0].options.headers["X-Consolas-Radar"], "1");
   assert.match(requests[0].url, /\/radar\/shipment\/close$/);
 });
+
+test("when they take offers and you are close, it says what to offer", async () => {
+  const { html } = await renderFeed({
+    items: [item({
+      listingKind: "best_offer",
+      valuation: { target: { value: 100, meets: false, itemPrice: 115, gap: 15 } },
+    })],
+  });
+
+  assert.match(html, /acepta ofertas: ofrecé/);
+});
+
+test("a fixed-price listing is never told to make an offer", async () => {
+  const { html } = await renderFeed({
+    items: [item({
+      listingKind: "fixed_price",
+      valuation: { target: { value: 100, meets: false, itemPrice: 115, gap: 15 } },
+    })],
+  });
+
+  assert.match(html, /de tu objetivo/);
+  assert.doesNotMatch(html, /acepta ofertas/);
+});
+
+test("an offer nobody would take is not suggested", async () => {
+  // Pedir la mitad no es una oferta, es otra publicación.
+  const { html } = await renderFeed({
+    items: [item({
+      listingKind: "best_offer",
+      valuation: { target: { value: 50, meets: false, itemPrice: 115, gap: 65 } },
+    })],
+  });
+
+  assert.doesNotMatch(html, /acepta ofertas/);
+});
+
+test("something already at your target is not asked to be negotiated", async () => {
+  const { html } = await renderFeed({
+    items: [item({
+      listingKind: "best_offer",
+      valuation: { target: { value: 100, meets: true, itemPrice: 95, gap: -5 } },
+    })],
+  });
+
+  assert.match(html, /Cruzó tu objetivo/);
+  assert.doesNotMatch(html, /acepta ofertas/);
+});

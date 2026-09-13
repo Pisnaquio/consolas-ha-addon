@@ -58,7 +58,7 @@ from radar.sources import registry as radar_registry  # noqa: E402
 
 
 SERVICE_NAME = "consolas-server"
-SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.46")
+SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.47")
 DEFAULT_DATA_DIR = "/data"
 DEFAULT_STATIC_DIR = "/app/web"
 DATABASE_NAME = "consolas.sqlite"
@@ -4813,6 +4813,10 @@ def radar_feed_item(row: sqlite3.Row, decision: dict[str, Any] | None, matches: 
         "sourceLabel": radar_source_label(str(row["source_id"])),
         "title": row["title"],
         "listingUrl": row["listing_url"],
+        # El formato crudo además de su etiqueta: "acepta ofertas" no es
+        # decoración, es la única vía por la que el precio de esta publicación
+        # puede bajar.
+        "listingKind": row["listing_kind"],
         "listingType": RADAR_LISTING_KIND_LABELS.get(str(row["listing_kind"]), ""),
         "priceLabel": row["price_label"],
         "priceAmount": row["price_amount"],

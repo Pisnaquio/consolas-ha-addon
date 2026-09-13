@@ -148,9 +148,29 @@
       return `<p class="feed-target is-met">Cruzó tu objetivo de ${escapeHtml(money(target.value, "USD"))}</p>`;
     }
     if (target.gap != null) {
-      return `<p class="feed-target">A ${escapeHtml(money(target.gap, "USD"))} de tu objetivo de ${escapeHtml(money(target.value, "USD"))}</p>`;
+      const falta = `A ${escapeHtml(money(target.gap, "USD"))} de tu objetivo de ${escapeHtml(money(target.value, "USD"))}`;
+      return `<p class="feed-target">${falta}${offerHint(item, target)}</p>`;
     }
     return "";
+  }
+
+  /**
+   * En este mercado el precio no baja solo: de 133 publicaciones seguidas
+   * durante dos días, tres cambiaron de precio y ninguna de forma material.
+   * Lo que sí existe es el Best Offer — casi un tercio de las publicaciones lo
+   * acepta. Ahí la baja no se espera, se pide.
+   *
+   * Sólo se sugiere cuando el descuento necesario es de los que un vendedor
+   * suele considerar. Más abajo de eso no es una oferta, es otra publicación, y
+   * sugerirlo sería ruido.
+   */
+  const MAX_OFFER_DISCOUNT = 0.2;
+
+  function offerHint(item, target) {
+    if (item.listingKind !== "best_offer" || !target.itemPrice) return "";
+    const descuento = target.gap / target.itemPrice;
+    if (descuento > MAX_OFFER_DISCOUNT) return "";
+    return ` · acepta ofertas: ofrecé ${escapeHtml(money(target.value, "USD"))} y lo cruzás`;
   }
 
   function decisionLine(item) {
