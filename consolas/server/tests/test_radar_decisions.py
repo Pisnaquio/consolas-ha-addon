@@ -321,3 +321,51 @@ class DismissedResultsLeaveTheSearchTests(DecisionTestCase):
         record_radar_decision(self.config, {"listingId": listing_id, "decision": "following"})
 
         self.assertIn(listing_id, self.search_result_ids())
+
+
+class PeerBenchmarkScopeTests(DecisionTestCase):
+    """La referencia de pares se arma sólo con lo que la búsqueda aceptó.
+
+    Antes promediaba todo lo que devolvía la fuente, incluidas las
+    publicaciones que la propia búsqueda había rechazado: una búsqueda de
+    consolas se comparaba contra los juegos sueltos que acababa de descartar.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        delete_radar_search(self.config, self.search["id"])
+        self.search = create_radar_search(
+            self.config,
+            {
+                "name": "PS2 consolas", "platform": "PS2", "searchType": "console",
+                "entityType": "console", "entityId": "ps2",
+                "criteria": {"includeTerms": ["PlayStation 2"]},
+            },
+        )["search"]
+
+    def benchmark_of(self, title_fragment: str) -> dict:
+        from server.app import radar_search_payload
+
+        payload = radar_search_payload(self.config, self.search["id"])
+        for result in payload["search"]["results"]:
+            if title_fragment in result["title"]:
+                return (result.get("valuation") or {}).get("benchmark") or {}
+        raise AssertionError(f"no apareció {title_fragment!r}")
+
+    def test_cheap_games_do_not_drag_the_console_reference_down(self) -> None:
+        consolas = [
+            ebay_summary(f"v1|{i}|0", price=precio, title=f"Sony PlayStation 2 PS2 Slim Console Tested {i}")
+            for i, precio in enumerate(["120.00", "130.00", "140.00", "150.00"], start=1)
+        ]
+        juegos = [
+            ebay_summary(f"v1|9{i}|0", price="12.00", title=f"Metal Gear Solid {i} Sony PlayStation 2 PS2 CIB")
+            for i in range(1, 5)
+        ]
+        self.seed(consolas + juegos)
+
+        benchmark = self.benchmark_of("Slim Console Tested 1")
+        self.assertEqual(benchmark.get("source"), "peer-listings")
+        self.assertGreater(
+            benchmark["value"], 100,
+            "la mediana tiene que salir de las consolas, no de los juegos descartados",
+        )

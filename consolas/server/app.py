@@ -58,7 +58,7 @@ from radar.sources import registry as radar_registry  # noqa: E402
 
 
 SERVICE_NAME = "consolas-server"
-SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.45")
+SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.46")
 DEFAULT_DATA_DIR = "/data"
 DEFAULT_STATIC_DIR = "/app/web"
 DATABASE_NAME = "consolas.sqlite"
@@ -3520,8 +3520,29 @@ def execute_radar_search(config: AppConfig, target_id: str, run_id: str = "") ->
     # Sin catálogo de precios para esta entidad, las publicaciones de esta misma
     # corrida son la única referencia disponible. Entra al final de la lista: la
     # preferencia de fuentes ya la deja por debajo de cualquier curada.
+    # La referencia de pares se arma sólo con lo que la búsqueda aceptó, y del
+    # tipo que persigue. Antes promediaba todo lo que devolvía la fuente,
+    # incluidas las publicaciones que la propia búsqueda había rechazado: una
+    # búsqueda de consolas se comparaba contra los juegos sueltos que descartó.
+    matched: list[tuple[MarketplaceListing, Any]] = []
+    rejected = 0
+    for page in pages:
+        for listing in page.listings:
+            verdict = evaluate_match(
+                listing, criteria, capabilities_by_source.get(listing.source_id, {}), expected_kind
+            )
+            if verdict.matched:
+                matched.append((listing, verdict))
+            else:
+                rejected += 1
+
     peers = peer_listing_benchmark(
-        [listing.price_amount for page in pages for listing in page.listings if listing.price_amount],
+        [
+            listing.price_amount
+            for listing, _ in matched
+            if listing.price_amount
+            and (not expected_kind or classify_listing_item(listing.title).kind == expected_kind)
+        ],
         entity_id=str(row["entity_id"]) or str(row["id"]),
         completeness=str(criteria.get("completeness") or "loose"),
         observed_at=now,
@@ -3529,46 +3550,38 @@ def execute_radar_search(config: AppConfig, target_id: str, run_id: str = "") ->
     if peers is not None:
         references = [*references, peers]
     matched_ids: list[str] = []
-    rejected = 0
 
     with _RADAR_LOCK, connect_db(config) as conn:
-        for page in pages:
-            for listing in page.listings:
-                verdict = evaluate_match(
-                    listing, criteria, capabilities_by_source.get(listing.source_id, {}), expected_kind
-                )
-                if not verdict.matched:
-                    rejected += 1
-                    continue
-                listing_id = upsert_radar_listing(conn, listing, now)
-                card = valuate_radar_match(
-                    listing, verdict, criteria, references, expected_kind, console_weight
-                )
-                conn.execute(
-                    """
-                    INSERT INTO radar_search_matches (
-                      search_id, listing_id, confidence, reasons_json, blockers_json, unverified_json,
-                      matched_terms_json, score, band, valuation_json, is_active, first_seen_at, last_seen_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
-                    ON CONFLICT(search_id, listing_id) DO UPDATE SET
-                      confidence=excluded.confidence, reasons_json=excluded.reasons_json,
-                      blockers_json=excluded.blockers_json, unverified_json=excluded.unverified_json,
-                      matched_terms_json=excluded.matched_terms_json, score=excluded.score,
-                      band=excluded.band, valuation_json=excluded.valuation_json, is_active=1,
-                      last_seen_at=excluded.last_seen_at
-                    """,
-                    (
-                        target_id, listing_id, verdict.confidence,
-                        json.dumps(verdict.reasons, ensure_ascii=False),
-                        json.dumps(verdict.blockers, ensure_ascii=False),
-                        json.dumps(verdict.unverified, ensure_ascii=False),
-                        json.dumps(verdict.matched_terms, ensure_ascii=False),
-                        card.score, card.band,
-                        json.dumps(card.to_dict(), ensure_ascii=False, separators=(",", ":")),
-                        now, now,
-                    ),
-                )
-                matched_ids.append(listing_id)
+        for listing, verdict in matched:
+            listing_id = upsert_radar_listing(conn, listing, now)
+            card = valuate_radar_match(
+                listing, verdict, criteria, references, expected_kind, console_weight
+            )
+            conn.execute(
+                """
+                INSERT INTO radar_search_matches (
+                  search_id, listing_id, confidence, reasons_json, blockers_json, unverified_json,
+                  matched_terms_json, score, band, valuation_json, is_active, first_seen_at, last_seen_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+                ON CONFLICT(search_id, listing_id) DO UPDATE SET
+                  confidence=excluded.confidence, reasons_json=excluded.reasons_json,
+                  blockers_json=excluded.blockers_json, unverified_json=excluded.unverified_json,
+                  matched_terms_json=excluded.matched_terms_json, score=excluded.score,
+                  band=excluded.band, valuation_json=excluded.valuation_json, is_active=1,
+                  last_seen_at=excluded.last_seen_at
+                """,
+                (
+                    target_id, listing_id, verdict.confidence,
+                    json.dumps(verdict.reasons, ensure_ascii=False),
+                    json.dumps(verdict.blockers, ensure_ascii=False),
+                    json.dumps(verdict.unverified, ensure_ascii=False),
+                    json.dumps(verdict.matched_terms, ensure_ascii=False),
+                    card.score, card.band,
+                    json.dumps(card.to_dict(), ensure_ascii=False, separators=(",", ":")),
+                    now, now,
+                ),
+            )
+            matched_ids.append(listing_id)
 
         # Sólo una cobertura completa autoriza retirar coincidencias previas.
         if authoritative:
