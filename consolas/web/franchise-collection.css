@@ -1,36 +1,96 @@
-/* Franchise Collection Tracker. Extiende el lenguaje visual existente
-   (detail-hero, detail-block, chip, btn-link) — nada de identidad nueva. */
+/* Colección temática — una colección dentro de la colección.
+   Evoluciona el lenguaje visual existente (studio-theme: fondo oscuro,
+   Fraunces para títulos, mono para datos, cards de borde suave). Ninguna
+   identidad nueva; ningún token nuevo salvo los tres colores semánticos, que
+   ya existían sueltos en la página vieja y acá se nombran.
 
-.franchise-hero { display: flex; justify-content: space-between; gap: 28px; align-items: start; flex-wrap: wrap; }
-.franchise-hero > div:first-child { flex: 1 1 360px; min-width: 0; }
+   Los tres colores no son decoración: son los tres números que nunca se
+   mezclan. Verde = lo que podés jugar, cyan = lo que está en la estantería,
+   dorado = lo opcional. El mismo color vuelve en cada lugar donde ese número
+   se toca, así se ve de qué se está hablando sin leer la etiqueta. */
 
-.franchise-next-action {
-  margin: 14px 0 0;
-  padding: 10px 14px;
-  border-left: 3px solid var(--accent-2, #63d8aa);
-  background: rgba(99, 216, 170, 0.08);
-  border-radius: 0 10px 10px 0;
-  font-size: 0.9rem;
+.tc-hero { display: block; }
+.tc-hero h1 { margin: 0.1rem 0 0; }
+.tc-summary { max-width: 62ch; color: var(--muted); margin: 8px 0 0; }
+
+/* --- Los tres números ------------------------------------------------------
+   Son el corazón de la página, así que ocupan el ancho completo justo debajo
+   del título — antes vivían en barras de 7 px arrinconadas en la esquina. */
+
+.tc-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-top: 24px;
 }
-.franchise-next-action.is-done { border-left-color: var(--line); background: transparent; color: var(--muted); }
 
-.franchise-progress-grid { display: grid; gap: 14px; min-width: 240px; flex: 0 0 260px; }
-.franchise-progress-head { display: flex; justify-content: space-between; font: 500 0.78rem "IBM Plex Mono", monospace; color: var(--muted); margin-bottom: 4px; }
-.franchise-progress-head strong { color: var(--ink); }
-.franchise-progress-track { height: 7px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
-.franchise-progress-track span { display: block; height: 100%; background: linear-gradient(90deg, var(--accent-2, #63d8aa), var(--accent, #32c7ff)); border-radius: inherit; }
+.tc-metric {
+  --tone: var(--accent);
+  position: relative;
+  padding: 18px 20px 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: linear-gradient(180deg, var(--surface-2), rgba(5, 19, 36, 0.7));
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+.tc-metric::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  border-radius: 16px 0 0 16px;
+  background: var(--tone);
+}
+.tc-metric.is-play { --tone: var(--accent-2, #63d8aa); }
+.tc-metric.is-shelf { --tone: var(--accent, #32c7ff); }
+.tc-metric.is-crown { --tone: var(--warn, #f1bd64); }
 
-.franchise-filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 22px 0 18px; }
-.franchise-filters select,
-.franchise-filters input[type="search"] {
+.tc-metric-value {
+  margin: 0;
+  font: 500 2.3rem/1 "IBM Plex Mono", monospace;
+  font-variant-numeric: tabular-nums;
+  color: var(--tone);
+}
+.tc-metric-label { margin: 0; font-weight: 600; font-size: 0.95rem; }
+.tc-metric-track {
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.09);
+  overflow: hidden;
+  margin: 2px 0 4px;
+}
+.tc-metric-track span { display: block; height: 100%; background: var(--tone); border-radius: inherit; }
+.tc-metric-meaning { margin: 0; font-size: 0.78rem; line-height: 1.45; color: var(--muted); }
+
+/* --- Próximo paso --------------------------------------------------------- */
+
+.tc-next {
+  margin-top: 14px;
+  padding: 16px 20px;
+  border: 1px solid rgba(99, 216, 170, 0.36);
+  border-radius: 16px;
+  background: rgba(99, 216, 170, 0.07);
+}
+.tc-next.is-done { border-color: var(--line); background: transparent; }
+.tc-next .eyebrow { margin: 0 0 4px; }
+.tc-next-headline { margin: 0; font-size: 1.02rem; }
+.tc-next-detail { margin: 5px 0 0; font-size: 0.82rem; color: var(--muted); }
+
+/* --- Filtros -------------------------------------------------------------- */
+
+.tc-filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 26px 0 0; }
+.tc-filters select,
+.tc-filters input[type="search"] {
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.04);
   color: var(--ink);
   border-radius: 10px;
-  padding: 7px 10px;
+  padding: 7px 11px;
   font: 400 0.84rem inherit;
 }
-.franchise-filters input[type="search"] { flex: 1 1 200px; min-width: 160px; }
+.tc-filters input[type="search"] { flex: 1 1 180px; min-width: 150px; }
 
 .pill-group { display: flex; gap: 6px; flex-wrap: wrap; }
 .pill {
@@ -44,66 +104,216 @@
 }
 .pill.is-active { border-color: var(--accent); color: var(--accent); background: rgba(50, 199, 255, 0.1); }
 
-.franchise-section { margin-top: 30px; }
-.franchise-section .section-head { margin-bottom: 12px; }
+/* --- Secciones ------------------------------------------------------------ */
 
-.franchise-work { padding: 18px 20px; margin-bottom: 14px; }
-.franchise-work.is-covered { border-left: 3px solid var(--accent-2, #63d8aa); }
-.franchise-work-head { display: flex; justify-content: space-between; align-items: start; gap: 12px; flex-wrap: wrap; }
-.franchise-work-head h2 { margin: 0.15rem 0; font-size: 1.05rem; }
+.tc-section { margin-top: 34px; }
+.tc-section-head { margin-bottom: 14px; }
+.tc-section-head h2 { margin: 0 0 2px; }
+.tc-section-head .muted { margin: 0; font-size: 0.84rem; }
 
-.chip.is-owned { border-color: var(--accent-2, #63d8aa); color: var(--accent-2, #63d8aa); }
-.chip.is-missing { color: var(--muted); }
-.chip.is-announced { border-color: #ffd68c; color: #ffd68c; }
+.tc-era + .tc-era { margin-top: 22px; }
+.tc-era-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 7px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+.tc-era-head h3 {
+  margin: 0;
+  font: 500 0.74rem/1 "IBM Plex Mono", monospace;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.tc-era-head span { font: 500 0.78rem "IBM Plex Mono", monospace; font-variant-numeric: tabular-nums; color: var(--muted); }
 
-.franchise-releases { display: grid; gap: 10px; margin-top: 12px; }
-.franchise-release { padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255, 255, 255, 0.02); }
-.franchise-release.is-owned { border-color: var(--accent-2, #63d8aa); }
-.franchise-release.is-historical { opacity: 0.82; }
-.franchise-release-head { display: flex; justify-content: space-between; align-items: start; gap: 10px; flex-wrap: wrap; }
-.franchise-release-title { margin: 0; font-weight: 600; font-size: 0.92rem; }
-.franchise-release-meta { margin: 3px 0 0; font: 400 0.76rem "IBM Plex Mono", monospace; color: var(--muted); }
-.franchise-release-note { margin: 8px 0 0; font-size: 0.8rem; color: var(--muted); }
-.franchise-release-note.is-warning { color: #ffd68c; }
-.franchise-release-note.is-pending { color: #8fb8dc; font-style: italic; }
-.franchise-release-price { margin: 4px 0 0; font: 500 0.76rem "IBM Plex Mono", monospace; color: var(--accent-2, #63d8aa); }
-.franchise-release-cover {
-  width: 48px;
-  height: 48px;
+/* --- La obra: una fila que se lee sin abrirse ------------------------------
+   La obra es la unidad narrativa y la unidad de decisión. El lanzamiento es
+   el detalle de en qué edición la tenés, y vive adentro. */
+
+.tc-work-list { display: grid; gap: 8px; }
+
+.tc-work {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.018);
+  overflow: hidden;
+}
+.tc-work.is-covered { border-left: 3px solid var(--accent-2, #63d8aa); }
+.tc-work.is-open { background: var(--surface-3, rgba(4, 18, 35, 0.48)); border-color: var(--line-strong, var(--line)); }
+
+.tc-work-head {
+  display: grid;
+  grid-template-columns: 58px 1fr auto;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 13px 16px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.tc-work-head:hover { background: rgba(255, 255, 255, 0.03); }
+.tc-work-head.is-static { cursor: default; }
+.tc-work-head:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.tc-work-year {
+  font: 500 0.86rem "IBM Plex Mono", monospace;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+.tc-work-id { min-width: 0; display: grid; gap: 2px; }
+.tc-work-title { font-family: "Fraunces", "Space Grotesk", serif; font-size: 1.04rem; font-weight: 500; }
+.tc-work-coverage { display: block; margin: 0; font-size: 0.79rem; line-height: 1.4; color: var(--muted); overflow-wrap: anywhere; }
+.tc-work-coverage.is-covered { color: var(--accent-2, #63d8aa); }
+.tc-work-coverage.is-future { font-style: italic; }
+
+.tc-work-flags { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.tc-work-toggle {
+  font: 400 0.73rem "IBM Plex Mono", monospace;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.tc-work-body { padding: 2px 16px 16px; display: grid; gap: 10px; }
+.tc-work-notes { margin: 0; font-size: 0.84rem; color: var(--muted); }
+.tc-work-shared { margin: 0; font-size: 0.79rem; color: var(--muted); }
+
+/* --- El lanzamiento ------------------------------------------------------- */
+
+.tc-release {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.025);
+  display: grid;
+  gap: 8px;
+}
+.tc-release.is-owned { border-color: rgba(99, 216, 170, 0.5); background: rgba(99, 216, 170, 0.05); }
+
+.tc-release-head { display: flex; gap: 12px; align-items: start; }
+.tc-release-id { min-width: 0; flex: 1 1 auto; }
+.tc-release-flags { display: flex; flex-direction: column; align-items: end; gap: 5px; flex-shrink: 0; }
+.tc-release-title { margin: 0; font-weight: 600; font-size: 0.93rem; overflow-wrap: anywhere; }
+.tc-release-meta { margin: 3px 0 0; font: 400 0.75rem "IBM Plex Mono", monospace; color: var(--muted); }
+.tc-release-price { margin: 4px 0 0; font: 500 0.75rem "IBM Plex Mono", monospace; color: var(--accent-2, #63d8aa); }
+.tc-release-note { margin: 0; font-size: 0.8rem; line-height: 1.45; color: var(--muted); }
+.tc-release-note.is-warning { color: var(--warn, #f1bd64); }
+.tc-release-note.is-pending { color: #8fb8dc; font-style: italic; }
+.tc-release-cover {
+  width: 44px;
+  height: 44px;
   object-fit: cover;
   border-radius: 8px;
   border: 1px solid var(--line);
   flex-shrink: 0;
 }
 
-.franchise-release-actions { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-.franchise-ownership { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
-.franchise-ownership .btn-link { padding: 5px 10px; font-size: 0.76rem; }
-.franchise-ownership .btn-link.is-on { border-color: var(--accent); color: var(--accent); background: rgba(50, 199, 255, 0.1); }
+.tc-release-actions { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.tc-ownership { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
+.tc-ownership .btn-link { padding: 5px 10px; font-size: 0.76rem; min-height: 0; }
+.tc-ownership .btn-link.is-on { border-color: var(--accent); color: var(--accent); background: rgba(50, 199, 255, 0.1); }
+.tc-radar-cta { font-size: 0.76rem; }
 
-.franchise-checklist { margin-top: 10px; font-size: 0.78rem; }
-.franchise-checklist summary { cursor: pointer; color: var(--muted); }
-.franchise-checklist ul { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; }
-.franchise-checklist label { display: flex; align-items: center; gap: 6px; }
+.chip.is-owned { border-color: var(--accent-2, #63d8aa); color: var(--accent-2, #63d8aa); }
+.chip.is-missing { color: var(--muted); }
+.chip.is-announced { border-color: var(--warn, #f1bd64); color: var(--warn, #f1bd64); }
+/* Cyan porque es el color de la estantería: este chip marca justamente el
+   lanzamiento que cuenta para ese número y no para los otros dos. */
+.chip.is-shelf { border-color: rgba(50, 199, 255, 0.5); color: var(--accent, #32c7ff); }
 
-.franchise-crown-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
-.franchise-crown {
-  display: flex;
-  justify-content: space-between;
-  align-items: start;
-  gap: 10px;
-  padding: 14px;
+/* --- Una compra, varias obras ---------------------------------------------
+   Lo que distingue a una compilación de un lanzamiento suelto es cuántas
+   obras cubre, así que ese número es lo primero que se ve. */
+
+.tc-leverage-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 12px; }
+.tc-leverage {
+  padding: 15px 16px;
   border: 1px solid var(--line);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.02);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.025);
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
 }
-.franchise-crown.is-owned { border-color: #ffd68c; }
-.franchise-crown-title { margin: 0; font-weight: 600; font-size: 0.9rem; }
-.franchise-crown .btn-link.is-on { border-color: #ffd68c; color: #ffd68c; background: rgba(255, 214, 140, 0.1); }
+.tc-leverage .tc-ownership { margin-top: auto; padding-top: 4px; }
+.tc-leverage.is-owned { border-color: rgba(99, 216, 170, 0.5); background: rgba(99, 216, 170, 0.05); }
+.tc-leverage-head { display: flex; gap: 12px; align-items: start; }
+.tc-leverage-count {
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  border: 1px solid rgba(99, 216, 170, 0.42);
+  background: rgba(99, 216, 170, 0.1);
+  color: var(--accent-2, #63d8aa);
+  font: 500 1.15rem "IBM Plex Mono", monospace;
+  font-variant-numeric: tabular-nums;
+}
+.tc-leverage-works { margin: 0; font-size: 0.8rem; line-height: 1.45; color: var(--muted); }
+.tc-leverage-gain { margin: 0; font-size: 0.82rem; color: var(--accent-2, #63d8aa); }
+.tc-leverage-crown { margin: 0; font-size: 0.78rem; line-height: 1.45; color: var(--warn, #f1bd64); }
 
-.franchise-empty { padding: 28px; text-align: center; }
+/* --- Piezas de colección --------------------------------------------------
+   Dorado en todo el bloque: es el tercer número, el opcional. Que se vea
+   distinto es justamente lo que impide que se lea como saga incompleta. */
 
-@media (max-width: 760px) {
-  .franchise-hero { flex-direction: column; }
-  .franchise-progress-grid { width: 100%; flex: none; }
+.tc-section-crown .tc-section-head h2 { color: var(--warn, #f1bd64); }
+.tc-crown-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 12px; }
+.tc-crown {
+  padding: 14px 15px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.025);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tc-crown.is-owned { border-color: rgba(241, 189, 100, 0.5); background: rgba(241, 189, 100, 0.06); }
+.tc-crown-head { display: grid; gap: 2px; }
+.tc-crown-head > div { min-width: 0; }
+.tc-crown-toggle { align-self: start; width: fit-content; margin-top: auto; padding: 5px 12px; font-size: 0.76rem; min-height: 0; }
+.tc-crown-toggle.is-on { border-color: var(--warn, #f1bd64); color: var(--warn, #f1bd64); background: rgba(241, 189, 100, 0.12); }
+
+.tc-checklist { font-size: 0.78rem; }
+.tc-checklist summary { cursor: pointer; color: var(--muted); }
+.tc-checklist ul { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; }
+.tc-checklist label { display: flex; align-items: center; gap: 6px; }
+
+/* --- Históricos: contexto, plegado --------------------------------------- */
+
+.tc-historical { border: 1px solid var(--line); border-radius: 14px; padding: 13px 16px; }
+.tc-historical summary { cursor: pointer; display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; }
+.tc-historical summary > span { font-family: "Fraunces", "Space Grotesk", serif; font-size: 1.02rem; }
+.tc-historical summary small { font: 400 0.76rem "IBM Plex Mono", monospace; color: var(--muted); }
+.tc-historical ul { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 12px; }
+.tc-historical li { display: grid; gap: 3px; }
+.tc-historical li span { font: 400 0.75rem "IBM Plex Mono", monospace; color: var(--muted); }
+.tc-historical li p { margin: 2px 0 0; font-size: 0.8rem; color: var(--muted); line-height: 1.45; }
+
+.tc-empty { padding: 28px; text-align: center; }
+
+@media (max-width: 860px) {
+  .tc-metrics { grid-template-columns: 1fr; }
+  .tc-metric { grid-template-columns: auto 1fr; column-gap: 14px; align-items: center; }
+  .tc-metric-value { grid-row: span 2; font-size: 1.9rem; }
+  .tc-metric-track { grid-column: 1 / -1; }
+  .tc-metric-meaning { grid-column: 1 / -1; }
+}
+
+@media (max-width: 620px) {
+  .tc-work-head { grid-template-columns: 1fr auto; row-gap: 4px; }
+  .tc-work-year { grid-column: 1; font-size: 0.76rem; }
+  .tc-work-id { grid-column: 1 / -1; grid-row: 2; }
+  .tc-work-flags { grid-column: 2; grid-row: 1; }
+  .tc-release-head { flex-wrap: wrap; }
+  .tc-release-flags { flex-direction: row; align-items: center; }
 }
