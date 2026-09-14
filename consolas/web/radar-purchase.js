@@ -98,6 +98,14 @@
       listingId, entityType, entityId, entityConsoleId, entityName, priceAmount, currency, purchasedAt
     } = purchase || {};
 
+    // Una escritura hecha antes de que el servidor conteste se acepta en
+    // pantalla y después se descarta al llegar la respuesta: el estado remoto
+    // reemplaza al local entero. No rompe nada —en esa ventana todavía no se
+    // empuja nada al servidor— pero la acción se pierde sin avisar. El feed
+    // del radar se dibuja apenas responde su propia API, sin esperar a
+    // `DataStore`, así que acá esa ventana es alcanzable con un click rápido.
+    await Promise.resolve(window.DataStore?.ready);
+
     const result = await repository.recordPurchase({
       listingId,
       entityType,

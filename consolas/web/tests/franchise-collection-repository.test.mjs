@@ -326,3 +326,82 @@ test("compose model end to end: a compilation covers two works without duplicati
   assert.equal(model.progress.sagaCoverage.covered, 2, "la compilación cubre las dos obras");
   assert.equal(model.progress.physicalShelf.owned, 0, "pero ninguna estantería física original se completó con la compilación");
 });
+
+/**
+ * `load()` lee la colección de forma síncrona desde `DataStore`, pero en modo
+ * Home Assistant el estado real llega del servidor de forma asíncrona. Si la
+ * página compone el modelo antes de que ese estado esté hidratado, todo lo que
+ * tenés se lee como no poseído — y la pantalla afirma con total seguridad que
+ * no podés jugar algo que sí tenés.
+ *
+ * Es el modo de falla que reportó el dueño con God of War (PS4) en digital, y
+ * es intermitente por naturaleza: con la caché tibia el estado llega a tiempo y
+ * con la caché fría, no. Por eso se prueba con la promesa resolviendo tarde.
+ */
+function loadWithLateHydration() {
+  const state = { user: { detailEditsById: {}, overridesById: {} } };
+  let resolveReady;
+  const ready = new Promise((resolve) => { resolveReady = resolve; });
+
+  const payloads = {
+    "./data/franchise-collections.json": {
+      franchises: {
+        saga: {
+          id: "saga",
+          name: "Saga",
+          eras: [{ id: "greek", label: "Era" }],
+          works: [work({ id: "w1", title: "Obra", originalPlatformId: "ps4" })],
+          releases: [release({
+            id: "r1", workIds: ["w1"], platformId: "ps4",
+            catalogRef: { consoleId: "ps4", gameId: "el-juego" }
+          })],
+          editions: [], hardware: [], historical: []
+        }
+      }
+    },
+    "./data/consoles.json": { consolas: [{ id: "ps4", nombre: "PlayStation 4" }] },
+    "./data/console-games.json": {
+      byConsole: { ps4: { juegosCatalogo: [{ id: "el-juego", nombre: "El juego" }] } }
+    }
+  };
+
+  const context = vm.createContext({
+    window: {
+      location: { pathname: "/franchise-collection.html", search: "" },
+      DataStore: {
+        ready,
+        getDetailEdits: () => state.user.detailEditsById,
+        replaceDetailEdit: (key, bucket) => { state.user.detailEditsById[key] = { ...bucket }; },
+        getOverrides: () => state.user.overridesById,
+        getAdditionsMap: () => ({})
+      }
+    },
+    URLSearchParams,
+    fetch: async (url) => ({ ok: true, async json() { return payloads[url]; } }),
+    console
+  });
+  vm.runInContext(collectionRepoSource, context, { filename: "collection-repository.js" });
+  vm.runInContext(franchiseRepoSource, context, { filename: "franchise-collection-repository.js" });
+
+  // La hidratación llega DESPUÉS de que la página pidió el modelo, que es
+  // exactamente el orden que rompe en producción.
+  const hydrate = () => {
+    state.user.detailEditsById.ps4 = {
+      gameEditsById: { "el-juego": { ownershipType: "digital" } }
+    };
+    resolveReady();
+  };
+  return { repository: context.window.FranchiseCollectionRepository, hydrate };
+}
+
+test("load waits for the store before deciding you do not own something", async () => {
+  const { repository, hydrate } = loadWithLateHydration();
+
+  const pending = repository.load("saga");
+  setTimeout(hydrate, 0);
+  const model = await pending;
+
+  assert.equal(model.releases[0].ownershipType, "digital");
+  assert.equal(model.releases[0].isOwned, true);
+  assert.equal(model.progress.sagaCoverage.covered, 1);
+});

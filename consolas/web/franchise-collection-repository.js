@@ -241,6 +241,12 @@
   }
 
   async function load(franchiseId) {
+    // El estado real del usuario llega del servidor de forma asíncrona, y todo
+    // lo que sigue lo lee de `DataStore` de forma síncrona. Sin esta espera la
+    // página compone el modelo contra un estado vacío y afirma que no tenés
+    // nada — que es peor que no mostrar nada, porque parece un dato.
+    await Promise.resolve(window.DataStore?.ready);
+
     const [catalog, consolesPayload, gamesPayload] = await Promise.all([
       fetchJson(DATA_URL),
       fetchJson(CONSOLES_URL),

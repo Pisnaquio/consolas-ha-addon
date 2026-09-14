@@ -3545,6 +3545,10 @@ function render() {
 }
 
 async function init() {
+  // Misma razón que en el Franchise Tracker: sin esperar la hidratación, la
+  // ficha puede dibujar toda la biblioteca como no poseída.
+  await Promise.resolve(window.DataStore?.ready);
+
   appState.root = document.getElementById("detailRoot");
   appState.id = new URLSearchParams(window.location.search).get("id");
 

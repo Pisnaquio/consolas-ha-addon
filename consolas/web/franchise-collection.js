@@ -216,6 +216,19 @@
     </section>`;
   }
 
+  /**
+   * Dos obras de la saga pueden llamarse igual: el original de 2005 y el
+   * reinicio de 2018 son «God of War» a secas. En una lista de lo que todavía
+   * no podés jugar, el título solo hace que parezca que te falta el que sí
+   * tenés — así que cuando el nombre se repite, lleva el año.
+   */
+  function workLabel(workId) {
+    const target = model.works.find((work) => work.id === workId);
+    if (!target) return "";
+    const repeated = model.works.filter((work) => work.title === target.title).length > 1;
+    return repeated && target.year ? `${target.title} (${target.year})` : target.title;
+  }
+
   function nextActionBlock() {
     const nextAction = model.nextAction;
     if (!nextAction) {
@@ -226,9 +239,7 @@
     }
     if (nextAction.type === "platform") {
       const count = nextAction.newWorkIds.length;
-      const names = nextAction.newWorkIds
-        .map((id) => model.works.find((work) => work.id === id)?.title)
-        .filter(Boolean);
+      const names = nextAction.newWorkIds.map(workLabel).filter(Boolean);
       return `<section class="tc-next">
         <p class="eyebrow">Próximo paso</p>
         <p class="tc-next-headline">Conseguir una <strong>${escapeHtml(platformLabel(nextAction.platformId))}</strong>
@@ -525,7 +536,7 @@
       .filter(leverageMatchesFilters)
       .sort((a, b) => (b.workIds || []).length - (a.workIds || []).length);
     if (!items.length) return "";
-    const workTitle = (id) => model.works.find((work) => work.id === id)?.title || id;
+    const workTitle = (id) => workLabel(id) || id;
     return `<section class="tc-section" id="compilaciones">
       <div class="tc-section-head">
         <h2>Una compra, varias obras</h2>
