@@ -170,7 +170,11 @@
           "codeStatus": "not-applicable",
           "region": "NTSC-U/C",
           "year": 2005,
-          "isPrimaryPhysicalTarget": true
+          "isPrimaryPhysicalTarget": true,
+          "catalogRef": {
+            "consoleId": "ps2",
+            "gameId": "god-of-war"
+          }
         },
         {
           "id": "gow2-2007-ps2-na",
@@ -227,7 +231,11 @@
           "codeStatus": "not-applicable",
           "region": "NTSC-U/C",
           "year": 2010,
-          "isPrimaryPhysicalTarget": true
+          "isPrimaryPhysicalTarget": true,
+          "catalogRef": {
+            "consoleId": "psp",
+            "gameId": "god-of-war-ghost-of-sparta"
+          }
         },
         {
           "id": "gow-collection-2009-ps3",

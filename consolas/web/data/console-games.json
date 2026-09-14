@@ -12712,6 +12712,1022 @@
           "sourceType": "catalog"
         }
       ]
+    },
+    "ps2": {
+      "juegosCatalogo": [
+        {
+          "id": "grand-theft-auto-san-andreas",
+          "nombre": "Grand Theft Auto: San Andreas",
+          "franquicia": "Grand Theft Auto",
+          "genero": "Action Adventure",
+          "priceGuide": {
+            "priceCharting": null,
+            "ebaySold": null,
+            "cib": null,
+            "targetBuy": null,
+            "notes": ""
+          },
+          "priceRange": {
+            "low": 20,
+            "mid": 22,
+            "high": 25,
+            "notes": "Copia suelta (game only), USD. Precios de lista consultados el 2026-09-14: DKOldies USD 19.99; Game Over Videogames USD 24.99. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          },
+          "coverUrl": "./assets/game-covers/ps2/grand-theft-auto-san-andreas.jpg",
+          "coverImage": "./assets/game-covers/ps2/grand-theft-auto-san-andreas.jpg",
+          "imageSearchName": "Grand Theft Auto: San Andreas",
+          "imageSource": "wikipedia",
+          "imageStatus": "found",
+          "sourceType": "catalog"
+        },
+        {
+          "id": "metal-gear-solid-3-snake-eater",
+          "nombre": "Metal Gear Solid 3: Snake Eater",
+          "franquicia": "Metal Gear",
+          "genero": "Action Adventure",
+          "priceGuide": {
+            "priceCharting": null,
+            "ebaySold": null,
+            "cib": null,
+            "targetBuy": null,
+            "notes": ""
+          },
+          "priceRange": {
+            "low": 20,
+            "mid": 22,
+            "high": 25,
+            "notes": "Copia suelta (game only), USD. Precios de lista consultados el 2026-09-14: DKOldies USD 19.99; Game Over Videogames USD 24.99. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          },
+          "coverUrl": "./assets/game-covers/ps2/metal-gear-solid-3-snake-eater.jpg",
+          "coverImage": "./assets/game-covers/ps2/metal-gear-solid-3-snake-eater.jpg",
+          "imageSearchName": "Metal Gear Solid 3: Snake Eater",
+          "imageSource": "wikipedia",
+          "imageStatus": "found",
+          "sourceType": "catalog"
+        },
+        {
+          "id": "shadow-of-the-colossus",
+          "nombre": "Shadow of the Colossus",
+          "franquicia": "Team Ico",
+          "genero": "Action Adventure",
+          "priceGuide": {
+            "priceCharting": null,
+            "ebaySold": null,
+            "cib": null,
+            "targetBuy": null,
+            "notes": ""
+          },
+          "priceRange": {
+            "low": 35,
+            "mid": 40,
+            "high": 46,
+            "notes": "Copia suelta (game only), USD. Precios de lista consultados el 2026-09-14: DKOldies USD 45.99; Game Over Videogames USD 34.99. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          },
+          "coverUrl": "./assets/game-covers/ps2/shadow-of-the-colossus.jpg",
+          "coverImage": "./assets/game-covers/ps2/shadow-of-the-colossus.jpg",
+          "imageSearchName": "Shadow of the Colossus",
+          "imageSource": "wikipedia",
+          "imageStatus": "found",
+          "sourceType": "catalog"
+        },
+        {
+          "id": "resident-evil-4",
+          "nombre": "Resident Evil 4",
+          "franquicia": "Resident Evil",
+          "genero": "Survival Horror",
+          "priceGuide": {
+            "priceCharting": null,
+            "ebaySold": null,
+            "cib": null,
+            "targetBuy": null,
+            "notes": ""
+          },
+          "priceRange": {
+            "low": 27,
+            "mid": 31,
+            "high": 35,
+            "notes": "Copia suelta (game only), USD. Precios de lista consultados el 2026-09-14: DKOldies USD 26.99; Game Over Videogames USD 34.99. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          },
+          "coverUrl": "./assets/game-covers/ps2/resident-evil-4.jpg",
+          "coverImage": "./assets/game-covers/ps2/resident-evil-4.jpg",
+          "imageSearchName": "Resident Evil 4",
+          "imageSource": "wikipedia",
+          "imageStatus": "found",
+          "sourceType": "catalog"
+        },
+        {
+          "id": "silent-hill-2",
+          "nombre": "Silent Hill 2",
+          "franquicia": "Silent Hill",
+          "genero": "Survival Horror",
+          "priceGuide": {
+            "priceCharting": null,
+            "ebaySold": null,
+            "cib": null,
+            "targetBuy": null,
+            "notes": ""
+          },
+          "priceRange": {
+            "low": 230,
+            "mid": 255,
+            "high": 280,
+            "notes": "Copia suelta (game only), USD. Precios de lista consultados el 2026-09-14: DKOldies USD 229.99; Game Over Videogames USD 279.99. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          },
+          "coverUrl": "./assets/game-covers/ps2/silent-hill-2.jpg",
+          "coverImage": "./assets/game-covers/ps2/silent-hill-2.jpg",
+          "imageSearchName": "Silent Hill 2",
+          "imageSource": "wikipedia",
+          "imageStatus": "found",
+          "sourceType": "catalog"
+        },
+        {
+          "id": "god-of-war",
+          "nombre": "God of War",
+          "franquicia": "God of War",
+          "genero": "Action",
+          "priceGuide": {
+            "priceCharting": null,
+            "ebaySold": null,
+            "cib": null,
+            "targetBuy": null,
+            "notes": ""
+          },
+          "priceRange": {
+            "low": 25,
+            "mid": 27,
+            "high": 30,
+            "notes": "Copia suelta (game only), USD. Precios de lista consultados el 2026-09-14: DKOldies USD 29.99; Game Over Videogames USD 24.99. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          },
+          "coverUrl": "./assets/game-covers/ps2/god-of-war.jpg",
+          "coverImage": "./assets/game-covers/ps2/god-of-war.jpg",
+          "imageSearchName": "God of War",
+          "imageSource": "wikipedia",
+          "imageStatus": "found",
+          "sourceType": "catalog"
+        },
+        {
+          "id": "final-fantasy-x",
+          "nombre": "Final Fantasy X",
+          "franquicia": "Final Fantasy",
+          "genero": "RPG",
+          "priceGuide": {
+            "priceCharting": null,
+            "ebaySold": null,
+            "cib": null,
+            "targetBuy": null,
+            "notes": ""
+          },
+          "priceRange": {
+            "low": 10,
+            "mid": 15,
+            "high": 20,
+            "notes": "Copia suelta (game only), USD. Precios de lista consultados el 2026-09-14: DKOldies USD 9.99; Game Over Videogames USD 19.99. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          },
+          "coverUrl": "./assets/game-covers/ps2/final-fantasy-x.jpg",
+          "coverImage": "./assets/game-covers/ps2/final-fantasy-x.jpg",
+          "imageSearchName": "Final Fantasy X",
+          "imageSource": "wikipedia",
+          "imageStatus": "found",
+          "sourceType": "catalog"
+        },
+        {
+          "id": "ico",
+          "nombre": "Ico",
+          "franquicia": "Team Ico",
+          "genero": "Action Adventure",
+          "priceGuide": {
+            "priceCharting": null,
+            "ebaySold": null,
+            "cib": null,
+            "targetBuy": null,
+            "notes": ""
+          },
+          "priceRange": {
+            "low": 35,
+            "mid": 35,
+            "high": 35,
+            "notes": "Copia suelta (game only), USD. Precios de lista consultados el 2026-09-14: DKOldies USD 34.99; Game Over Videogames USD 34.99. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          },
+          "coverUrl": "./assets/game-covers/ps2/ico.jpg",
+          "coverImage": "./assets/game-covers/ps2/ico.jpg",
+          "imageSearchName": "Ico",
+          "imageSource": "wikipedia",
+          "imageStatus": "found",
+          "sourceType": "catalog"
+        },
+        {
+          "id": "devil-may-cry",
+          "nombre": "Devil May Cry",
+          "franquicia": "Devil May Cry",
+          "genero": "Action",
+          "priceGuide": {
+            "priceCharting": null,
+            "ebaySold": null,
+            "cib": null,
+            "targetBuy": null,
+            "notes": ""
+          },
+          "priceRange": {
+            "low": 18,
+            "mid": 20,
+            "high": 23,
+            "notes": "Copia suelta (game only), USD. Precios de lista consultados el 2026-09-14: DKOldies USD 22.99; Game Over Videogames USD 17.99. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          },
+          "coverUrl": "./assets/game-covers/ps2/devil-may-cry.jpg",
+          "coverImage": "./assets/game-covers/ps2/devil-may-cry.jpg",
+          "imageSearchName": "Devil May Cry",
+          "imageSource": "wikipedia",
+          "imageStatus": "found",
+          "sourceType": "catalog"
+        },
+        {
+          "id": "burnout-3-takedown",
+          "nombre": "Burnout 3: Takedown",
+          "franquicia": "Burnout",
+          "genero": "Racing",
+          "priceGuide": {
+            "priceCharting": null,
+            "ebaySold": null,
+            "cib": null,
+            "targetBuy": null,
+            "notes": ""
+          },
+          "priceRange": {
+            "low": 25,
+            "mid": 25,
+            "high": 26,
+            "notes": "Copia suelta (game only), USD. Precios de lista consultados el 2026-09-14: DKOldies USD 25.99; Game Over Videogames USD 24.99. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          },
+          "coverUrl": "./assets/game-covers/ps2/burnout-3-takedown.jpg",
+          "coverImage": "./assets/game-covers/ps2/burnout-3-takedown.jpg",
+          "imageSearchName": "Burnout 3: Takedown",
+          "imageSource": "wikipedia",
+          "imageStatus": "found",
+          "sourceType": "catalog"
+        }
+      ]
+    },
+    "ps3": {
+      "juegosCatalogo": [
+        {
+          "id": "the-last-of-us",
+          "nombre": "The Last of Us",
+          "franquicia": "The Last of Us",
+          "genero": "Action Adventure",
+          "priceGuide": {
+            "priceCharting": null,
+            "ebaySold": null,
+            "cib": null,
+            "targetBuy": null,
+            "notes": ""
+          },
+          "priceRange": {
+            "low": 12,
+            "mid": 13,
+            "high": 15,
+            "notes": "Copia suelta (game only), USD. Precios de lista consultados el 2026-09-14: DKOldies USD 11.99; Lukie Games USD 11.97; Game Over Videogames USD 14.99. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          },
+          "coverUrl": "./assets/game-covers/ps3/the-last-of-us.jpg",
+          "coverImage": "./assets/game-covers/ps3/the-last-of-us.jpg",
+          "imageSearchName": "The Last of Us",
+          "imageSource": "wikipedia",
+          "imageStatus": "found",
+          "sourceType": "catalog"
+        },
+        {
+          "id": "dark-souls",
+          "nombre": "Dark Souls",
+          "franquicia": "Souls",
+          "genero": "Action RPG",
+          "priceGuide": {
+            "priceCharting": null,
+            "ebaySold": null,
+            "cib": null,
+            "targetBuy": null,
+            "notes": ""
+          },
+          "priceRange": {
+            "low": 19,
+            "mid": 21,
+            "high": 23,
+            "notes": "Copia suelta (game only), USD. Precios de lista consultados el 2026-09-14: DKOldies USD 18.99; Lukie Games USD 23.47; Game Over Videogames USD 19.99. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          },
+          "coverUrl": "./assets/game-covers/ps3/dark-souls.jpg",
+          "coverImage": "./assets/game-covers/ps3/dark-souls.jpg",
+          "imageSearchName": "Dark Souls",
+          "imageSource": "wikipedia",
+          "imageStatus": "found",
+          "sourceType": "catalog"
+        },
+        {
+          "id": "grand-theft-auto-v",
+          "nombre": "Grand Theft Auto V",
+          "franquicia": "Grand Theft Auto",
+          "genero": "Action Adventure",
+          "priceGuide": {
+            "priceCharting": null,
+            "ebaySold": null,
+            "cib": null,
+            "targetBuy": null,
+            "notes": ""
+          },
+          "priceRange": {
+            "low": 6,
+            "mid": 9,
+            "high": 15,
+            "notes": "Copia suelta (game only), USD. Precios de lista consultados el 2026-09-14: DKOldies USD 5.99; Lukie Games USD 6.64; Game Over Videogames USD 14.99. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          },
+          "coverUrl": "./assets/game-covers/ps3/grand-theft-auto-v.png",
+          "coverImage": "./assets/game-covers/ps3/grand-theft-auto-v.png",
+          "imageSearchName": "Grand Theft Auto V",
+          "imageSource": "wikipedia",
+          "imageStatus": "found",
+          "sourceType": "catalog"
+        },
+        {
+          "id": "portal-2",
+          "nombre": "Portal 2",
+          "franquicia": "Portal",
+          "genero": "Puzzle",
+          "priceGuide": {
+            "priceCharting": null,
+            "ebaySold": null,
+            "cib": null,
+            "targetBuy": null,
+            "notes": ""
+          },
+          "priceRange": {
+            "low": 9,
+            "mid": 13,
+            "high": 18,
+            "notes": "Copia suelta (game only), USD. Precios de lista consultados el 2026-09-14: DKOldies USD 8.99; Game Over Videogames USD 17.99. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          },
+          "coverUrl": "./assets/game-covers/ps3/portal-2.jpg",
+          "coverImage": "./assets/game-covers/ps3/portal-2.jpg",
+          "imageSearchName": "Portal 2",
+          "imageSource": "wikipedia",
+          "imageStatus": "found",
+          "sourceType": "catalog"
+        },
+        {
+          "id": "mass-effect-2",
+          "nombre": "Mass Effect 2",
+          "franquicia": "Mass Effect",
+          "genero": "Action RPG",
+          "priceGuide": {
+            "priceCharting": null,
+            "ebaySold": null,
+            "cib": null,
+            "targetBuy": null,
+            "notes": ""
+          },
+          "priceRange": {
+            "low": 5,
+            "mid": 7,
+            "high": 10,
+            "notes": "Copia suelta (game only), USD. Precios de lista consultados el 2026-09-14: DKOldies USD 4.99; Game Over Videogames USD 9.99. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          },
+          "coverUrl": "./assets/game-covers/ps3/mass-effect-2.png",
+          "coverImage": "./assets/game-covers/ps3/mass-effect-2.png",
+          "imageSearchName": "Mass Effect 2",
+          "imageSource": "wikipedia",
+          "imageStatus": "found",
+          "sourceType": "catalog"
+        },
+        {
+          "id": "uncharted-2-among-thieves",
+          "nombre": "Uncharted 2: Among Thieves",
+          "franquicia": "Uncharted",
+          "genero": "Action Adventure",
+          "priceGuide": {
+            "priceCharting": null,
+            "ebaySold": null,
+            "cib": null,
+            "targetBuy": null,
+            "notes": ""
+          },
+          "priceRange": {
+            "low": 10,
+            "mid": 10,
+            "high": 10,
+            "notes": "Copia suelta (game only), USD. Precios de lista consultados el 2026-09-14: DKOldies USD 9.99; Game Over Videogames USD 9.99. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          },
+          "coverUrl": "./assets/game-covers/ps3/uncharted-2-among-thieves.jpg",
+          "coverImage": "./assets/game-covers/ps3/uncharted-2-among-thieves.jpg",
+          "imageSearchName": "Uncharted 2: Among Thieves",
+          "imageSource": "wikipedia",
+          "imageStatus": "found",
+          "sourceType": "catalog"
+        },
+        {
+          "id": "bioshock",
+          "nombre": "BioShock",
+          "franquicia": "BioShock",
+          "genero": "FPS",
+          "priceGuide": {
+            "priceCharting": null,
+            "ebaySold": null,
+            "cib": null,
+            "targetBuy": null,
+            "notes": ""
+          },
+          "priceRange": {
+            "low": 11,
+            "mid": 13,
+            "high": 15,
+            "notes": "Copia suelta (game only), USD. Precios de lista consultados el 2026-09-14: DKOldies USD 10.99; Game Over Videogames USD 14.99. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          },
+          "coverUrl": "./assets/game-covers/ps3/bioshock.jpg",
+          "coverImage": "./assets/game-covers/ps3/bioshock.jpg",
+          "imageSearchName": "BioShock",
+          "imageSource": "wikipedia",
+          "imageStatus": "found",
+          "sourceType": "catalog"
+        },
+        {
+          "id": "red-dead-redemption",
+          "nombre": "Red Dead Redemption",
+          "franquicia": "Red Dead",
+          "genero": "Action Adventure",
+          "priceGuide": {
+            "priceCharting": null,
+            "ebaySold": null,
+            "cib": null,
+            "targetBuy": null,
+            "notes": ""
+          },
+          "priceRange": {
+            "low": 9,
+            "mid": 13,
+            "high": 17,
+            "notes": "Copia suelta (game only), USD. Precios de lista consultados el 2026-09-14: DKOldies USD 8.99; Game Over Videogames USD 16.99. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          },
+          "coverUrl": "./assets/game-covers/ps3/red-dead-redemption.jpg",
+          "coverImage": "./assets/game-covers/ps3/red-dead-redemption.jpg",
+          "imageSearchName": "Red Dead Redemption",
+          "imageSource": "wikipedia",
+          "imageStatus": "found",
+          "sourceType": "catalog"
+        },
+        {
+          "id": "xcom-enemy-unknown",
+          "nombre": "XCOM: Enemy Unknown",
+          "franquicia": "XCOM",
+          "genero": "Strategy",
+          "priceGuide": {
+            "priceCharting": null,
+            "ebaySold": null,
+            "cib": null,
+            "targetBuy": null,
+            "notes": ""
+          },
+          "priceRange": {
+            "low": 3,
+            "mid": 7,
+            "high": 10,
+            "notes": "Copia suelta (game only), USD. Precios de lista consultados el 2026-09-14: DKOldies USD 2.99; Lukie Games USD 9.47; Game Over Videogames USD 9.99. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          },
+          "coverUrl": "./assets/game-covers/ps3/xcom-enemy-unknown.jpg",
+          "coverImage": "./assets/game-covers/ps3/xcom-enemy-unknown.jpg",
+          "imageSearchName": "XCOM: Enemy Unknown",
+          "imageSource": "wikipedia",
+          "imageStatus": "found",
+          "sourceType": "catalog"
+        },
+        {
+          "id": "dead-space-2",
+          "nombre": "Dead Space 2",
+          "franquicia": "Dead Space",
+          "genero": "Survival Horror",
+          "priceGuide": {
+            "priceCharting": null,
+            "ebaySold": null,
+            "cib": null,
+            "targetBuy": null,
+            "notes": ""
+          },
+          "priceRange": {
+            "low": 15,
+            "mid": 16,
+            "high": 18,
+            "notes": "Copia suelta (game only), USD. Precios de lista consultados el 2026-09-14: DKOldies USD 14.99; Game Over Videogames USD 17.99. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          },
+          "coverUrl": "./assets/game-covers/ps3/dead-space-2.jpg",
+          "coverImage": "./assets/game-covers/ps3/dead-space-2.jpg",
+          "imageSearchName": "Dead Space 2",
+          "imageSource": "wikipedia",
+          "imageStatus": "found",
+          "sourceType": "catalog"
+        }
+      ]
+    },
+    "psp": {
+      "juegosCatalogo": [
+        {
+          "id": "lumines-puzzle-fusion",
+          "nombre": "Lumines: Puzzle Fusion",
+          "franquicia": "Lumines",
+          "genero": "Puzzle",
+          "priceGuide": {
+            "priceCharting": null,
+            "ebaySold": null,
+            "cib": null,
+            "targetBuy": null,
+            "notes": ""
+          },
+          "priceRange": {
+            "low": 8,
+            "mid": 10,
+            "high": 13,
+            "notes": "Copia suelta (game only), USD. Precios de lista consultados el 2026-09-14: DKOldies USD 7.99; Lukie Games USD 7.97; Game Over Videogames USD 12.99. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          },
+          "coverUrl": "./assets/game-covers/psp/lumines-puzzle-fusion.png",
+          "coverImage": "./assets/game-covers/psp/lumines-puzzle-fusion.png",
+          "imageSearchName": "Lumines: Puzzle Fusion",
+          "imageSource": "wikipedia",
+          "imageStatus": "found",
+          "sourceType": "catalog"
+        },
+        {
+          "id": "metal-gear-solid-peace-walker",
+          "nombre": "Metal Gear Solid: Peace Walker",
+          "franquicia": "Metal Gear",
+          "genero": "Action Adventure",
+          "priceGuide": {
+            "priceCharting": null,
+            "ebaySold": null,
+            "cib": null,
+            "targetBuy": null,
+            "notes": ""
+          },
+          "priceRange": {
+            "low": 53,
+            "mid": 59,
+            "high": 70,
+            "notes": "Copia suelta (game only), USD. Precios de lista consultados el 2026-09-14: DKOldies USD 52.99; Lukie Games USD 54.97; Game Over Videogames USD 69.99. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          },
+          "coverUrl": "./assets/game-covers/psp/metal-gear-solid-peace-walker.jpg",
+          "coverImage": "./assets/game-covers/psp/metal-gear-solid-peace-walker.jpg",
+          "imageSearchName": "Metal Gear Solid: Peace Walker",
+          "imageSource": "wikipedia",
+          "imageStatus": "found",
+          "sourceType": "catalog"
+        },
+        {
+          "id": "god-of-war-ghost-of-sparta",
+          "nombre": "God of War: Ghost of Sparta",
+          "franquicia": "God of War",
+          "genero": "Action",
+          "priceGuide": {
+            "priceCharting": null,
+            "ebaySold": null,
+            "cib": null,
+            "targetBuy": null,
+            "notes": ""
+          },
+          "priceRange": {
+            "low": 56,
+            "mid": 67,
+            "high": 80,
+            "notes": "Copia suelta (game only), USD. Precios de lista consultados el 2026-09-14: DKOldies USD 79.99; Lukie Games USD 55.97; Game Over Videogames USD 64.99. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          },
+          "coverUrl": "./assets/game-covers/psp/god-of-war-ghost-of-sparta.jpg",
+          "coverImage": "./assets/game-covers/psp/god-of-war-ghost-of-sparta.jpg",
+          "imageSearchName": "God of War: Ghost of Sparta",
+          "imageSource": "wikipedia",
+          "imageStatus": "found",
+          "sourceType": "catalog"
+        },
+        {
+          "id": "daxter",
+          "nombre": "Daxter",
+          "franquicia": "Jak and Daxter",
+          "genero": "Platformer",
+          "priceGuide": {
+            "priceCharting": null,
+            "ebaySold": null,
+            "cib": null,
+            "targetBuy": null,
+            "notes": ""
+          },
+          "priceRange": {
+            "low": 14,
+            "mid": 19,
+            "high": 25,
+            "notes": "Copia suelta (game only), USD. Precios de lista consultados el 2026-09-14: DKOldies USD 13.99; Lukie Games USD 18.97; Game Over Videogames USD 24.99. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          },
+          "coverUrl": "./assets/game-covers/psp/daxter.jpg",
+          "coverImage": "./assets/game-covers/psp/daxter.jpg",
+          "imageSearchName": "Daxter",
+          "imageSource": "wikipedia",
+          "imageStatus": "found",
+          "sourceType": "catalog"
+        },
+        {
+          "id": "grand-theft-auto-vice-city-stories",
+          "nombre": "Grand Theft Auto: Vice City Stories",
+          "franquicia": "Grand Theft Auto",
+          "genero": "Action Adventure",
+          "priceGuide": {
+            "priceCharting": null,
+            "ebaySold": null,
+            "cib": null,
+            "targetBuy": null,
+            "notes": ""
+          },
+          "priceRange": {
+            "low": 49,
+            "mid": 50,
+            "high": 52,
+            "notes": "Copia suelta (game only), USD. Precios de lista consultados el 2026-09-14: DKOldies USD 48.99; Lukie Games USD 52.47; Game Over Videogames USD 49.99. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          },
+          "coverUrl": "./assets/game-covers/psp/grand-theft-auto-vice-city-stories.jpg",
+          "coverImage": "./assets/game-covers/psp/grand-theft-auto-vice-city-stories.jpg",
+          "imageSearchName": "Grand Theft Auto: Vice City Stories",
+          "imageSource": "wikipedia",
+          "imageStatus": "found",
+          "sourceType": "catalog"
+        },
+        {
+          "id": "crisis-core-final-fantasy-vii",
+          "nombre": "Crisis Core: Final Fantasy VII",
+          "franquicia": "Final Fantasy",
+          "genero": "Action RPG",
+          "priceGuide": {
+            "priceCharting": null,
+            "ebaySold": null,
+            "cib": null,
+            "targetBuy": null,
+            "notes": ""
+          },
+          "priceRange": {
+            "low": 17,
+            "mid": 20,
+            "high": 25,
+            "notes": "Copia suelta (game only), USD. Precios de lista consultados el 2026-09-14: DKOldies USD 16.99; Lukie Games USD 16.97; Game Over Videogames USD 24.99. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          },
+          "coverUrl": "./assets/game-covers/psp/crisis-core-final-fantasy-vii.png",
+          "coverImage": "./assets/game-covers/psp/crisis-core-final-fantasy-vii.png",
+          "imageSearchName": "Crisis Core: Final Fantasy VII",
+          "imageSource": "wikipedia",
+          "imageStatus": "found",
+          "sourceType": "catalog"
+        },
+        {
+          "id": "castlevania-the-dracula-x-chronicles",
+          "nombre": "Castlevania: The Dracula X Chronicles",
+          "franquicia": "Castlevania",
+          "genero": "Platformer",
+          "priceGuide": {
+            "priceCharting": null,
+            "ebaySold": null,
+            "cib": null,
+            "targetBuy": null,
+            "notes": ""
+          },
+          "priceRange": {
+            "low": 30,
+            "mid": 37,
+            "high": 45,
+            "notes": "Copia suelta (game only), USD. Precios de lista consultados el 2026-09-14: DKOldies USD 34.99; Lukie Games USD 30.47; Game Over Videogames USD 44.99. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          },
+          "coverUrl": "./assets/game-covers/psp/castlevania-the-dracula-x-chronicles.jpg",
+          "coverImage": "./assets/game-covers/psp/castlevania-the-dracula-x-chronicles.jpg",
+          "imageSearchName": "Castlevania: The Dracula X Chronicles",
+          "imageSource": "wikipedia",
+          "imageStatus": "found",
+          "sourceType": "catalog"
+        },
+        {
+          "id": "final-fantasy-tactics-the-war-of-the-lions",
+          "nombre": "Final Fantasy Tactics: The War of the Lions",
+          "franquicia": "Final Fantasy",
+          "genero": "Tactical RPG",
+          "priceGuide": {
+            "priceCharting": null,
+            "ebaySold": null,
+            "cib": null,
+            "targetBuy": null,
+            "notes": ""
+          },
+          "priceRange": {
+            "low": 25,
+            "mid": 27,
+            "high": 30,
+            "notes": "Copia suelta (game only), USD. Precios de lista consultados el 2026-09-14: DKOldies USD 24.99; Lukie Games USD 25.97; Game Over Videogames USD 29.99. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          },
+          "coverUrl": "./assets/game-covers/psp/final-fantasy-tactics-the-war-of-the-lions.jpg",
+          "coverImage": "./assets/game-covers/psp/final-fantasy-tactics-the-war-of-the-lions.jpg",
+          "imageSearchName": "Final Fantasy Tactics: The War of the Lions",
+          "imageSource": "wikipedia",
+          "imageStatus": "found",
+          "sourceType": "catalog"
+        },
+        {
+          "id": "valkyria-chronicles-ii",
+          "nombre": "Valkyria Chronicles II",
+          "franquicia": "Valkyria Chronicles",
+          "genero": "Tactical RPG",
+          "priceGuide": {
+            "priceCharting": null,
+            "ebaySold": null,
+            "cib": null,
+            "targetBuy": null,
+            "notes": ""
+          },
+          "priceRange": {
+            "low": 39,
+            "mid": 41,
+            "high": 45,
+            "notes": "Copia suelta (game only), USD. Precios de lista consultados el 2026-09-14: DKOldies USD 39.99; Lukie Games USD 38.97; Game Over Videogames USD 44.99. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          },
+          "coverUrl": "./assets/game-covers/psp/valkyria-chronicles-ii.jpg",
+          "coverImage": "./assets/game-covers/psp/valkyria-chronicles-ii.jpg",
+          "imageSearchName": "Valkyria Chronicles II",
+          "imageSource": "wikipedia",
+          "imageStatus": "found",
+          "sourceType": "catalog"
+        },
+        {
+          "id": "locoroco-2",
+          "nombre": "LocoRoco 2",
+          "franquicia": "LocoRoco",
+          "genero": "Platformer",
+          "priceGuide": {
+            "priceCharting": null,
+            "ebaySold": null,
+            "cib": null,
+            "targetBuy": null,
+            "notes": ""
+          },
+          "priceRange": {
+            "low": 17,
+            "mid": 18,
+            "high": 20,
+            "notes": "Copia suelta (game only), USD. Precios de lista consultados el 2026-09-14: DKOldies USD 16.99; Game Over Videogames USD 19.99. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          },
+          "coverUrl": "./assets/game-covers/psp/locoroco-2.jpg",
+          "coverImage": "./assets/game-covers/psp/locoroco-2.jpg",
+          "imageSearchName": "LocoRoco 2",
+          "imageSource": "wikipedia",
+          "imageStatus": "found",
+          "sourceType": "catalog"
+        }
+      ]
+    },
+    "ps-vita": {
+      "juegosCatalogo": [
+        {
+          "id": "gravity-rush",
+          "nombre": "Gravity Rush",
+          "franquicia": "Gravity Rush",
+          "genero": "Action Adventure",
+          "priceGuide": {
+            "priceCharting": null,
+            "ebaySold": null,
+            "cib": null,
+            "targetBuy": null,
+            "notes": ""
+          },
+          "priceRange": {
+            "low": 40,
+            "mid": 57,
+            "high": 76,
+            "notes": "Copia suelta (game only), USD. Precios de lista consultados el 2026-09-14: DKOldies USD 39.99; Lukie Games USD 76.47; Game Over Videogames USD 54.99. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          },
+          "coverUrl": "./assets/game-covers/ps-vita/gravity-rush.png",
+          "coverImage": "./assets/game-covers/ps-vita/gravity-rush.png",
+          "imageSearchName": "Gravity Rush",
+          "imageSource": "wikipedia",
+          "imageStatus": "found",
+          "sourceType": "catalog"
+        },
+        {
+          "id": "persona-4-golden",
+          "nombre": "Persona 4 Golden",
+          "franquicia": "Persona",
+          "genero": "RPG",
+          "priceGuide": {
+            "priceCharting": null,
+            "ebaySold": null,
+            "cib": null,
+            "targetBuy": null,
+            "notes": ""
+          },
+          "priceRange": {
+            "low": 27,
+            "mid": 30,
+            "high": 35,
+            "notes": "Copia suelta (game only), USD. Precios de lista consultados el 2026-09-14: DKOldies USD 28.99; Lukie Games USD 26.97; Game Over Videogames USD 34.99. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          },
+          "coverUrl": "./assets/photos/game-placeholder.svg",
+          "coverImage": "./assets/photos/game-placeholder.svg",
+          "imageSearchName": "Persona 4 Golden",
+          "imageSource": "placeholder",
+          "imageStatus": "placeholder",
+          "sourceType": "catalog"
+        },
+        {
+          "id": "tearaway",
+          "nombre": "Tearaway",
+          "franquicia": "Tearaway",
+          "genero": "Platformer",
+          "priceGuide": {
+            "priceCharting": null,
+            "ebaySold": null,
+            "cib": null,
+            "targetBuy": null,
+            "notes": ""
+          },
+          "priceRange": {
+            "low": 26,
+            "mid": 28,
+            "high": 30,
+            "notes": "Copia suelta (game only), USD. Precios de lista consultados el 2026-09-14: DKOldies USD 27.99; Lukie Games USD 26.47; Game Over Videogames USD 29.99. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          },
+          "coverUrl": "./assets/game-covers/ps-vita/tearaway.jpg",
+          "coverImage": "./assets/game-covers/ps-vita/tearaway.jpg",
+          "imageSearchName": "Tearaway",
+          "imageSource": "wikipedia",
+          "imageStatus": "found",
+          "sourceType": "catalog"
+        },
+        {
+          "id": "danganronpa-trigger-happy-havoc",
+          "nombre": "Danganronpa: Trigger Happy Havoc",
+          "franquicia": "Danganronpa",
+          "genero": "Visual Novel",
+          "priceGuide": {
+            "priceCharting": null,
+            "ebaySold": null,
+            "cib": null,
+            "targetBuy": null,
+            "notes": ""
+          },
+          "priceRange": {
+            "low": 30,
+            "mid": 31,
+            "high": 32,
+            "notes": "Copia suelta (game only), USD. Precios de lista consultados el 2026-09-14: DKOldies USD 31.99; Lukie Games USD 32.47; Game Over Videogames USD 29.99. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          },
+          "coverUrl": "./assets/game-covers/ps-vita/danganronpa-trigger-happy-havoc.jpg",
+          "coverImage": "./assets/game-covers/ps-vita/danganronpa-trigger-happy-havoc.jpg",
+          "imageSearchName": "Danganronpa: Trigger Happy Havoc",
+          "imageSource": "wikipedia",
+          "imageStatus": "found",
+          "sourceType": "catalog"
+        },
+        {
+          "id": "uncharted-golden-abyss",
+          "nombre": "Uncharted: Golden Abyss",
+          "franquicia": "Uncharted",
+          "genero": "Action Adventure",
+          "priceGuide": {
+            "priceCharting": null,
+            "ebaySold": null,
+            "cib": null,
+            "targetBuy": null,
+            "notes": ""
+          },
+          "priceRange": {
+            "low": 30,
+            "mid": 33,
+            "high": 35,
+            "notes": "Copia suelta (game only), USD. Precios de lista consultados el 2026-09-14: DKOldies USD 29.99; Lukie Games USD 32.97; Game Over Videogames USD 34.99. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          },
+          "coverUrl": "./assets/game-covers/ps-vita/uncharted-golden-abyss.png",
+          "coverImage": "./assets/game-covers/ps-vita/uncharted-golden-abyss.png",
+          "imageSearchName": "Uncharted: Golden Abyss",
+          "imageSource": "wikipedia",
+          "imageStatus": "found",
+          "sourceType": "catalog"
+        },
+        {
+          "id": "ys-memories-of-celceta",
+          "nombre": "Ys: Memories of Celceta",
+          "franquicia": "Ys",
+          "genero": "Action RPG",
+          "priceGuide": {
+            "priceCharting": null,
+            "ebaySold": null,
+            "cib": null,
+            "targetBuy": null,
+            "notes": ""
+          },
+          "priceRange": {
+            "low": 25,
+            "mid": 30,
+            "high": 34,
+            "notes": "Copia suelta (game only), USD. Precios de lista consultados el 2026-09-14: DKOldies USD 24.99; Lukie Games USD 34.47; Game Over Videogames USD 29.99. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          },
+          "coverUrl": "./assets/game-covers/ps-vita/ys-memories-of-celceta.jpg",
+          "coverImage": "./assets/game-covers/ps-vita/ys-memories-of-celceta.jpg",
+          "imageSearchName": "Ys: Memories of Celceta",
+          "imageSource": "wikipedia",
+          "imageStatus": "found",
+          "sourceType": "catalog"
+        },
+        {
+          "id": "zero-escape-virtues-last-reward",
+          "nombre": "Zero Escape: Virtue's Last Reward",
+          "franquicia": "Zero Escape",
+          "genero": "Visual Novel",
+          "priceGuide": {
+            "priceCharting": null,
+            "ebaySold": null,
+            "cib": null,
+            "targetBuy": null,
+            "notes": ""
+          },
+          "priceRange": {
+            "low": 18,
+            "mid": 19,
+            "high": 20,
+            "notes": "Copia suelta (game only), USD. Precios de lista consultados el 2026-09-14: DKOldies USD 19.99; Lukie Games USD 17.97; Game Over Videogames USD 17.99. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          },
+          "coverUrl": "./assets/game-covers/ps-vita/zero-escape-virtues-last-reward.jpg",
+          "coverImage": "./assets/game-covers/ps-vita/zero-escape-virtues-last-reward.jpg",
+          "imageSearchName": "Zero Escape: Virtue's Last Reward",
+          "imageSource": "wikipedia",
+          "imageStatus": "found",
+          "sourceType": "catalog"
+        },
+        {
+          "id": "the-walking-dead-season-one",
+          "nombre": "The Walking Dead: Season One",
+          "franquicia": "The Walking Dead",
+          "genero": "Adventure",
+          "priceGuide": {
+            "priceCharting": null,
+            "ebaySold": null,
+            "cib": null,
+            "targetBuy": null,
+            "notes": ""
+          },
+          "priceRange": {
+            "low": 12,
+            "mid": 16,
+            "high": 20,
+            "notes": "Copia suelta (game only), USD. Precios de lista consultados el 2026-09-14: DKOldies USD 19.99; Lukie Games USD 11.97. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          },
+          "coverUrl": "./assets/game-covers/ps-vita/the-walking-dead-season-one.jpg",
+          "coverImage": "./assets/game-covers/ps-vita/the-walking-dead-season-one.jpg",
+          "imageSearchName": "The Walking Dead: Season One",
+          "imageSource": "wikipedia",
+          "imageStatus": "found",
+          "sourceType": "catalog"
+        },
+        {
+          "id": "lumines-electronic-symphony",
+          "nombre": "Lumines: Electronic Symphony",
+          "franquicia": "Lumines",
+          "genero": "Puzzle",
+          "priceGuide": {
+            "priceCharting": null,
+            "ebaySold": null,
+            "cib": null,
+            "targetBuy": null,
+            "notes": ""
+          },
+          "priceRange": {
+            "low": 20,
+            "mid": 22,
+            "high": 24,
+            "notes": "Copia suelta (game only), USD. Precios de lista consultados el 2026-09-14: DKOldies USD 19.99; Lukie Games USD 23.97; Game Over Videogames USD 22.99. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          },
+          "coverUrl": "./assets/game-covers/ps-vita/lumines-electronic-symphony.jpg",
+          "coverImage": "./assets/game-covers/ps-vita/lumines-electronic-symphony.jpg",
+          "imageSearchName": "Lumines: Electronic Symphony",
+          "imageSource": "wikipedia",
+          "imageStatus": "found",
+          "sourceType": "catalog"
+        },
+        {
+          "id": "mortal-kombat",
+          "nombre": "Mortal Kombat",
+          "franquicia": "Mortal Kombat",
+          "genero": "Fighting",
+          "priceGuide": {
+            "priceCharting": null,
+            "ebaySold": null,
+            "cib": null,
+            "targetBuy": null,
+            "notes": ""
+          },
+          "priceRange": {
+            "low": 19,
+            "mid": 25,
+            "high": 30,
+            "notes": "Copia suelta (game only), USD. Precios de lista consultados el 2026-09-14: DKOldies USD 18.99; Lukie Games USD 26.97; Game Over Videogames USD 29.99. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          },
+          "coverUrl": "./assets/game-covers/ps-vita/mortal-kombat.png",
+          "coverImage": "./assets/game-covers/ps-vita/mortal-kombat.png",
+          "imageSearchName": "Mortal Kombat",
+          "imageSource": "wikipedia",
+          "imageStatus": "found",
+          "sourceType": "catalog"
+        }
+      ]
     }
   }
 }
