@@ -64,6 +64,8 @@ PART_MARKERS = (
     r"\bacrylic\b",
     r"\bempty\s+case\b",
     r"\bstorage\s+case\b",
+    r"\breplacement\s+case\b",
+    r"\bcase\s+only\b",
     r"\bdisplay\b",
     r"\bdust\s+cover\b",
 )

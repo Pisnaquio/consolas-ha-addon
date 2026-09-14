@@ -115,3 +115,29 @@ class VariablePriceTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ReplacementCaseTests(unittest.TestCase):
+    """Una caja de repuesto es una caja, no el juego que iría adentro.
+
+    Apareció en producción cruzando un objetivo de juego a 6,49: el título dice
+    "Game Replacement Case" y el marcador de juego se quedaba con la palabra
+    "Game".
+    """
+
+    def test_a_replacement_case_is_an_accessory(self) -> None:
+        item = classify_listing_item("PlayStation 2 (PS2) OEM Authentic Game Replacement Case Read Description")
+        self.assertEqual(item.kind, "accessory")
+
+    def test_a_case_only_listing_is_an_accessory(self) -> None:
+        self.assertEqual(classify_listing_item("Final Fantasy X PS2 CASE ONLY no disc").kind, "accessory")
+
+    def test_a_game_that_merely_includes_its_case_is_still_a_game(self) -> None:
+        self.assertEqual(
+            classify_listing_item("Pokemon Blue Version Game Boy Color game w/ case (1998)").kind, "game"
+        )
+
+    def test_a_complete_game_is_still_a_game(self) -> None:
+        self.assertEqual(
+            classify_listing_item("Metal Gear Solid 2 PS2 CIB Complete with case and manual").kind, "game"
+        )
