@@ -44,6 +44,18 @@
   const money = (amount, currency) =>
     amount == null ? "" : `${currency || "USD"} ${Number(amount).toLocaleString("es-UY", { maximumFractionDigits: 2 })}`;
 
+  /**
+   * La fecha de una compra, no su hora: `formatSlotTime` dice "lun, 08:47"
+   * porque describe el próximo slot de esta semana, y una compra de hace un mes
+   * diría lo mismo que una de ayer.
+   */
+  const purchaseDate = (value) => {
+    if (!value) return "";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    return new Intl.DateTimeFormat("es-UY", { day: "2-digit", month: "short", year: "numeric" }).format(date);
+  };
+
   function setFeedback(message, tone = "info") {
     feedback = message || "";
     feedbackTone = tone;
@@ -54,6 +66,7 @@
       repository.loadFeed(),
       repository.loadBudget().catch(() => null), // el presupuesto es complementario: sin él, el feed igual funciona
       repository.loadShipment().catch(() => null),
+      repository.loadPurchases().catch(() => null),
     ]);
     feed = nextFeed;
     budget = nextBudget;
@@ -96,6 +109,42 @@
       }</span></div>
       <button class="btn-link" type="button" data-close-shipment="1"${busy ? " disabled" : ""}>Ya lo reenvié</button>
     </div>`;
+  }
+
+  /**
+   * Lo que registraste como comprado, con la salida. "Registrar compra" escribe
+   * en tres lados con un click: sin un lugar donde verlo y revertirlo, un error
+   * queda grabado y encima invisible, porque el feed esconde lo ya comprado.
+   */
+  function purchasesSection() {
+    const compras = repository.getPurchases();
+    if (!compras.length) return "";
+    return `<section class="detail-block purchases-panel">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Compras</p>
+          <h2>Lo que registraste</h2>
+        </div>
+        <small>${compras.length}</small>
+      </div>
+      <ul class="purchases-list">
+        ${compras
+          .map(
+            (compra) => `<li>
+              <div>
+                <strong>${escapeHtml(compra.title || compra.entityId)}</strong>
+                <span>${escapeHtml(money(compra.priceAmount, compra.currency))} · ${escapeHtml(
+                  purchaseDate(compra.purchasedAt)
+                )}${compra.shippedAt ? " · ya reenviada" : ""}</span>
+              </div>
+              <button class="btn-link" type="button" data-undo-purchase="${escapeHtml(compra.id)}"
+                      data-listing="${escapeHtml(compra.listingId || "")}"${busy ? " disabled" : ""}>Deshacer</button>
+            </li>`
+          )
+          .join("")}
+      </ul>
+      <p class="muted">Deshacer saca el gasto y devuelve la publicación al feed. No desmarca nada en tu colección: eso se corrige en la ficha de la consola o del juego.</p>
+    </section>`;
   }
 
   function budgetWidget() {
@@ -314,6 +363,7 @@
       </header>
       ${budgetWidget()}
       ${shipmentWidget()}
+      ${purchasesSection()}
       ${feedback ? `<p class="chasing-feedback is-${escapeHtml(feedbackTone)}" role="status">${escapeHtml(feedback)}</p>` : ""}
       <section class="feed-list">${
         items.length
@@ -370,6 +420,20 @@
           isReserved ? "Ya no cuenta como plan probable." : "Cuenta como plan probable en el presupuesto del mes."
         );
       })
+    );
+
+    each("[data-undo-purchase]", (button) =>
+      button.addEventListener("click", () =>
+        perform(
+          "Deshaciendo…",
+          () =>
+            window.RadarPurchase.undoPurchase({
+              purchaseId: button.dataset.undoPurchase,
+              listingId: button.dataset.listing,
+            }),
+          "Compra deshecha. Revisá la ficha si además querés desmarcarla de tu colección."
+        )
+      )
     );
 
     each("[data-close-shipment]", (button) =>

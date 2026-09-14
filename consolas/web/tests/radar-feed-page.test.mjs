@@ -59,7 +59,8 @@ function defaultBudget(overrides = {}) {
 
 async function renderFeed({
   items = [], following = [], counts = {}, environment = "production", fail = false,
-  budget = defaultBudget(), radarPurchase = null, openPurchaseFor = "",
+  budget = defaultBudget(), radarPurchase = null, openPurchaseFor = "", purchases = { items: [] },
+  clickUndo = false,
   shipment = { currency: "USD", limit: 200, merchandise: 0, headroom: 200, overLimit: false, count: 0, items: [] },
 } = {}) {
   let html = "";
@@ -68,10 +69,20 @@ async function renderFeed({
   // se le devuelve al binding un botón mínimo y se dispara su handler, en vez
   // de manipular el estado interno de la página desde afuera.
   const purchaseClicks = [];
+  const undoClicks = [];
   const root = {
     set innerHTML(value) { html = String(value); },
     get innerHTML() { return html; },
     querySelectorAll(selector) {
+      if (selector === "[data-undo-purchase]") {
+        if (!clickUndo) return [];
+        const first = purchases.items?.[0];
+        if (!first) return [];
+        return [{
+          dataset: { undoPurchase: String(first.id), listing: String(first.listingId || "") },
+          addEventListener: (_event, handler) => undoClicks.push(handler),
+        }];
+      }
       if (!openPurchaseFor || selector !== "[data-purchase]") return [];
       return [{
         dataset: { purchase: openPurchaseFor },
@@ -93,6 +104,9 @@ async function renderFeed({
     if (fail) return { ok: false, status: 503, async json() { return { error: "sin backend" }; } };
     if (String(url).includes("/radar/budget")) {
       return { ok: true, status: 200, async json() { return budget; } };
+    }
+    if (String(url).includes("/radar/purchases")) {
+      return { ok: true, status: 200, async json() { return purchases; } };
     }
     if (String(url).includes("/radar/shipment")) {
       return { ok: true, status: 200, async json() { return shipment; } };
@@ -118,6 +132,11 @@ async function renderFeed({
   await new Promise((resolve) => setImmediate(resolve));
   await new Promise((resolve) => setImmediate(resolve));
   if (openPurchaseFor) purchaseClicks[0]?.();
+  if (clickUndo) {
+    await undoClicks[0]?.();
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+  }
   return { html, requests, repository: windowStub.RadarRepository };
 }
 
@@ -500,4 +519,68 @@ test("something already at your target is not asked to be negotiated", async () 
 
   assert.match(html, /Cruzó tu objetivo/);
   assert.doesNotMatch(html, /acepta ofertas/);
+});
+
+test("without purchases the history stays out of the way", async () => {
+  const { html } = await renderFeed({ items: [item()] });
+
+  assert.doesNotMatch(html, /Lo que registraste/);
+  assert.doesNotMatch(html, /data-undo-purchase/);
+});
+
+test("a registered purchase is listed with a way out", async () => {
+  const { html } = await renderFeed({
+    items: [],
+    purchases: {
+      items: [{
+        id: 7,
+        listingId: "ebay-us-1",
+        title: "PlayStation 2 Slim tested with OEM controller",
+        entityType: "console",
+        entityId: "ps2",
+        priceAmount: 149.99,
+        currency: "USD",
+        purchasedAt: "2026-09-11T12:00:00Z",
+        shippedAt: null,
+      }],
+    },
+  });
+
+  assert.match(html, /Lo que registraste/);
+  assert.match(html, /PlayStation 2 Slim tested/);
+  assert.match(html, /USD 149,99/);
+  assert.match(html, /data-undo-purchase="7"/);
+});
+
+// El riesgo real de esta pantalla es prometer más de lo que hace: deshacer
+// borra el gasto, no la tenencia, porque no guardamos qué decía la colección
+// antes. Si el texto dejara de decirlo, el usuario creería que quedó limpio.
+test("undo says out loud that the collection is not touched", async () => {
+  const { html } = await renderFeed({
+    items: [],
+    purchases: {
+      items: [{ id: 7, listingId: "ebay-us-1", title: "PS2", priceAmount: 10, currency: "USD",
+                purchasedAt: "2026-09-11T12:00:00Z" }],
+    },
+  });
+
+  assert.match(html, /No desmarca nada en tu colección/);
+});
+
+test("undoing deletes the purchase and frees the listing, and nothing else", async () => {
+  const { requests } = await renderFeed({
+    items: [],
+    purchases: {
+      items: [{ id: 7, listingId: "ebay-us-1", title: "PS2", priceAmount: 10, currency: "USD",
+                purchasedAt: "2026-09-11T12:00:00Z" }],
+    },
+    clickUndo: true,
+  });
+
+  const written = requests.filter((request) => request.options?.method && request.options.method !== "GET");
+  assert.equal(written.length, 2);
+  assert.match(String(written[0].url), /\/radar\/purchases\/7$/);
+  assert.equal(written[0].options.method, "DELETE");
+  assert.match(String(written[1].url), /\/radar\/decisions\/ebay-us-1$/);
+  assert.equal(written[1].options.method, "DELETE");
 });

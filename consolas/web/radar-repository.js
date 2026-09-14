@@ -79,6 +79,7 @@
   let runs = null;
   let shipment = null;
   let coverage = null;
+  let purchases = null;
   let available = false;
 
   async function request(path, options = {}) {
@@ -395,6 +396,20 @@
     return write("/radar/purchases", payload);
   }
 
+  /** Historial de compras registradas, lo más reciente primero. */
+  async function loadPurchases() {
+    purchases = await request("/radar/purchases");
+    return purchases;
+  }
+
+  function getPurchases() {
+    return Array.isArray(purchases?.items) ? purchases.items : [];
+  }
+
+  async function deletePurchase(purchaseId) {
+    return request(`/radar/purchases/${encodeURIComponent(purchaseId)}`, { method: "DELETE" });
+  }
+
   /** Qué parte de la colección el radar no está mirando. */
   async function loadCoverage() {
     coverage = await request("/radar/coverage");
@@ -501,6 +516,9 @@
     recordPurchase,
     loadCoverage,
     getCoverage,
+    loadPurchases,
+    getPurchases,
+    deletePurchase,
     loadShipment,
     getShipment,
     closeShipment,

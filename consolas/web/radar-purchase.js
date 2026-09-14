@@ -118,5 +118,22 @@
     return { ...result, collectionWritten };
   }
 
-  window.RadarPurchase = { registerPurchase, canWriteCollection };
+  /**
+   * Deshace lo que el radar registró: el gasto y la decisión sobre la
+   * publicación, que así vuelve al feed.
+   *
+   * **No toca la colección.** Registrar la compra marcó la consola como tuya,
+   * pero no guardamos qué decía antes: desmarcarla a ciegas podría borrar una
+   * consola que ya tenías por otro camino. Quien llama tiene que decirlo, y la
+   * corrección de la colección se hace donde vive, en su propia ficha.
+   */
+  async function undoPurchase({ purchaseId, listingId }) {
+    const repository = window.RadarRepository;
+    if (!repository) throw new Error("RadarRepository no está disponible.");
+    const result = await repository.deletePurchase(purchaseId);
+    if (listingId) await repository.clearDecision(listingId).catch(() => null);
+    return result;
+  }
+
+  window.RadarPurchase = { registerPurchase, canWriteCollection, undoPurchase };
 })();
