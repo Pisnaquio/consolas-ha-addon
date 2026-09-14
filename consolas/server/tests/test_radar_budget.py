@@ -411,3 +411,79 @@ class ShipmentFranchiseTests(RadarBudgetTestCase):
         )
         self.assertEqual(out["shipment"]["merchandise"], 150.0)
         self.assertEqual(out["shipment"]["headroom"], 50.0)
+
+
+class UndoPurchaseTests(RadarBudgetTestCase):
+    """Registrar una compra tiene que poder deshacerse.
+
+    Escribe en tres lados —evidencia, presupuesto y colección— y basta un click
+    para dispararla. Sin vuelta atrás, un error queda grabado para siempre.
+    """
+
+    def comprar(self, precio: float = 99.0) -> str:
+        [listing_id] = self.seed([ebay_summary(price=str(precio))])
+        out = record_radar_purchase(
+            self.config,
+            {"listingId": listing_id, "entityType": "console", "entityId": "ps3", "priceAmount": precio},
+        )
+        return out["purchase"]["id"]
+
+    def test_deleting_a_purchase_takes_it_out_of_the_budget(self) -> None:
+        from server.app import delete_radar_purchase
+
+        purchase_id = self.comprar()
+        self.assertEqual(compute_radar_budget(self.config)["spent"], 99.0)
+
+        out = delete_radar_purchase(self.config, purchase_id)
+        self.assertEqual(out["deleted"]["entityId"], "ps3")
+        self.assertEqual(out["budget"]["spent"], 0)
+        self.assertEqual(compute_radar_budget(self.config)["spentCount"], 0)
+
+    def test_deleting_a_purchase_empties_the_mailbox_too(self) -> None:
+        from server.app import compute_radar_shipment, delete_radar_purchase
+
+        purchase_id = self.comprar()
+        self.assertEqual(compute_radar_shipment(self.config)["merchandise"], 99.0)
+
+        delete_radar_purchase(self.config, purchase_id)
+        self.assertEqual(compute_radar_shipment(self.config)["count"], 0)
+
+    def test_deleting_one_leaves_the_others_alone(self) -> None:
+        from server.app import delete_radar_purchase
+
+        ids = self.seed([ebay_summary("v1|1|0", price="40.00"), ebay_summary("v1|2|0", price="60.00")])
+        primera = record_radar_purchase(
+            self.config, {"listingId": ids[0], "entityType": "console", "entityId": "ps2", "priceAmount": 40.0}
+        )["purchase"]["id"]
+        record_radar_purchase(
+            self.config, {"listingId": ids[1], "entityType": "console", "entityId": "ps3", "priceAmount": 60.0}
+        )
+
+        delete_radar_purchase(self.config, primera)
+        self.assertEqual(compute_radar_budget(self.config)["spent"], 60.0)
+
+    def test_deleting_a_purchase_that_does_not_exist_is_refused(self) -> None:
+        from server.app import delete_radar_purchase
+
+        with self.assertRaises(ApiError) as raised:
+            delete_radar_purchase(self.config, "purchase-noexiste")
+        self.assertEqual(raised.exception.status, 404)
+
+    def test_the_decision_is_a_separate_fact(self) -> None:
+        # Borrar la compra no toca la decisión sobre la publicación: son dos
+        # hechos distintos y se limpian por separado, a propósito.
+        from server.app import delete_radar_purchase, list_radar_decisions
+
+        purchase_id = self.comprar()
+        delete_radar_purchase(self.config, purchase_id)
+        decisiones = list_radar_decisions(self.config)["items"]
+        self.assertEqual([d["decision"] for d in decisiones], ["purchased"])
+
+    def test_the_history_lists_what_was_registered(self) -> None:
+        from server.app import list_radar_purchases
+
+        self.comprar()
+        items = list_radar_purchases(self.config)["items"]
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["entityId"], "ps3")
+        self.assertIsNone(items[0]["shippedAt"])

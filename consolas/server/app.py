@@ -58,7 +58,7 @@ from radar.sources import registry as radar_registry  # noqa: E402
 
 
 SERVICE_NAME = "consolas-server"
-SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.52")
+SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.53")
 DEFAULT_DATA_DIR = "/data"
 DEFAULT_STATIC_DIR = "/app/web"
 DATABASE_NAME = "consolas.sqlite"
@@ -4766,6 +4766,68 @@ def close_radar_shipment(config: AppConfig) -> dict[str, Any]:
     }
 
 
+def delete_radar_purchase(config: AppConfig, purchase_id: Any) -> dict[str, Any]:
+    """Borra el registro de una compra que no ocurrió.
+
+    "Registrar compra" escribe en tres lados —evidencia, presupuesto y la
+    colección— y hasta acá sólo se podía deshacer a mano en dos de ellos. Una
+    acción que escribe la colección tiene que poder revertirse, sobre todo
+    cuando basta un click para dispararla.
+
+    La decisión sobre la publicación se limpia aparte, con el endpoint que ya
+    existe: son dos hechos distintos y borrar uno no implica el otro.
+    """
+
+    target_id = normalize_radar_id(purchase_id)
+    with _RADAR_LOCK, connect_db(config) as conn:
+        row = conn.execute("SELECT * FROM radar_purchases WHERE id = ?", (target_id,)).fetchone()
+        if row is None:
+            raise ApiError(HTTPStatus.NOT_FOUND, "Purchase not found")
+        conn.execute("DELETE FROM radar_purchases WHERE id = ?", (target_id,))
+
+    return {
+        "ok": True,
+        "deleted": {
+            "id": target_id,
+            "listingId": row["listing_id"],
+            "entityType": row["entity_type"],
+            "entityId": row["entity_id"],
+            "priceAmount": row["price_amount"],
+        },
+        "budget": compute_radar_budget(config),
+        "shipment": compute_radar_shipment(config),
+    }
+
+
+def list_radar_purchases(config: AppConfig) -> dict[str, Any]:
+    """Historial de compras registradas, lo más reciente primero."""
+
+    with _RADAR_LOCK, connect_db(config) as conn:
+        rows = conn.execute(
+            """SELECT p.*, l.title AS listing_title
+                 FROM radar_purchases p
+                 LEFT JOIN radar_listings l ON l.id = p.listing_id
+                ORDER BY p.purchased_at DESC"""
+        ).fetchall()
+    return {
+        "items": [
+            {
+                "id": row["id"],
+                "listingId": row["listing_id"],
+                "title": row["listing_title"] or row["entity_id"],
+                "entityType": row["entity_type"],
+                "entityId": row["entity_id"],
+                "entityConsoleId": row["entity_console_id"] if "entity_console_id" in row.keys() else "",
+                "priceAmount": row["price_amount"],
+                "currency": row["currency"],
+                "purchasedAt": row["purchased_at"],
+                "shippedAt": row["shipped_at"] if "shipped_at" in row.keys() else None,
+            }
+            for row in rows
+        ]
+    }
+
+
 def compute_radar_budget(config: AppConfig) -> dict[str, Any]:
     """Gastado, reservado, disponible e impacto (PRD §10.6).
 
@@ -5799,6 +5861,9 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/radar/shipment":
             self.send_json(compute_radar_shipment(config))
             return
+        if path == "/api/radar/purchases":
+            self.send_json(list_radar_purchases(config))
+            return
         if path == "/api/radar/coverage":
             self.send_json(compute_radar_coverage(config))
             return
@@ -5970,6 +6035,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def route_delete(self) -> None:
         parsed = urllib.parse.urlsplit(self.path)
+        if parsed.path.startswith("/api/radar/purchases/"):
+            require_radar_write_request(self)
+            purchase_id = parsed.path.removeprefix("/api/radar/purchases/")
+            self.send_json(delete_radar_purchase(self.config(), purchase_id))
+            return
         if parsed.path.startswith("/api/radar/decisions/"):
             require_radar_write_request(self)
             listing_id = parsed.path.removeprefix("/api/radar/decisions/")
