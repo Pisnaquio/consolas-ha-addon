@@ -193,7 +193,9 @@
           "codeStatus": "not-applicable",
           "region": "NTSC-U/C",
           "year": 2007,
-          "isPrimaryPhysicalTarget": true
+          "isPrimaryPhysicalTarget": true,
+          "coverUrl": "./assets/franchise-covers/god-of-war/gow2-2007-ps2-na.jpg",
+          "coverSource": "wikipedia"
         },
         {
           "id": "chains-of-olympus-2008-psp-na",
@@ -212,7 +214,9 @@
           "codeStatus": "not-applicable",
           "region": "NTSC-U/C",
           "year": 2008,
-          "isPrimaryPhysicalTarget": true
+          "isPrimaryPhysicalTarget": true,
+          "coverUrl": "./assets/franchise-covers/god-of-war/chains-of-olympus-2008-psp-na.jpg",
+          "coverSource": "wikipedia"
         },
         {
           "id": "ghost-of-sparta-2010-psp-na",
@@ -256,7 +260,9 @@
           "region": "NTSC-U/C",
           "year": 2009,
           "notes": "GoW y GoW II remasterizados en HD, un solo disco — un lanzamiento físico que cubre dos obras.",
-          "isPrimaryPhysicalTarget": false
+          "isPrimaryPhysicalTarget": false,
+          "coverUrl": "./assets/franchise-covers/god-of-war/gow-collection-2009-ps3.jpg",
+          "coverSource": "wikipedia"
         },
         {
           "id": "gow-collection-2012-vita",
@@ -298,7 +304,9 @@
           "region": "NTSC-U/C",
           "year": 2011,
           "notes": "Chains of Olympus y Ghost of Sparta remasterizados. Título europeo equivalente: God of War Collection – Volume II.",
-          "isPrimaryPhysicalTarget": false
+          "isPrimaryPhysicalTarget": false,
+          "coverUrl": "./assets/franchise-covers/god-of-war/gow-origins-collection-2011-ps3.jpg",
+          "coverSource": "wikipedia"
         },
         {
           "id": "gow3-2010-ps3-na",
@@ -317,7 +325,9 @@
           "codeStatus": "not-applicable",
           "region": "NTSC-U/C",
           "year": 2010,
-          "isPrimaryPhysicalTarget": true
+          "isPrimaryPhysicalTarget": true,
+          "coverUrl": "./assets/franchise-covers/god-of-war/gow3-2010-ps3-na.jpg",
+          "coverSource": "wikipedia"
         },
         {
           "id": "gow3-remastered-2015-ps4",
@@ -363,7 +373,9 @@
           "notes": "Bundle de God of War Collection + Origins Collection + acceso a God of War III. El componente de GoW III se distribuyó por código/PSN, no como disco propio dentro del set — una copia usada no garantiza que ese código siga sin canjear.",
           "sourceUrl": "https://blog.playstation.com/2012/08/06/never-stop-playing-with-playstation-collections/",
           "lastVerified": "2026-09-12",
-          "isPrimaryPhysicalTarget": false
+          "isPrimaryPhysicalTarget": false,
+          "coverUrl": "./assets/franchise-covers/god-of-war/gow-saga-2012-ps3.jpg",
+          "coverSource": "wikipedia"
         },
         {
           "id": "gow-complete-collection-ps3",
@@ -437,7 +449,9 @@
           "codeStatus": "not-applicable",
           "region": "NTSC-U/C",
           "year": 2013,
-          "isPrimaryPhysicalTarget": true
+          "isPrimaryPhysicalTarget": true,
+          "coverUrl": "./assets/franchise-covers/god-of-war/ascension-2013-ps3-na.jpg",
+          "coverSource": "wikipedia"
         },
         {
           "id": "gow-2018-ps4-na",
@@ -529,7 +543,10 @@
           "notes": "Sólo digital por ahora. No afirmar que nunca tendrá edición física.",
           "sourceUrl": "https://blog.playstation.com/2026/02/12/god-of-war-greek-trilogy-remake-in-development-god-of-war-sons-of-sparta-out-now/",
           "lastVerified": "2026-09-12",
-          "isPrimaryPhysicalTarget": true
+          "isPrimaryPhysicalTarget": true,
+          "coverUrl": "./assets/franchise-covers/god-of-war/sons-of-sparta-2026-ps5-standard.webp",
+          "coverSource": "wikipedia",
+          "coverAspect": "wide"
         },
         {
           "id": "sons-of-sparta-2026-ps5-deluxe",

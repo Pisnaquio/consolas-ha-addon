@@ -78,13 +78,22 @@
       // catalogRef resuelve a una entrada manual sin esos campos — nunca se
       // inventa una portada ni un precio para él.
       const catalogGame = release.catalogRef ? state.game : null;
+      // La portada sale del juego de catálogo cuando hay `catalogRef`, porque
+      // ese archivo ya pasó por la validación del repo. Cuando no lo hay —la
+      // mayoría de los lanzamientos de PS2, PSP y las compilaciones de PS3— el
+      // lanzamiento puede declarar la suya: es un asset del repo igual que
+      // cualquier portada de juego, no una URL remota ni una invención.
+      //
+      // El precio sigue viniendo sólo del catálogo. Una portada es un hecho
+      // verificable mirando la caja; un precio es un dato de mercado y no se
+      // declara a mano.
       return {
         ...release,
         ownershipType: state.ownershipType,
         loQuiero: state.loQuiero,
         isOwned: isReleaseOwned(state),
         isOwnedPhysical: isReleaseOwnedPhysical(state),
-        coverUrl: catalogGame?.coverUrl || null,
+        coverUrl: catalogGame?.coverUrl || release.coverUrl || null,
         priceRange: catalogGame?.priceRange || null
       };
     });

@@ -357,7 +357,12 @@
       release.isPrimaryPhysicalTarget ? " is-primary" : ""
     }${compact ? " is-compact" : ""}">
       <div class="tc-release-head">
-        ${release.coverUrl ? `<img class="tc-release-cover" src="${escapeHtml(release.coverUrl)}" alt="" loading="lazy" decoding="async" />` : ""}
+        ${
+          release.coverUrl
+            ? `<img class="tc-release-cover${release.coverAspect === "wide" ? " is-wide" : ""}"
+                    src="${escapeHtml(release.coverUrl)}" alt="" loading="lazy" decoding="async" />`
+            : ""
+        }
         <div class="tc-release-id">
           <p class="tc-release-title">${escapeHtml(release.title)}</p>
           <p class="tc-release-meta">${escapeHtml(releaseMeta(release))}</p>

@@ -206,14 +206,25 @@
 .tc-release-note { margin: 0; font-size: 0.8rem; line-height: 1.45; color: var(--muted); }
 .tc-release-note.is-warning { color: var(--warn, #f1bd64); }
 .tc-release-note.is-pending { color: #8fb8dc; font-style: italic; }
+/* La caja de un juego es vertical, no cuadrada: recortarla a 44x44 le comía
+   el título y la mitad del arte. Va con la proporción de una caja real y con
+   sombra, porque acá la portada es la pieza que se colecciona, no un ícono. */
 .tc-release-cover {
-  width: 44px;
-  height: 44px;
+  width: 58px;
+  aspect-ratio: 3 / 4;
+  height: auto;
   object-fit: cover;
-  border-radius: 8px;
-  border: 1px solid var(--line);
+  border-radius: 5px;
+  border: 1px solid var(--line-strong, var(--line));
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
   flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.03);
 }
+.tc-release.is-owned .tc-release-cover { border-color: rgba(99, 216, 170, 0.55); }
+/* No todo lo que ilustra un lanzamiento es una caja. Un juego que todavía no
+   salió en físico sólo tiene key art apaisado: forzarlo a 3:4 le recorta el
+   título, que es justo lo que hace falta leer. */
+.tc-release-cover.is-wide { width: 104px; aspect-ratio: 16 / 9; }
 
 .tc-release-actions { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
 .tc-ownership { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }

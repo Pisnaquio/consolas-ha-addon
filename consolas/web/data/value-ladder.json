@@ -90,17 +90,18 @@
           "name": "Heavy Sixer",
           "years": "1977",
           "region": "NTSC",
-          "identify": "Seis switches, plástico notablemente más grueso y pesado, y un bisel de madera más ancho. Fabricada principalmente en Sunnyvale, California.",
-          "technical": "La primera VCS. Su construcción más robusta es lo que le da el apodo.",
-          "note": "Es la variante histórica de la familia: distinguirla de una Light Sixer es el paso previo a comparar precios, no algo posterior."
+          "identify": "Pesala: 2,05 kg contra 1,52 kg de una Light Sixer. Medio kilo de diferencia decide en cualquier balanza de cocina, y es lo único que no se discute. Sin balanza: el panel de madera termina antes del zócalo negro del frente en vez de meterse detrás, el zócalo es más grueso y de esquinas más redondeadas, y el reborde alrededor de los switches es levantado y redondeado, con agujeros más chicos.",
+          "technical": "La primera VCS. Su construcción más robusta es lo que le da el apodo; la base llega a unos 12 mm de espesor. Salía de fábrica con joysticks CX-10, no CX-40, aunque a esta altura casi ninguna conserva los suyos.",
+          "note": "Ojo con la etiqueta: todas las Heavy Sixer se hicieron en Sunnyvale, pero las Light Sixer tempranas también, y llevan exactamente el mismo texto «MFG. BY ATARI, INC., SUNNYVALE, CA.». Leer Sunnyvale acota a Heavy o Light temprana y no confirma nada más. Lo que sí es concluyente es al revés: si dice Atari-Wong o Hong Kong, es Light seguro."
         },
         {
           "id": "light-sixer",
           "name": "Light Sixer",
           "years": "1978-1980",
           "region": "NTSC",
-          "identify": "También seis switches, pero plástico más liviano y bisel más angosto que la Heavy.",
-          "technical": "Misma electrónica esencial, construcción aligerada para abaratar producción."
+          "identify": "También seis switches, pero 1,52 kg contra los 2,05 de una Heavy. El panel de madera corre por detrás del zócalo del frente, el zócalo es más angosto y de esquinas más angulares, y el reborde de los switches es más plano con agujeros algo más grandes.",
+          "technical": "Misma electrónica esencial, construcción aligerada para abaratar producción.",
+          "note": "Las primeras salieron de Sunnyvale con la misma etiqueta que una Heavy: por eso la etiqueta no alcanza para descartarla. Las posteriores dicen Atari-Wong, Hong Kong o Taiwán, y ahí no hay duda."
         },
         {
           "id": "four-switch",
