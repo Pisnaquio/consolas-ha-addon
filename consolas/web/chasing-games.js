@@ -47,6 +47,55 @@
   ];
 
   /**
+   * Cómo se ordenan las publicaciones DENTRO de una búsqueda. Es distinto de
+   * `SORT_OPTIONS`, que ordena las búsquedas entre sí.
+   *
+   * El orden del servidor es por score: la recomendación del radar, mejor
+   * primero. Sirve para decidir rápido y no sirve para comparar: con once
+   * publicaciones del mismo juego a precios distintos, lo que se quiere es
+   * verlas juntas y baratas primero.
+   *
+   * «Juego y precio» ordena por título y desempata por precio, así las copias
+   * del mismo juego quedan pegadas y la más barata arriba. No se infiere qué
+   * juego es: se agrupa por lo que el título dice, que es el único dato que hay.
+   */
+  const RESULT_SORT_OPTIONS = [
+    { id: "default", label: "Como los trae el radar" },
+    { id: "title-price", label: "Juego y precio" },
+    { id: "price-asc", label: "Precio: más barato primero" },
+    { id: "price-desc", label: "Precio: más caro primero" },
+  ];
+
+  const priceOf = (result) => {
+    const value = Number(result?.priceAmount);
+    return Number.isFinite(value) ? value : Number.POSITIVE_INFINITY;
+  };
+
+  /** El título sin ruido de plataforma, año ni condición: lo que queda nombra al juego. */
+  const titleKey = (result) =>
+    String(result?.title || "")
+      .toLowerCase()
+      .replace(/\b(sony|playstation portable|playstation|psp|ps[1-5]|nintendo|sega|xbox)\b/g, " ")
+      .replace(/\b(19|20)\d{2}\b/g, " ")
+      .replace(/\b(cib|complete|sealed|new|tested|rare|w\/|with|manual|game|only|version)\b/g, " ")
+      .replace(/[^a-z0-9 ]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  function sortResults(results, mode) {
+    const list = [...(results || [])];
+    if (mode === "price-asc") return list.sort((a, b) => priceOf(a) - priceOf(b));
+    if (mode === "price-desc") return list.sort((a, b) => priceOf(b) - priceOf(a));
+    if (mode === "title-price") {
+      return list.sort((a, b) => {
+        const byTitle = titleKey(a).localeCompare(titleKey(b), "es");
+        return byTitle !== 0 ? byTitle : priceOf(a) - priceOf(b);
+      });
+    }
+    return list;
+  }
+
+  /**
    * Preferencias de la vista, no estado de colección: viven en el navegador y
    * nunca tocan `/api/state`. Con ochenta búsquedas apiladas, cómo las mirás es
    * tan tuyo como qué buscás — y tiene que sobrevivir a recargar la página.
@@ -58,10 +107,16 @@
       const raw = JSON.parse(window.localStorage?.getItem(PREFS_KEY) || "{}");
       return {
         sortBy: SORT_OPTIONS.some((o) => o.id === raw.sortBy) ? raw.sortBy : "default",
+        resultSortBy: RESULT_SORT_OPTIONS.some((o) => o.id === raw.resultSortBy)
+          ? raw.resultSortBy
+          : "title-price",
+        // Plegado por defecto: el resumen se lee igual y el detalle deja de
+        // empujar las búsquedas fuera de la primera pantalla.
+        coverageOpen: raw.coverageOpen === true,
         expanded: Array.isArray(raw.expanded) ? new Set(raw.expanded) : new Set(),
       };
     } catch {
-      return { sortBy: "default", expanded: new Set() };
+      return { sortBy: "default", resultSortBy: "title-price", coverageOpen: false, expanded: new Set() };
     }
   }
 
@@ -69,7 +124,7 @@
     try {
       window.localStorage?.setItem(
         PREFS_KEY,
-        JSON.stringify({ sortBy, expanded: [...expanded] })
+        JSON.stringify({ sortBy, resultSortBy, coverageOpen, expanded: [...expanded] })
       );
     } catch {
       // Sin localStorage la vista funciona igual; sólo no recuerda la elección.
@@ -85,9 +140,15 @@
   let lotCalcId = "";
   let lotCalcPieceCount = 3;
   let lotCalcResult = null;
+  // La previa es de esta sesión y de una sola búsqueda por vez: no se guardó
+  // nada en el servidor, así que tampoco se conserva acá.
+  let previewId = "";
+  let previewData = null;
   let creating = false;
   const prefs = loadPrefs();
   let sortBy = prefs.sortBy;
+  let resultSortBy = prefs.resultSortBy;
+  let coverageOpen = prefs.coverageOpen;
   const expanded = prefs.expanded;
   let feedback = "";
   let feedbackTone = "info";
@@ -278,6 +339,7 @@
           <label>Mínimo de piezas del lote
             <input name="minLotSize" type="number" min="1" step="1"
                    value="${escapeHtml(criteria.minLotSize ?? "")}" placeholder="6" />
+            <small class="radar-field-hint">Descarta lo que declare menos piezas. Un lote que no las cuenta no se descarta: queda marcado como sin verificar.</small>
           </label>
         </div>
         <div class="radar-form-checks">
@@ -292,6 +354,13 @@
           <legend>Horarios</legend>
           ${slotCheckboxes(item.slots || [])}
         </fieldset>
+        <label class="radar-notes">Consultas extra
+          <textarea name="queries" rows="4"
+                    placeholder="God of War Chains of Olympus PSP&#10;Patapon PSP">${escapeHtml(
+                      (criteria.queries || []).join("\n")
+                    )}</textarea>
+          <small class="radar-field-hint">Una por línea. Cada una se busca por separado, además de la consulta principal: así una sola búsqueda persigue una lista de títulos. Los criterios y los términos excluidos se aplican igual a todas.</small>
+        </label>
         <label class="radar-notes">Notas
           <textarea name="notes" maxlength="600" rows="2"
                     placeholder="Qué verificar antes de comprar">${escapeHtml(item.notes || "")}</textarea>
@@ -350,6 +419,9 @@
       notes: text("notes"),
       sources: sources.length ? sources : ["ebay-us"],
       criteria: {
+        // Una por línea: una consulta lleva espacios y comas propias, así que
+        // separarlas por coma partiría "Patapon 2, the War of the Lions".
+        queries: String(data.get("queries") || "").split("\n"),
         includeTerms: text("includeTerms"),
         anyTerms: text("anyTerms"),
         excludeTerms: text("excludeTerms"),
@@ -536,6 +608,13 @@
     if (item.status === "archived") {
       actions.push(`<button class="btn-link" type="button" data-status="${id}" data-next="active">Reactivar</button>`);
     }
+    // Previsualizar corre la búsqueda y no guarda nada. Es la única forma de ver
+    // qué traería una búsqueda que todavía no está activa sin activarla.
+    actions.push(
+      `<button class="btn-link" type="button" data-preview="${id}"${
+        repository.canPreview(item) ? "" : " disabled"
+      }>Previsualizar</button>`
+    );
     actions.push(`<button class="btn-link" type="button" data-edit="${id}">Editar</button>`);
     actions.push(`<button class="btn-link" type="button" data-duplicate="${id}">Duplicar</button>`);
     if (item.status !== "archived") {
@@ -578,17 +657,24 @@
     if (!sinBusqueda.length && !conHuecos.length) return "";
 
     const nombre = (id) => (coverage.consoles || []).find((c) => c.id === id)?.name || id;
-    return `<section class="detail-block radar-coverage">
-      <div>
-        <p class="eyebrow">Cobertura</p>
-        <h2>Qué no está mirando el radar</h2>
-        <p class="muted">${coverage.explicitUncovered} de los ${coverage.explicitWanted} juegos que marcaste «lo quiero» no tienen ninguna búsqueda que los persiga${
-          coverage.uncoveredGames > coverage.explicitUncovered
-            ? `, más ${coverage.uncoveredGames - coverage.explicitUncovered} recomendaciones conservadas`
-            : ""
-        }.</p>
-      </div>
-      ${
+    // El resumen —cuántos huecos hay— es lo único que se lee de un vistazo y
+    // queda siempre visible. El detalle, que son ocho consolas con sus
+    // ejemplos, ocupaba media pantalla arriba de las búsquedas y empujaba
+    // fuera de vista lo que uno viene a mirar.
+    return `<section class="detail-block radar-coverage${coverageOpen ? "" : " is-collapsed"}">
+      <button class="radar-coverage-head" type="button" data-toggle-coverage="1" aria-expanded="${coverageOpen}">
+        <span>
+          <span class="eyebrow">Cobertura</span>
+          <span class="radar-coverage-title">Qué no está mirando el radar</span>
+          <span class="muted">${coverage.explicitUncovered} de los ${coverage.explicitWanted} juegos que marcaste «lo quiero» no tienen ninguna búsqueda que los persiga${
+            coverage.uncoveredGames > coverage.explicitUncovered
+              ? `, más ${coverage.uncoveredGames - coverage.explicitUncovered} recomendaciones conservadas`
+              : ""
+          }.</span>
+        </span>
+        <span class="radar-coverage-caret" aria-hidden="true">${coverageOpen ? "▾" : "▸"}</span>
+      </button>
+      ${!coverageOpen ? "" : `${
         sinBusqueda.length
           ? `<p class="radar-coverage-consoles">Consolas tuyas sin ninguna búsqueda: ${sinBusqueda
               .map((id) => escapeHtml(nombre(id)))
@@ -609,7 +695,7 @@
               .join("")}</ul>`
           : ""
       }
-      <p class="muted">El Master propone de a pocas por vez, a propósito. Pedile que proponga otra tanda, o creá la búsqueda a mano.</p>
+      <p class="muted">El Master propone de a pocas por vez, a propósito. Pedile que proponga otra tanda, o creá la búsqueda a mano.</p>`}
     </section>`;
   }
 
@@ -690,6 +776,77 @@
     return expanded.has(item.id) ? true : !expanded.has(`!${item.id}`) && item.status !== "draft";
   }
 
+  /**
+   * Lo que traería la búsqueda si corriera ahora. No se guardó nada: no hay
+   * "Descartar", "Valorar como lote" ni "Registrar compra", porque ninguna de
+   * esas acciones tiene sobre qué operar. Sólo el link a la publicación real.
+   */
+  function previewResultCard(result) {
+    const meta = [result.conditionLabel, result.shippingLabel, result.locationLabel, result.sellerLabel]
+      .filter(Boolean)
+      .map((item) => `<span>${escapeHtml(item)}</span>`)
+      .join("");
+    const reasons = (result.reasons || []).map((reason) => `<li>${escapeHtml(reason)}</li>`).join("");
+    const unverified = (result.unverified || [])
+      .map((item) => `<li class="is-unverified">${escapeHtml(item)}</li>`)
+      .join("");
+    const total = repository.formatTotal(result);
+    return `<article class="chase-result">
+      ${
+        result.imageUrl
+          ? `<img src="${escapeHtml(result.imageUrl)}" alt="" loading="lazy" />`
+          : `<span class="chase-result-placeholder" aria-hidden="true"></span>`
+      }
+      <div>
+        <p class="eyebrow">${escapeHtml(result.listingType || repository.getSourceLabel(result.sourceId))}${
+          result.confidence ? ` · ${repository.formatConfidence(result.confidence)}` : ""
+        }</p>
+        ${
+          result.band
+            ? `<p class="chase-result-band is-${escapeHtml(result.band)}">${escapeHtml(
+                repository.getBandLabel(result.band)
+              )}${Number.isFinite(Number(result.score)) ? ` · ${Number(result.score)}/100` : ""}</p>`
+            : ""
+        }
+        <h3>${escapeHtml(result.title)}</h3>
+        <div class="chase-result-meta">${meta || "<span>Detalles a confirmar</span>"}</div>
+        ${reasons || unverified ? `<ul class="chase-result-why">${reasons}${unverified}</ul>` : ""}
+      </div>
+      <div class="chase-result-price">
+        <strong>${escapeHtml(result.priceLabel || "Ver precio")}</strong>
+        ${total ? `<span class="chase-result-total">${escapeHtml(total)}</span>` : ""}
+        <a class="btn-link" href="${escapeHtml(result.listingUrl)}" target="_blank" rel="noreferrer noopener">Ver publicación</a>
+      </div>
+    </article>`;
+  }
+
+  function previewPanel(item) {
+    if (previewId !== item.id || !previewData) return "";
+    const results = previewData.results || [];
+    const failed = (previewData.receipts || []).filter((receipt) => receipt.status === "failed").length;
+    const queries = (previewData.queries || []).length;
+    return `<div class="detail-block radar-preview">
+      <p class="muted">Previsualización: ${
+        queries === 1 ? "se consultó 1 consulta" : `se consultaron ${escapeHtml(String(queries))} consultas`
+      } y no se guardó nada. La búsqueda sigue ${escapeHtml(
+        repository.getStatusLabel(previewData.status || item.status)
+      ).toLowerCase()} y su inventario quedó intacto.</p>
+      <p class="muted">${escapeHtml(String(previewData.matched ?? 0))} coincidencias · ${escapeHtml(
+        String(previewData.rejected ?? 0)
+      )} descartadas por los criterios${
+        failed ? ` · ${escapeHtml(String(failed))} ${failed === 1 ? "consulta falló" : "consultas fallaron"}` : ""
+      }.</p>
+      <div class="chase-results">${
+        results.length
+          ? results.map(previewResultCard).join("")
+          : `<p class="chase-empty-results">Ninguna publicación pasó los criterios en esta previa.</p>`
+      }</div>
+      <div class="card-actions radar-form-actions">
+        <button class="btn-link" type="button" data-preview-close="1">Cerrar la previa</button>
+      </div>
+    </div>`;
+  }
+
   function searchCard(item) {
     const results = item.results || [];
     const open = isExpanded(item) || editingId === item.id;
@@ -733,13 +890,25 @@
         ${item.lastError ? `<span class="chase-error">${escapeHtml(item.lastError)}</span>` : ""}
       </div>
       ${searchActions(item)}
+      ${previewPanel(item)}
       ${isEditing ? searchForm(item, { formId: `radarEdit-${item.id}`, submitLabel: "Guardar cambios", cancelAction: "edit" }) : ""}
       ${manualListingForm(item)}
       ${
         open
-          ? `<div class="chase-results">${
+          ? `${
+              results.length > 1
+                ? `<div class="chase-results-sort">
+                     <label for="resultSort-${escapeHtml(item.id)}">Ordenar</label>
+                     <select id="resultSort-${escapeHtml(item.id)}" data-result-sort="1">${optionList(
+                       RESULT_SORT_OPTIONS.map((option) => option.id),
+                       resultSortBy,
+                       (value) => RESULT_SORT_OPTIONS.find((option) => option.id === value).label
+                     )}</select>
+                   </div>`
+                : ""
+            }<div class="chase-results">${
               results.length
-                ? results.map(resultCard).join("")
+                ? sortResults(results, resultSortBy).map(resultCard).join("")
                 : `<p class="chase-empty-results">${escapeHtml(emptyResultsMessage(item))}</p>`
             }</div>`
           : ""
@@ -877,6 +1046,22 @@
         expanded.delete(id);
         expanded.delete(`!${id}`);
         expanded.add(abierta ? `!${id}` : id);
+        savePrefs();
+        render();
+      })
+    );
+
+    each("[data-result-sort]", (select) =>
+      select.addEventListener("change", (event) => {
+        resultSortBy = event.target.value;
+        savePrefs();
+        render();
+      })
+    );
+
+    each("[data-toggle-coverage]", (button) =>
+      button.addEventListener("click", () => {
+        coverageOpen = !coverageOpen;
         savePrefs();
         render();
       })
@@ -1137,6 +1322,40 @@
           "",
           () => setFeedback(summary, "success")
         );
+      })
+    );
+
+    each("[data-preview]", (button) =>
+      button.addEventListener("click", async () => {
+        // Previsualizar no escribe nada, así que no recarga el inventario: el
+        // resultado vive sólo en esta vista hasta que se cierre.
+        if (busy) return;
+        busy = true;
+        previewId = button.dataset.preview;
+        previewData = null;
+        setFeedback("Previsualizando sin guardar nada…");
+        render();
+        try {
+          previewData = await repository.previewSearch(previewId);
+          busy = false;
+          setFeedback(
+            `Previa lista: ${previewData.results?.length || 0} de ${previewData.matched || 0} coincidencias. No se guardó nada.`,
+            "success"
+          );
+        } catch (error) {
+          busy = false;
+          previewId = "";
+          setFeedback(error.message, "error");
+        }
+        render();
+      })
+    );
+
+    each("[data-preview-close]", (button) =>
+      button.addEventListener("click", () => {
+        previewId = "";
+        previewData = null;
+        render();
       })
     );
 

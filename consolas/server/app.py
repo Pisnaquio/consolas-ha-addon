@@ -58,7 +58,7 @@ from radar.sources import registry as radar_registry  # noqa: E402
 
 
 SERVICE_NAME = "consolas-server"
-SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.57")
+SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.58")
 DEFAULT_DATA_DIR = "/data"
 DEFAULT_STATIC_DIR = "/app/web"
 DATABASE_NAME = "consolas.sqlite"
@@ -97,11 +97,18 @@ RADAR_COMPLETENESS = ("any", "loose", "boxed", "cib", "sealed")
 RADAR_REQUIREMENT_LEVELS = ("any", "preferred", "required")
 RADAR_MAX_TERMS = 24
 RADAR_MAX_TERM_LENGTH = 80
+# Consultas adicionales de una misma búsqueda (PRD §9 "Consulta"). Una búsqueda
+# que persigue una lista de títulos no se puede expresar con un solo `q`: eBay
+# entiende una consulta por vez, y "biblioteca de PSP" no es una consulta. Cada
+# entrada se manda a cada fuente por separado y los resultados se unen.
+RADAR_MAX_QUERIES = 48
+RADAR_MAX_QUERY_LENGTH = 300
 RADAR_DEFAULT_RESULT_LIMIT = 12
 RADAR_MAX_RESULT_LIMIT = 50
 RADAR_MIGRATION_CHASING_GAMES = "chasing_games_v1"
 RADAR_MIGRATION_LISTINGS = "radar_listings_v1"
 RADAR_MIGRATION_SEED = "seed_iss_deluxe_v1"
+RADAR_MIGRATION_PSP_LIBRARY = "seed_psp_library_v1"
 RADAR_MIGRATION_SELLER_IDENTITY = "drop_seller_identity_v1"
 
 # Scheduler durable. Los horarios están cerrados en el PRD §16: tres corridas
@@ -642,6 +649,32 @@ def init_db(config: AppConfig) -> None:
         # que "Registrar compra" sepa a qué biblioteca escribir.
         if "entity_console_id" not in radar_search_columns:
             conn.execute("ALTER TABLE radar_searches ADD COLUMN entity_console_id TEXT NOT NULL DEFAULT ''")
+        # Techo de búsquedas activas. Sin él, pedirle varias tandas al Master y
+        # aceptarlas en bloque deja ochenta búsquedas corriendo tres veces por
+        # día: el feed se vuelve ilegible y deja de servir para detectar nada.
+        # El cupo del Master era por tanda, no global, así que nada frenaba la
+        # acumulación.
+        #
+        # Se siembra desde el estado real y nunca por debajo de lo que ya hay
+        # activo: un techo que empieza por debajo de la realidad bloquearía la
+        # próxima activación legítima por algo que el usuario no hizo hoy.
+        preference_columns = {
+            str(row["name"]) for row in conn.execute("PRAGMA table_info(radar_preferences)").fetchall()
+        }
+        if "max_active_searches" not in preference_columns:
+            conn.execute("ALTER TABLE radar_preferences ADD COLUMN max_active_searches INTEGER")
+            active_now = int(
+                conn.execute(
+                    "SELECT COUNT(*) FROM radar_searches WHERE status = 'active' AND deleted_at IS NULL"
+                ).fetchone()[0]
+            )
+            seeded = max(RADAR_DEFAULT_MAX_ACTIVE, active_now)
+            conn.execute(
+                """INSERT INTO radar_preferences (id, max_active_searches, updated_at)
+                   VALUES ('default', ?, ?)
+                   ON CONFLICT(id) DO UPDATE SET max_active_searches = excluded.max_active_searches""",
+                (seeded, utc_now()),
+            )
         purchase_columns = {
             str(row["name"]) for row in conn.execute("PRAGMA table_info(radar_purchases)").fetchall()
         }
@@ -689,6 +722,7 @@ def init_db(config: AppConfig) -> None:
         migrate_radar_results_to_listings(conn)
         migrate_drop_seller_identity(conn)
         seed_radar_searches(conn)
+        seed_psp_library_search(conn)
 
 
 def read_state(config: AppConfig) -> dict[str, Any]:
@@ -2429,6 +2463,166 @@ def seed_radar_searches(conn: sqlite3.Connection) -> None:
     )
 
 
+# Los títulos que el owner pidió perseguir, en el orden en que los pidió. Son
+# datos del pedido, no lógica: el motor que los usa (`criteria.queries`) no sabe
+# qué es una PSP y sirve igual para cualquier otra lista de títulos.
+PSP_LIBRARY_TOP_PRIORITY = (
+    "God of War Chains of Olympus",
+    "God of War Ghost of Sparta",
+    "Metal Gear Solid Peace Walker",
+    "Crisis Core Final Fantasy VII",
+    "Castlevania The Dracula X Chronicles",
+    "Grand Theft Auto Vice City Stories",
+    "Grand Theft Auto Liberty City Stories",
+    "Daxter",
+    "Patapon",
+    "Patapon 2",
+    "LocoRoco",
+    "LocoRoco 2",
+    "Lumines",
+    "Burnout Legends",
+    "Kingdom Hearts Birth by Sleep",
+)
+
+PSP_LIBRARY_SECOND_PRIORITY = (
+    "Ratchet and Clank Size Matters",
+    "Resistance Retribution",
+    "Killzone Liberation",
+    "Tekken Dark Resurrection",
+    "Gran Turismo",
+    "Wipeout Pure",
+    "Wipeout Pulse",
+    "Ridge Racer",
+    "Monster Hunter Freedom Unite",
+    "Final Fantasy Tactics The War of the Lions",
+    "Tactics Ogre Let Us Cling Together",
+    "Jeanne d'Arc",
+    "Mega Man Powered Up",
+    "Mega Man Maverick Hunter X",
+    "Persona 3 Portable",
+    "Silent Hill Origins",
+    "Silent Hill Shattered Memories",
+    "The Warriors",
+    "LittleBigPlanet",
+    "Ys Seven",
+)
+
+# Lotes: la consulta principal de la búsqueda más dos formas de nombrar lo mismo.
+PSP_LIBRARY_LOT_QUERIES = ("PSP game lot", "PSP UMD lot", "PSP games bundle")
+
+
+def psp_library_criteria() -> dict[str, Any]:
+    """Los criterios del pedido de biblioteca de PSP que el radar sí puede evaluar.
+
+    Lo que queda afuera —tiers de precio por título, PriceCharting, ventas
+    cerradas, fotos, envío a un ZIP concreto— está documentado en
+    `docs/BACKLOG.md`. Acá no se declara nada que el matcher no pueda medir.
+    """
+
+    criteria = default_radar_criteria()
+    criteria.update(
+        {
+            # Cada título es su propia consulta: eBay entiende una por vez y
+            # "biblioteca de PSP" no es una consulta.
+            "queries": [
+                *(f"{title} PSP" for title in PSP_LIBRARY_TOP_PRIORITY),
+                *(f"{title} PSP" for title in PSP_LIBRARY_SECOND_PRIORITY),
+                *PSP_LIBRARY_LOT_QUERIES[1:],
+            ],
+            # Puerta de plataforma, no de título: una consulta por "Lumines" o
+            # "Gran Turismo" sin esto traería la versión de otra consola.
+            "anyTerms": ["psp", "playstation portable", "umd"],
+            "excludeTerms": [
+                "repro",
+                "reproduction",
+                "bootleg",
+                "counterfeit",
+                "no umd",
+                "umd video",
+                "umd movie",
+                "for parts",
+                "parts only",
+                "broken",
+                "water damage",
+                "mold",
+                "demo",
+                "digital code",
+                "download code",
+                "screen protector",
+                "replacement screen",
+                "battery cover",
+                "charger",
+                "carrying case",
+                "faceplate",
+                "custom case",
+            ],
+            # Sin bloqueo regional: los juegos de PSP no lo tienen, y el owner
+            # pidió aceptar NTSC-U/C, PAL y NTSC-J.
+            "region": "",
+            # CIB es la preferencia, no el filtro. Exigirlo ya se probó en la
+            # búsqueda de juegos de PS3 y devolvía ruido: el vendedor rara vez
+            # escribe "complete in box" aunque la caja esté en la foto.
+            "completeness": "any",
+            # Bloquea ante evidencia de reproducción; la ausencia de declaración
+            # queda como "verificar antes de comprar", no como descarte.
+            "originalParts": "required",
+            "currency": "USD",
+            # El único techo que el owner declaró como absoluto: "No recomendar
+            # juegos de US$100 o más salvo una oportunidad extraordinaria".
+            "maxItemPrice": 100,
+            # "Para juegos comunes, priorizar CIB por debajo de US$20."
+            "targetItemPrice": 20,
+            # "Entregar como máximo 10 resultados realmente interesantes."
+            "resultLimit": 10,
+        }
+    )
+    return criteria
+
+
+def seed_psp_library_search(conn: sqlite3.Connection) -> None:
+    """Deja creada, **suspendida**, la búsqueda de biblioteca de PSP del owner.
+
+    Nace `paused` a propósito: el owner todavía no confirmó que compró la
+    consola, y pidió poder activarla de un clic cuando lo haga. La migración es
+    aditiva e idempotente por partida doble — por su id de migración y por el
+    nombre — así que no duplica ni pisa una búsqueda que el owner ya haya
+    editado, y si la borra no vuelve a aparecer.
+    """
+
+    if radar_migration_applied(conn, RADAR_MIGRATION_PSP_LIBRARY):
+        return
+    mark_radar_migration(conn, RADAR_MIGRATION_PSP_LIBRARY)
+    name = "Biblioteca PSP — juegos esenciales"
+    existing = conn.execute(
+        "SELECT 1 FROM radar_searches WHERE lower(name) = ? AND deleted_at IS NULL",
+        (name.lower(),),
+    ).fetchone()
+    if existing:
+        return
+    now = utc_now()
+    conn.execute(
+        """INSERT INTO radar_searches (
+             id, name, search_type, status, origin, priority, platform, entity_type, entity_id,
+             entity_console_id, search_query, query_custom, criteria_json, sources_json, slots_json,
+             notes, created_at, updated_at
+           ) VALUES (?, ?, 'lot', 'paused', 'user', 'alta', 'PSP', '', '', '', ?, 1, ?, ?, ?, ?, ?, ?)""",
+        (
+            "radar-psp-library",
+            name,
+            PSP_LIBRARY_LOT_QUERIES[0],
+            json.dumps(psp_library_criteria(), ensure_ascii=False, separators=(",", ":")),
+            json.dumps(["ebay-us"], ensure_ascii=False, separators=(",", ":")),
+            json.dumps(["morning", "afternoon", "night"], ensure_ascii=False, separators=(",", ":")),
+            "Suspendida hasta que confirmes la PSP. Juegos sueltos y lotes: una consulta por "
+            "título más tres de lote. CIB se prefiere pero no se exige. Sin bloqueo de región. "
+            "Los tramos de precio por título (menos de 20, 20-40, más de 40) no son expresables "
+            "en una sola búsqueda: ver docs/BACKLOG.md.",
+            now,
+            now,
+        ),
+    )
+
+
 def require_chasing_games_write_request(handler: BaseHTTPRequestHandler) -> None:
     content_type = str(handler.headers.get("Content-Type") or "").split(";", 1)[0].strip().lower()
     if content_type != "application/json":
@@ -2469,6 +2663,7 @@ def default_radar_criteria() -> dict[str, Any]:
         "includeTerms": [],
         "anyTerms": [],
         "excludeTerms": [],
+        "queries": [],
         "region": "",
         "condition": "any",
         "completeness": "any",
@@ -2555,6 +2750,51 @@ def normalize_radar_terms(value: Any, field: str) -> list[str]:
     return terms
 
 
+def normalize_radar_queries(value: Any) -> list[str]:
+    """Consultas extra de una búsqueda, además de la principal.
+
+    No son términos: cada una es una consulta completa que se le manda a cada
+    fuente por separado, como si el owner la hubiera tecleado. Por eso admiten
+    más largo que un término y se deduplican sin distinguir mayúsculas — mandar
+    dos veces la misma consulta gasta cuota de la API y no agrega nada.
+    """
+
+    if value is None:
+        return []
+    if isinstance(value, str):
+        raw_items: list[Any] = value.splitlines()
+    elif isinstance(value, list):
+        raw_items = value
+    else:
+        raise ApiError(HTTPStatus.BAD_REQUEST, "queries must be a list of queries")
+    queries: list[str] = []
+    for item in raw_items:
+        if isinstance(item, (list, dict)):
+            raise ApiError(HTTPStatus.BAD_REQUEST, "queries must be a list of queries")
+        query = " ".join(str(item or "").split()).strip()
+        if not query:
+            continue
+        if len(query) > RADAR_MAX_QUERY_LENGTH:
+            raise ApiError(HTTPStatus.BAD_REQUEST, "queries has a query that is too long")
+        if query.lower() not in {existing.lower() for existing in queries}:
+            queries.append(query)
+    if len(queries) > RADAR_MAX_QUERIES:
+        raise ApiError(HTTPStatus.BAD_REQUEST, f"queries accepts up to {RADAR_MAX_QUERIES} queries")
+    return queries
+
+
+def radar_search_queries(search_query: Any, criteria: dict[str, Any]) -> list[str]:
+    """La consulta principal más las extra, sin repetidas ni vacías."""
+    candidates = [search_query, *(criteria.get("queries") or [])]
+    queries: list[str] = []
+    for candidate in candidates:
+        query = " ".join(str(candidate or "").split()).strip()
+        if not query or query.lower() in {existing.lower() for existing in queries}:
+            continue
+        queries.append(query)
+    return queries
+
+
 def normalize_radar_amount(value: Any, field: str) -> float | None:
     if value is None or value == "":
         return None
@@ -2592,6 +2832,8 @@ def normalize_radar_criteria(value: Any, base: dict[str, Any] | None = None) -> 
     for field in ("includeTerms", "anyTerms", "excludeTerms"):
         if field in value:
             criteria[field] = normalize_radar_terms(value.get(field), field)
+    if "queries" in value:
+        criteria["queries"] = normalize_radar_queries(value.get("queries"))
     if "region" in value:
         criteria["region"] = normalize_radar_text(value.get("region"), "region", 60, required=False)
     if "condition" in value:
@@ -2726,6 +2968,9 @@ def radar_search_row(row: sqlite3.Row, results: list[dict[str, Any]] | None = No
         "slotLabels": [RADAR_SLOT_LABELS[key] for key in radar_search_slots(row)],
         "enabled": status == "active",
         "canRun": status == "active" and bool(runnable_sources),
+        # Previsualizar no depende del estado: existe justamente para mirar
+        # una búsqueda que todavía no corre. Sólo necesita una fuente viva.
+        "canPreview": bool(runnable_sources),
         "createdAt": row["created_at"],
         "updatedAt": row["updated_at"],
         "lastCheckedAt": row["last_checked_at"],
@@ -2996,6 +3241,10 @@ def create_radar_search(config: AppConfig, payload: Any) -> dict[str, Any]:
     now = utc_now()
     search_id = f"radar-{uuid.uuid4().hex[:16]}"
     with _RADAR_LOCK, connect_db(config) as conn:
+        # Una búsqueda que nace activa suma al feed igual que una que se activa
+        # después: el techo no puede depender de por qué puerta entró.
+        if status == "active":
+            assert_radar_active_capacity(conn)
         assert_radar_name_is_free(conn, name, platform)
         conn.execute(
             """INSERT INTO radar_searches (
@@ -3104,6 +3353,33 @@ def update_radar_search(config: AppConfig, search_id: Any, payload: Any) -> dict
     return radar_search_payload(config, target_id)
 
 
+def radar_active_search_count(conn: sqlite3.Connection) -> int:
+    return int(
+        conn.execute(
+            "SELECT COUNT(*) FROM radar_searches WHERE status = 'active' AND deleted_at IS NULL"
+        ).fetchone()[0]
+    )
+
+
+def assert_radar_active_capacity(conn: sqlite3.Connection) -> None:
+    """Rechaza una activación que pase del techo, diciendo los números.
+
+    El error nombra cuántas hay y cuál es el techo porque la salida no es
+    obvia: o se retira una búsqueda que ya no importa, o se sube el techo a
+    conciencia. Un «no se puede» sin números obliga a adivinar cuál de las dos.
+    """
+
+    row = conn.execute("SELECT * FROM radar_preferences WHERE id = 'default'").fetchone()
+    cap = radar_preferences_row(row)["maxActiveSearches"]
+    active = radar_active_search_count(conn)
+    if active >= cap:
+        raise ApiError(
+            HTTPStatus.CONFLICT,
+            f"Ya hay {active} búsquedas activas y el techo es {cap}. "
+            "Retirá alguna que ya no te sirva, o subí el techo en las preferencias del radar.",
+        )
+
+
 def set_radar_search_status(config: AppConfig, search_id: Any, status: Any) -> dict[str, Any]:
     target_id = normalize_radar_id(search_id)
     next_status = str(status or "").strip().lower()
@@ -3111,7 +3387,12 @@ def set_radar_search_status(config: AppConfig, search_id: Any, status: Any) -> d
         raise ApiError(HTTPStatus.BAD_REQUEST, f"status must be one of: {', '.join(RADAR_SEARCH_STATUSES)}")
     now = utc_now()
     with _RADAR_LOCK, connect_db(config) as conn:
-        load_radar_search(conn, target_id)
+        row = load_radar_search(conn, target_id)
+        # Activar es lo único que suma carga al feed, así que es lo único que
+        # mira el techo. Pausar, archivar y borrar nunca se bloquean: salir
+        # siempre tiene que ser posible.
+        if next_status == "active" and str(row["status"]) != "active":
+            assert_radar_active_capacity(conn)
         conn.execute(
             "UPDATE radar_searches SET status = ?, archived_at = ?, updated_at = ? WHERE id = ?",
             (next_status, now if next_status == "archived" else None, now, target_id),
@@ -3205,12 +3486,17 @@ RADAR_LISTING_KIND_LABELS = {
 
 
 def collect_radar_source_pages(
-    config: AppConfig, query: str, criteria: dict[str, Any], sources: list[str]
+    config: AppConfig, queries: list[str], criteria: dict[str, Any], sources: list[str]
 ) -> tuple[list[Any], list[dict[str, Any]]]:
-    """Consulta cada fuente ejecutable de forma aislada.
+    """Consulta cada fuente ejecutable de forma aislada, una vez por consulta.
 
     Una fuente rota no puede ocultar a las demás ni vaciar el inventario: su falla
-    queda en el recibo y el resto de las publicaciones sigue llegando.
+    queda en el recibo y el resto de las publicaciones sigue llegando. Lo mismo
+    vale consulta por consulta: que «Patapon 2» falle no invalida lo que trajo
+    «Patapon», y cada recibo dice a qué consulta corresponde.
+
+    Una publicación que aparece en dos consultas entra una sola vez: dos
+    consultas son dos formas de encontrar la misma cosa, no dos oportunidades.
     """
 
     pages: list[Any] = []
@@ -3219,30 +3505,35 @@ def collect_radar_source_pages(
         spec = radar_registry.get_source(source_id)
         if spec is None:  # pragma: no cover - defensivo
             continue
-        started_at = utc_now()
-        try:
-            adapter = spec.load()
-            page = adapter.search(config, query, criteria)
-        except Exception as error:  # el adapter es código aislado: nunca tumba la corrida
-            receipts.append(
-                {
-                    "sourceId": source_id,
-                    "status": "failed",
-                    "query": query,
-                    "listingCount": 0,
-                    "errorCount": 1,
-                    "startedAt": started_at,
-                    "finishedAt": utc_now(),
-                    "errors": [f"{spec.label}: {error}"],
-                    "authoritative": False,
-                }
-            )
-            continue
-        pages.append(page)
-        receipt = page.receipt.to_dict() if page.receipt else None
-        if receipt is not None:
-            receipt["errors"] = [f"{spec.label}: {message}" for message in receipt.get("errors") or []]
-            receipts.append(receipt)
+        seen: set[str] = set()
+        for query in queries:
+            started_at = utc_now()
+            try:
+                adapter = spec.load()
+                page = adapter.search(config, query, criteria)
+            except Exception as error:  # el adapter es código aislado: nunca tumba la corrida
+                receipts.append(
+                    {
+                        "sourceId": source_id,
+                        "status": "failed",
+                        "query": query,
+                        "listingCount": 0,
+                        "errorCount": 1,
+                        "startedAt": started_at,
+                        "finishedAt": utc_now(),
+                        "errors": [f"{spec.label}: {error}"],
+                        "authoritative": False,
+                    }
+                )
+                continue
+            fresh = [listing for listing in page.listings if listing.external_id not in seen]
+            seen.update(listing.external_id for listing in fresh)
+            page.listings = fresh
+            pages.append(page)
+            receipt = page.receipt.to_dict() if page.receipt else None
+            if receipt is not None:
+                receipt["errors"] = [f"{spec.label}: {message}" for message in receipt.get("errors") or []]
+                receipts.append(receipt)
     return pages, receipts
 
 
@@ -3464,54 +3755,21 @@ def valuate_radar_match(
     )
 
 
-def run_radar_search(config: AppConfig, search_id: Any, run_id: str = "") -> dict[str, Any]:
-    """Ejecuta una búsqueda activa: consulta, evalúa y guarda sus coincidencias.
+def score_radar_pages(
+    config: AppConfig,
+    row: sqlite3.Row,
+    criteria: dict[str, Any],
+    sources: list[str],
+    pages: list[Any],
+    now: str,
+) -> tuple[list[tuple[MarketplaceListing, Any, Any]], int]:
+    """Evalúa y valúa lo que trajeron las fuentes, sin tocar la base.
 
-    El lock por búsqueda cubre también la llamada de red: el scheduler y un
-    “Buscar ahora” simultáneos no pueden escanear dos veces lo mismo.
+    Vive separado de `execute_radar_search` porque la previsualización tiene que
+    contestar exactamente lo mismo que contestaría una corrida real: si el
+    veredicto de una previa se calculara por otro camino, la previa dejaría de
+    ser una previa.
     """
-    target_id = normalize_radar_id(search_id)
-    with radar_search_lock(target_id):
-        return execute_radar_search(config, target_id, run_id)
-
-
-def execute_radar_search(config: AppConfig, target_id: str, run_id: str = "") -> dict[str, Any]:
-    with _RADAR_LOCK, connect_db(config) as conn:
-        row = load_radar_search(conn, target_id)
-    status = str(row["status"])
-    if status != "active":
-        raise ApiError(
-            HTTPStatus.CONFLICT,
-            "Sólo una búsqueda activa puede ejecutarse. Activala o reanudala primero.",
-            {"id": target_id, "status": status},
-        )
-    criteria = normalize_radar_criteria(radar_json_field(row["criteria_json"], None))
-    sources = normalize_radar_sources(radar_json_field(row["sources_json"], []))
-    if not executable_radar_sources(sources):
-        raise ApiError(
-            HTTPStatus.CONFLICT,
-            "Ninguna de las fuentes de esta búsqueda puede ejecutarse todavía.",
-            {"id": target_id, "sources": sources},
-        )
-
-    now = utc_now()
-    pages, receipts = collect_radar_source_pages(config, str(row["search_query"]), criteria, sources)
-    failures = [receipt for receipt in receipts if receipt["status"] == "failed"]
-    authoritative = bool(receipts) and all(receipt["authoritative"] for receipt in receipts)
-
-    # Ninguna fuente respondió: se conserva el inventario previo y se explica la falla.
-    # Una respuesta fallida nunca prueba que una publicación dejó de existir.
-    if failures and len(failures) == len(receipts):
-        message = " · ".join(
-            error for receipt in failures for error in (receipt.get("errors") or ["Falla de la fuente"])
-        )
-        with _RADAR_LOCK, connect_db(config) as conn:
-            conn.execute(
-                "UPDATE radar_searches SET last_checked_at = ?, last_error = ?, updated_at = ? WHERE id = ?",
-                (now, message, now, target_id),
-            )
-        record_radar_receipts(config, run_id, target_id, receipts, 0, 0)
-        raise ApiError(HTTPStatus.BAD_GATEWAY, message, {"id": target_id, "receipts": receipts})
 
     capabilities_by_source = {source_id: radar_source_capabilities(source_id) for source_id in sources}
     expected_kind = radar_expected_item_kind(str(row["search_type"]), str(row["entity_type"]))
@@ -3549,14 +3807,167 @@ def execute_radar_search(config: AppConfig, target_id: str, run_id: str = "") ->
     )
     if peers is not None:
         references = [*references, peers]
+
+    scored = [
+        (
+            listing,
+            verdict,
+            valuate_radar_match(listing, verdict, criteria, references, expected_kind, console_weight),
+        )
+        for listing, verdict in matched
+    ]
+    return scored, rejected
+
+
+def preview_radar_search(config: AppConfig, search_id: Any) -> dict[str, Any]:
+    """Corre una búsqueda sin guardar nada y sin exigir que esté activa.
+
+    Contesta la única pregunta que no se puede contestar leyendo los criterios:
+    si esto se activa, ¿qué trae? Una búsqueda en borrador o pausada se puede
+    mirar antes de decidir activarla, y mirarla no le cambia el inventario, el
+    historial, la última corrida ni el presupuesto. No escribe una sola fila:
+    por eso también sirve para probar un criterio nuevo sobre una búsqueda viva
+    sin ensuciar lo que ya encontró.
+    """
+
+    target_id = normalize_radar_id(search_id)
+    with radar_search_lock(target_id):
+        with _RADAR_LOCK, connect_db(config) as conn:
+            row = load_radar_search(conn, target_id)
+        criteria = normalize_radar_criteria(radar_json_field(row["criteria_json"], None))
+        sources = normalize_radar_sources(radar_json_field(row["sources_json"], []))
+        if not executable_radar_sources(sources):
+            raise ApiError(
+                HTTPStatus.CONFLICT,
+                "Ninguna de las fuentes de esta búsqueda puede ejecutarse todavía.",
+                {"id": target_id, "sources": sources},
+            )
+        now = utc_now()
+        queries = radar_search_queries(row["search_query"], criteria)
+        pages, receipts = collect_radar_source_pages(config, queries, criteria, sources)
+        failures = [receipt for receipt in receipts if receipt["status"] == "failed"]
+        if failures and len(failures) == len(receipts):
+            message = " · ".join(
+                error for receipt in failures for error in (receipt.get("errors") or ["Falla de la fuente"])
+            )
+            raise ApiError(HTTPStatus.BAD_GATEWAY, message, {"id": target_id, "receipts": receipts})
+        scored, rejected = score_radar_pages(config, row, criteria, sources, pages, now)
+
+    limit = max(1, min(int(criteria.get("resultLimit") or RADAR_DEFAULT_RESULT_LIMIT), RADAR_MAX_RESULT_LIMIT))
+    ranked = sorted(
+        scored,
+        key=lambda entry: (entry[2].score if entry[2].score is not None else -1, entry[1].confidence),
+        reverse=True,
+    )
+    return {
+        "ok": True,
+        "id": target_id,
+        "status": str(row["status"]),
+        "preview": True,
+        "persisted": False,
+        "queries": queries,
+        "matched": len(scored),
+        "rejected": rejected,
+        "checkedAt": now,
+        "receipts": receipts,
+        "results": [
+            radar_preview_result(listing, verdict, card) for listing, verdict, card in ranked[:limit]
+        ],
+    }
+
+
+def radar_preview_result(listing: MarketplaceListing, verdict: Any, card: Any) -> dict[str, Any]:
+    """La forma mínima de un resultado que nunca se guardó.
+
+    No lleva `id` de listing ni fechas de inventario a propósito: nada de esto
+    existe en la base, y darle la forma exacta de un resultado persistido
+    invitaría a la UI a ofrecer acciones (descartar, registrar compra) sobre
+    algo que no está guardado.
+    """
+
+    return {
+        "sourceId": listing.source_id,
+        "externalId": listing.external_id,
+        "title": listing.title,
+        "listingUrl": listing.listing_url,
+        "imageUrl": listing.image_url,
+        "listingKind": listing.listing_kind,
+        "listingType": RADAR_LISTING_KIND_LABELS.get(listing.listing_kind, ""),
+        "priceAmount": listing.price_amount,
+        "priceCurrency": listing.price_currency,
+        "priceLabel": listing.price_label,
+        "shippingLabel": listing.shipping_label,
+        "totalAmount": listing.total_amount,
+        "conditionLabel": listing.condition_label,
+        "locationLabel": listing.location_label,
+        "sellerLabel": listing.seller_label,
+        "closesAt": listing.closes_at,
+        "confidence": verdict.confidence,
+        "score": card.score,
+        "band": card.band,
+        "valuation": card.to_dict(),
+        "reasons": list(verdict.reasons),
+        "unverified": list(verdict.unverified),
+        "matchedTerms": list(verdict.matched_terms),
+    }
+
+
+def run_radar_search(config: AppConfig, search_id: Any, run_id: str = "") -> dict[str, Any]:
+    """Ejecuta una búsqueda activa: consulta, evalúa y guarda sus coincidencias.
+
+    El lock por búsqueda cubre también la llamada de red: el scheduler y un
+    “Buscar ahora” simultáneos no pueden escanear dos veces lo mismo.
+    """
+    target_id = normalize_radar_id(search_id)
+    with radar_search_lock(target_id):
+        return execute_radar_search(config, target_id, run_id)
+
+
+def execute_radar_search(config: AppConfig, target_id: str, run_id: str = "") -> dict[str, Any]:
+    with _RADAR_LOCK, connect_db(config) as conn:
+        row = load_radar_search(conn, target_id)
+    status = str(row["status"])
+    if status != "active":
+        raise ApiError(
+            HTTPStatus.CONFLICT,
+            "Sólo una búsqueda activa puede ejecutarse. Activala o reanudala primero.",
+            {"id": target_id, "status": status},
+        )
+    criteria = normalize_radar_criteria(radar_json_field(row["criteria_json"], None))
+    sources = normalize_radar_sources(radar_json_field(row["sources_json"], []))
+    if not executable_radar_sources(sources):
+        raise ApiError(
+            HTTPStatus.CONFLICT,
+            "Ninguna de las fuentes de esta búsqueda puede ejecutarse todavía.",
+            {"id": target_id, "sources": sources},
+        )
+
+    now = utc_now()
+    queries = radar_search_queries(row["search_query"], criteria)
+    pages, receipts = collect_radar_source_pages(config, queries, criteria, sources)
+    failures = [receipt for receipt in receipts if receipt["status"] == "failed"]
+    authoritative = bool(receipts) and all(receipt["authoritative"] for receipt in receipts)
+
+    # Ninguna fuente respondió: se conserva el inventario previo y se explica la falla.
+    # Una respuesta fallida nunca prueba que una publicación dejó de existir.
+    if failures and len(failures) == len(receipts):
+        message = " · ".join(
+            error for receipt in failures for error in (receipt.get("errors") or ["Falla de la fuente"])
+        )
+        with _RADAR_LOCK, connect_db(config) as conn:
+            conn.execute(
+                "UPDATE radar_searches SET last_checked_at = ?, last_error = ?, updated_at = ? WHERE id = ?",
+                (now, message, now, target_id),
+            )
+        record_radar_receipts(config, run_id, target_id, receipts, 0, 0)
+        raise ApiError(HTTPStatus.BAD_GATEWAY, message, {"id": target_id, "receipts": receipts})
+
+    scored, rejected = score_radar_pages(config, row, criteria, sources, pages, now)
     matched_ids: list[str] = []
 
     with _RADAR_LOCK, connect_db(config) as conn:
-        for listing, verdict in matched:
+        for listing, verdict, card in scored:
             listing_id = upsert_radar_listing(conn, listing, now)
-            card = valuate_radar_match(
-                listing, verdict, criteria, references, expected_kind, console_weight
-            )
             conn.execute(
                 """
                 INSERT INTO radar_search_matches (
@@ -4260,6 +4671,28 @@ def regenerate_radar_master(config: AppConfig) -> dict[str, Any]:
     skipped: list[str] = []
 
     with _RADAR_LOCK, connect_db(config) as conn:
+        # El cupo del Master era por tanda, no global: pedirle varias seguidas
+        # apilaba borradores sin techo, y aceptarlos en bloque fue como se
+        # llegó a ochenta búsquedas activas. Mientras haya una pila sin revisar,
+        # no se propone más — el Master sugiere, no acumula.
+        pending = int(
+            conn.execute(
+                "SELECT COUNT(*) FROM radar_searches "
+                "WHERE status = 'draft' AND origin = 'master' AND deleted_at IS NULL"
+            ).fetchone()[0]
+        )
+        if pending >= RADAR_MAX_PENDING_DRAFTS:
+            return {
+                "ok": True,
+                "proposed": len(proposals),
+                "created": [],
+                "skipped": [],
+                "pendingDrafts": pending,
+                "note": (
+                    f"Ya hay {pending} propuestas del Master sin revisar. "
+                    "Aceptá o descartá esas antes de pedir más."
+                ),
+            }
         for proposal in proposals:
             search_id = master_search_id(str(proposal["key"]))
             existing = conn.execute("SELECT status, deleted_at FROM radar_searches WHERE id = ?", (search_id,)).fetchone()
@@ -4533,12 +4966,28 @@ def clear_radar_decision(config: AppConfig, listing_id: Any) -> dict[str, Any]:
 # --- Presupuesto mensual (PRD §10.6) ----------------------------------------
 
 
+# Cuántas búsquedas pueden estar activas a la vez. No es una preferencia
+# estética: cada activa corre tres veces por día y aporta resultados al mismo
+# feed. Pasado cierto punto el feed deja de ser una lista de decisiones y pasa
+# a ser un volcado que nadie lee.
+RADAR_DEFAULT_MAX_ACTIVE = 25
+RADAR_MAX_PENDING_DRAFTS = 12
+
+
 def radar_preferences_row(row: sqlite3.Row | None) -> dict[str, Any]:
     if row is None:
-        return {"monthlyBudgetUsd": None, "currency": "USD", "updatedAt": None}
+        return {
+            "monthlyBudgetUsd": None,
+            "currency": "USD",
+            "maxActiveSearches": RADAR_DEFAULT_MAX_ACTIVE,
+            "updatedAt": None,
+        }
+    keys = row.keys()
+    cap = row["max_active_searches"] if "max_active_searches" in keys else None
     return {
         "monthlyBudgetUsd": row["monthly_budget_usd"],
         "currency": "USD",
+        "maxActiveSearches": int(cap) if cap is not None else RADAR_DEFAULT_MAX_ACTIVE,
         "updatedAt": row["updated_at"],
     }
 
@@ -4556,12 +5005,25 @@ def update_radar_preferences(config: AppConfig, payload: Any) -> dict[str, Any]:
     monthly_budget = normalize_radar_amount(payload.get("monthlyBudgetUsd"), "monthlyBudgetUsd")
     now = utc_now()
     with _RADAR_LOCK, connect_db(config) as conn:
+        current = radar_preferences_row(
+            conn.execute("SELECT * FROM radar_preferences WHERE id = 'default'").fetchone()
+        )
+        # Bajar el techo no apaga nada: sólo frena la próxima activación. Apagar
+        # búsquedas por un cambio de preferencia sería decidir por el usuario
+        # cuáles dejan de importarle.
+        max_active = (
+            normalize_radar_count(payload.get("maxActiveSearches"), "maxActiveSearches", 500)
+            if "maxActiveSearches" in payload
+            else current["maxActiveSearches"]
+        )
         conn.execute(
-            """INSERT INTO radar_preferences (id, monthly_budget_usd, updated_at)
-               VALUES ('default', ?, ?)
+            """INSERT INTO radar_preferences (id, monthly_budget_usd, max_active_searches, updated_at)
+               VALUES ('default', ?, ?, ?)
                ON CONFLICT(id) DO UPDATE SET
-                 monthly_budget_usd=excluded.monthly_budget_usd, updated_at=excluded.updated_at""",
-            (monthly_budget, now),
+                 monthly_budget_usd=excluded.monthly_budget_usd,
+                 max_active_searches=excluded.max_active_searches,
+                 updated_at=excluded.updated_at""",
+            (monthly_budget, max_active, now),
         )
         row = conn.execute("SELECT * FROM radar_preferences WHERE id = 'default'").fetchone()
     return radar_preferences_row(row)
@@ -6004,6 +6466,9 @@ class Handler(BaseHTTPRequestHandler):
             search_id, action = parts
             if action == "run":
                 self.send_json(run_radar_search(self.config(), search_id))
+                return
+            if action == "preview":
+                self.send_json(preview_radar_search(self.config(), search_id))
                 return
             if action == "status":
                 self.send_json(set_radar_search_status(self.config(), search_id, payload.get("status")))

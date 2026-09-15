@@ -54,6 +54,8 @@ function search(overrides = {}) {
     notes: "",
     enabled: status === "active",
     canRun: status === "active" && sources.some((id) => SOURCES.find((item) => item.id === id)?.executable),
+    // Previsualizar no depende del estado: sólo de que una fuente pueda correr.
+    canPreview: sources.some((id) => SOURCES.find((item) => item.id === id)?.executable),
     createdAt: "2026-09-01T10:00:00Z",
     updatedAt: "2026-09-10T10:00:00Z",
     lastCheckedAt: "2026-09-10T10:00:00Z",
@@ -68,7 +70,7 @@ function search(overrides = {}) {
 async function renderPage({
   items = [], environment = "production", failLoad = false, runs = null, search = "",
   coverage = { consoles: [], ownedWithoutSearch: [], wantedGames: 0, uncoveredGames: 0, explicitWanted: 0, explicitUncovered: 0 },
-  expanded = null,
+  expanded = null, resultSortBy = null, coverageOpen = false,
 } = {}) {
   let html = "";
   const requests = [];
@@ -107,8 +109,13 @@ async function renderPage({
   };
   // Las preferencias de la vista viven en el navegador, así que el harness
   // necesita un localStorage para poder probar plegada y desplegada.
-  const guardado = expanded
-    ? JSON.stringify({ sortBy: "default", expanded })
+  const guardado = expanded || resultSortBy || coverageOpen
+    ? JSON.stringify({
+        sortBy: "default",
+        expanded: expanded || [],
+        coverageOpen,
+        ...(resultSortBy ? { resultSortBy } : {}),
+      })
     : null;
   const windowStub = {
     location: { search },
@@ -863,6 +870,26 @@ test("the form offers a target price and says it does not filter", async () => {
   assert.match(html, /No filtra/);
 });
 
+test("the lot minimum says what it does and what it cannot do", async () => {
+  // El campo prometía un filtro absoluto. Descarta lo que declara menos
+  // piezas, pero un título que no las cuenta no se puede descartar sin
+  // inventar el dato, y eso tiene que estar dicho donde se carga.
+  const { html } = await renderPage({ items: [], search: "?open=create" });
+
+  assert.match(html, /name="minLotSize"/);
+  assert.match(html, /Descarta lo que declare menos piezas/);
+  assert.match(html, /sin verificar/);
+});
+
+test("a lot search shows its piece minimum as a chip", async () => {
+  const lot = search();
+  lot.searchType = "lot";
+  lot.criteria = { ...lot.criteria, minLotSize: 6 };
+  const { html } = await renderPage({ items: [lot] });
+
+  assert.match(html, /Lotes desde 6 piezas/);
+});
+
 test("an existing target price comes back into the edit form", async () => {
   const withTarget = search();
   withTarget.criteria = { ...withTarget.criteria, targetItemPrice: 80 };
@@ -932,10 +959,37 @@ test("what the radar is not watching is spelled out, with the real denominator",
     },
   });
 
+  // El resumen se lee sin abrir nada: es el número que decide si vale la pena
+  // mirar el detalle.
   assert.match(html, /15 de los 16 juegos que marcaste/);
   assert.match(html, /10 recomendaciones conservadas/);
+  // El detalle —ocho consolas con ejemplos— empujaba las búsquedas fuera de la
+  // primera pantalla, así que arranca plegado.
+  assert.doesNotMatch(html, /Consolas tuyas sin ninguna búsqueda/);
+  assert.doesNotMatch(html, /Chrono Trigger/);
+  assert.match(html, /data-toggle-coverage/);
+});
+
+test("the coverage detail is there once you open it", async () => {
+  const { html } = await renderPage({
+    items: [search()],
+    coverageOpen: true,
+    coverage: {
+      consoles: [
+        { id: "snes", name: "Super Nintendo", owned: true, hasSearch: true, wantedGames: 15, uncoveredGames: 14, explicitUncovered: 9, examples: ["Chrono Trigger", "Super Metroid"] },
+        { id: "ps1", name: "PlayStation", owned: true, hasSearch: false, wantedGames: 11, uncoveredGames: 11, explicitUncovered: 6, examples: ["Silent Hill"] },
+      ],
+      ownedWithoutSearch: ["ps1"],
+      wantedGames: 26,
+      uncoveredGames: 25,
+      explicitWanted: 16,
+      explicitUncovered: 15,
+    },
+  });
+
   assert.match(html, /Consolas tuyas sin ninguna búsqueda: PlayStation/);
   assert.match(html, /Chrono Trigger/);
+  assert.match(html, /15 de los 16 juegos que marcaste/);
 });
 
 test("full coverage says nothing at all", async () => {
@@ -977,4 +1031,106 @@ test("the order can be chosen, and the default imposes nothing", async () => {
   assert.match(html, /data-sort="1"/);
   assert.match(html, /Como las trae el radar/);
   assert.match(html, /Buscadas hace más tiempo/);
+});
+
+test("a paused search can be previewed without being resumed", async () => {
+  // La única forma de ver qué traería una búsqueda suspendida sin activarla.
+  const { html } = await renderPage({ items: [search({ status: "paused" })] });
+
+  assert.match(html, /data-preview="radar-1"/);
+  assert.doesNotMatch(html, /data-preview="radar-1" disabled/);
+  assert.match(html, /data-status="radar-1" data-next="active">Reanudar/);
+});
+
+test("previewing is offered for a draft too, and refused when no source can run", async () => {
+  const draft = await renderPage({ items: [search({ status: "draft" })] });
+  assert.match(draft.html, /data-preview="radar-1"/);
+
+  const blocked = await renderPage({ items: [search({ status: "paused", sources: ["shopgoodwill"] })] });
+  assert.match(blocked.html, /data-preview="radar-1" disabled/);
+});
+
+test("the card says how many extra queries a search carries", async () => {
+  const item = search({
+    status: "paused",
+    criteria: { ...search().criteria, queries: ["Daxter PSP", "Patapon PSP"] }
+  });
+  const { html } = await renderPage({ items: [item], expanded: ["radar-1"] });
+
+  assert.match(html, /2 consultas extra/);
+
+  const one = await renderPage({
+    items: [search({ criteria: { ...search().criteria, queries: ["Daxter PSP"] } })],
+    expanded: ["radar-1"]
+  });
+  assert.match(one.html, /1 consulta extra/);
+});
+
+test("the search form carries a field for the extra queries", async () => {
+  const source = await readFile(new URL("../chasing-games.js", import.meta.url), "utf8");
+
+  assert.match(source, /name="queries"/);
+  assert.match(source, /Consultas extra/);
+  // Una por línea: partir por coma rompería "Patapon 2, the War of the Lions".
+  assert.match(source, /data\.get\("queries"\) \|\| ""\)\.split\("\\n"\)/);
+});
+
+/**
+ * Ordenar las publicaciones dentro de una búsqueda.
+ *
+ * Los títulos y precios son los de una corrida real de «God of War PSP» del
+ * 2026-09-15: once resultados, nueve de Chains of Olympus y uno de Ghost of
+ * Sparta, a precios que van de 25 a 99,99. El orden del servidor es por score,
+ * que sirve para decidir rápido y no para comparar once copias del mismo juego.
+ */
+function godOfWarResults() {
+  return [
+    { id: "r1", title: "God of War Chains of Olympus (Sony PlayStation Portable PSP, 2008)", priceAmount: 30, priceCurrency: "USD" },
+    { id: "r2", title: "God of War Chains of Olympus (Sony PSP, 2008)", priceAmount: 25, priceCurrency: "USD" },
+    { id: "r3", title: "God of War: Ghost of Sparta (Sony PSP, 2010) - CIB Complete W/ Manual & Insert", priceAmount: 99.99, priceCurrency: "USD" },
+    { id: "r4", title: "God of War Chains of Olympus Sony PSP 2008 CIB Complete With Manual", priceAmount: 33.99, priceCurrency: "USD" },
+    { id: "r5", title: "Sony God of War: Chains of Olympus PSP 2007 M Action Adventure w/ Manual", priceAmount: 49.99, priceCurrency: "USD" },
+  ];
+}
+
+function searchWithResults(results) {
+  return { ...search({ id: "gow", name: "God of War — PSP", status: "active" }), id: "gow", results };
+}
+
+test("results can be ordered by game and price, so copies sit together and cheapest first", async () => {
+  const { html } = await renderPage({
+    items: [searchWithResults(godOfWarResults())],
+    expanded: ["gow"],
+    resultSortBy: "title-price",
+  });
+
+  const order = [...html.matchAll(/God of War[^<]*/g)].map((match) => match[0]);
+  const chains = order.filter((title) => title.includes("Chains"));
+  const sparta = order.findIndex((title) => title.includes("Ghost of Sparta"));
+
+  // Las cuatro de Chains quedan juntas y ordenadas de más barata a más cara.
+  assert.equal(chains.length, 4);
+  assert.ok(order.indexOf(chains[0]) < sparta, "Chains va antes que Ghost of Sparta");
+  assert.match(chains[0], /Sony PSP, 2008/);
+});
+
+test("results can be ordered by price alone", async () => {
+  const { html } = await renderPage({
+    items: [searchWithResults(godOfWarResults())],
+    expanded: ["gow"],
+    resultSortBy: "price-asc",
+  });
+
+  const first = html.indexOf("God of War Chains of Olympus (Sony PSP, 2008)");
+  const last = html.indexOf("Ghost of Sparta");
+  assert.ok(first >= 0 && last > first, "la de 25 va antes que la de 99,99");
+});
+
+test("a single result gets no sort control: there is nothing to order", async () => {
+  const { html } = await renderPage({
+    items: [searchWithResults([godOfWarResults()[0]])],
+    expanded: ["gow"],
+  });
+
+  assert.doesNotMatch(html, /data-result-sort/);
 });

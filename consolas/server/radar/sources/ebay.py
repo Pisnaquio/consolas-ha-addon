@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import base64
 import json
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -28,6 +29,12 @@ SOURCE_ID = "ebay-us"
 MARKETPLACE_ID = "EBAY_US"
 REQUEST_TIMEOUT_SECONDS = 20
 MAX_LIMIT = 50
+# Margen contra el vencimiento del token de aplicación de eBay: se renueva
+# antes de tiempo en vez de descubrir a mitad de una corrida que venció.
+TOKEN_EXPIRY_MARGIN_SECONDS = 120
+
+# Tokens de aplicación vigentes, sólo en memoria y por (host, client_id).
+_TOKEN_CACHE: dict[tuple[str, str], tuple[str, float]] = {}
 
 # Condición de eBay → condición del criterio. Los ids son los de la Browse API.
 EBAY_CONDITION_FILTERS = {
@@ -196,6 +203,16 @@ class EbayBrowseSource:
         client_secret = str(getattr(config, "ebay_client_secret", "") or "").strip()
         if not client_id or not client_secret:
             raise EbayCredentialsMissing("Configurá las credenciales de eBay Developers en el add-on")
+        # Una búsqueda con varias consultas pedía un token por consulta: el doble
+        # de llamadas y el doble de latencia, para un token que eBay emite con
+        # dos horas de vida. Se reusa mientras esté vigente, con margen de
+        # seguridad, y la clave incluye el host para no mezclar sandbox con
+        # producción. El token vive sólo en memoria: no se persiste nunca.
+        host = self.api_host(config)
+        cache_key = (host, client_id)
+        cached = _TOKEN_CACHE.get(cache_key)
+        if cached and cached[1] > time.monotonic():
+            return cached[0]
         credentials = base64.b64encode(f"{client_id}:{client_secret}".encode("utf-8")).decode("ascii")
         request = urllib.request.Request(
             f"https://{self.api_host(config)}/identity/v1/oauth2/token",
@@ -208,7 +225,9 @@ class EbayBrowseSource:
         )
         try:
             with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
-                token = str(json.loads(response.read().decode("utf-8")).get("access_token") or "")
+                payload = json.loads(response.read().decode("utf-8"))
+                token = str(payload.get("access_token") or "")
+                expires_in = payload.get("expires_in")
         except urllib.error.HTTPError as exc:
             error_code = ""
             try:
@@ -221,6 +240,14 @@ class EbayBrowseSource:
             raise EbayRequestFailed("No se pudo obtener el token de eBay") from exc
         if not token:
             raise EbayRequestFailed("eBay no devolvió un token de aplicación")
+        try:
+            lifetime = float(expires_in)
+        except (TypeError, ValueError):
+            lifetime = 0.0
+        # Sin vida declarada no se cachea: adivinar cuánto dura un token ajeno
+        # es pedir un 401 a mitad de una corrida.
+        if lifetime > TOKEN_EXPIRY_MARGIN_SECONDS:
+            _TOKEN_CACHE[cache_key] = (token, time.monotonic() + lifetime - TOKEN_EXPIRY_MARGIN_SECONDS)
         return token
 
     def fetch_item_summaries(self, config: Any, query: str, criteria: dict[str, Any]) -> list[Any]:

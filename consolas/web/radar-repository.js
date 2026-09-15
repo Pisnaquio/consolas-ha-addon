@@ -173,6 +173,11 @@
     return item.canRun === true;
   }
 
+  /** Previsualizar no exige estar activa: sólo una fuente que pueda correr. */
+  function canPreview(item = {}) {
+    return item.canPreview === true;
+  }
+
   function isExecutableSource(sourceId) {
     return getSource(sourceId)?.executable === true;
   }
@@ -206,6 +211,8 @@
     const maxTotal = formatAmount(criteria.maxTotalUsa, currency);
     if (maxTotal) chips.push(`Recibido en USA hasta ${maxTotal}`);
     if (criteria.minLotSize) chips.push(`Lotes desde ${criteria.minLotSize} piezas`);
+    const queries = (criteria.queries || []).length;
+    if (queries) chips.push(`${queries} ${queries === 1 ? "consulta extra" : "consultas extra"}`);
     if ((criteria.excludeTerms || []).length) chips.push(`Excluye: ${criteria.excludeTerms.join(", ")}`);
     return chips;
   }
@@ -362,6 +369,17 @@
     return write(`/radar/searches/${encodeURIComponent(searchId)}/run`, {});
   }
 
+  /**
+   * Corre la búsqueda y devuelve lo que traería, sin guardar nada.
+   *
+   * Sirve para mirar una búsqueda en borrador o pausada antes de activarla: el
+   * servidor no escribe inventario, historial ni última corrida, así que la
+   * respuesta es de sólo lectura y no aparece después en la card.
+   */
+  async function previewSearch(searchId) {
+    return write(`/radar/searches/${encodeURIComponent(searchId)}/preview`, {});
+  }
+
   async function deleteSearch(searchId) {
     return request(`/radar/searches/${encodeURIComponent(searchId)}`, {
       method: "DELETE",
@@ -378,8 +396,10 @@
     return request("/radar/preferences");
   }
 
-  async function updateBudget(monthlyBudgetUsd) {
-    return write("/radar/preferences", { monthlyBudgetUsd });
+  async function updateBudget(monthlyBudgetUsd, maxActiveSearches) {
+    const payload = { monthlyBudgetUsd };
+    if (maxActiveSearches !== undefined) payload.maxActiveSearches = maxActiveSearches;
+    return write("/radar/preferences", payload);
   }
 
   /** PRD §10.5, cálculo puro: nada se persiste ni se infiere del título. */
@@ -478,6 +498,7 @@
     getTypeLabel,
     getPriorityLabel,
     canRun,
+    canPreview,
     isExecutableSource,
     getBlockedSources,
     formatAmount,
@@ -508,6 +529,7 @@
     setStatus,
     duplicateSearch,
     runSearch,
+    previewSearch,
     deleteSearch,
     loadBudget,
     getPreferences,

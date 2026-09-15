@@ -22,7 +22,7 @@ import unicodedata
 from dataclasses import dataclass, field
 from typing import Any
 
-from .classify import classify_listing_item
+from .classify import classify_listing_item, detect_lot_size
 from .model import MarketplaceListing
 
 
@@ -135,6 +135,7 @@ def evaluate_match(
     verdict = MatchVerdict()
     capabilities = capabilities or {}
     haystack = normalize(listing.searchable_text())
+    item = classify_listing_item(listing.title)
     currency = str(criteria.get("currency") or "USD").upper()
     signals_total = 0
     signals_hit = 0
@@ -144,13 +145,11 @@ def evaluate_match(
     # Una búsqueda de consolas no tiene por qué traer juegos sueltos. Sólo
     # bloquea cuando el título lo dice con todas las letras: una deducción por
     # descarte sirve para estimar peso, no para tirar una publicación.
-    if expected_kind:
-        item = classify_listing_item(listing.title)
-        if item.confident and item.kind != expected_kind:
-            verdict.blockers.append(
-                f"Es {ITEM_KIND_LABELS.get(item.kind, item.kind)} y esta búsqueda pide "
-                f"{ITEM_KIND_LABELS.get(expected_kind, expected_kind)}"
-            )
+    if expected_kind and item.confident and item.kind != expected_kind:
+        verdict.blockers.append(
+            f"Es {ITEM_KIND_LABELS.get(item.kind, item.kind)} y esta búsqueda pide "
+            f"{ITEM_KIND_LABELS.get(expected_kind, expected_kind)}"
+        )
 
     for term in criteria.get("excludeTerms") or []:
         if contains_term(haystack, term):
@@ -175,6 +174,37 @@ def evaluate_match(
             verdict.reasons.append(f"Coincide con {', '.join(f'«{term}»' for term in hits)}")
         else:
             verdict.blockers.append("No coincide con ninguno de los sinónimos aceptados")
+
+    # Cuántas piezas trae. Es el único criterio cuya evidencia hay que contar en
+    # vez de reconocer, y contar leyendo un título es frágil: por eso bloquea
+    # sólo contra una cantidad que el vendedor declaró, y un título que no la
+    # declara pasa como requisito sin verificar. Descartar por lo que el título
+    # no dice tiraría la mitad del mercado de lotes, que se publica enumerando
+    # los juegos en vez de contarlos.
+    min_lot_size = criteria.get("minLotSize")
+    if min_lot_size:
+        minimum = int(min_lot_size)
+        signals_total += 1
+        declared = detect_lot_size(listing.title)
+        if declared is None:
+            if item.variable_price:
+                # "Elegí cuál querés" no es un lote: el precio publicado es el
+                # de una pieza a elección, así que no hay cantidad que medir.
+                verdict.unverified.append(
+                    f"Es un listado «elegí cuál querés»: no hay un lote de {minimum} piezas "
+                    "con ese precio"
+                )
+            else:
+                verdict.unverified.append(
+                    f"No declara cuántas piezas trae; la búsqueda pide {minimum} o más"
+                )
+        elif declared < minimum:
+            verdict.blockers.append(
+                f"Declara {declared} pieza(s) y la búsqueda pide al menos {minimum}"
+            )
+        else:
+            signals_hit += 1
+            verdict.reasons.append(f"Declara {declared} piezas, y la búsqueda pide al menos {minimum}")
 
     max_item_price = criteria.get("maxItemPrice")
     if max_item_price is not None and listing.price_amount is not None:

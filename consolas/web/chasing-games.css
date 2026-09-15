@@ -159,3 +159,26 @@
 .chase-result-band.is-premium { color:#ffd68c; }
 .chase-result-band.is-caro { color:var(--danger); }
 .chase-result-total.is-imported { color:var(--accent); opacity:.9; }
+
+/* Previsualización: se corrió la búsqueda y no se guardó nada. El borde
+   punteado dice justamente eso — es una vista, no inventario. */
+.radar-preview { margin-top:10px; padding:16px; border-style:dashed; }
+.radar-preview .chase-results { margin-top:12px; }
+
+/* Ordenar las publicaciones de una búsqueda. Vive con los resultados y no en
+   la barra de arriba: ordena esta lista, no la lista de búsquedas. */
+.chase-results-sort { display:flex; align-items:center; gap:8px; margin:14px 0 2px; }
+.chase-results-sort label { font:500 .74rem "IBM Plex Mono",monospace; letter-spacing:.1em;
+                            text-transform:uppercase; color:var(--muted); }
+.chase-results-sort select { border:1px solid var(--line); background:rgba(255,255,255,.04);
+                             color:var(--ink); border-radius:9px; padding:5px 9px; font:400 .8rem inherit; }
+/* Cobertura plegable. El resumen queda siempre visible; el detalle —ocho
+   consolas con sus ejemplos— ocupaba media pantalla arriba de las búsquedas. */
+.radar-coverage-head { display:flex; align-items:start; justify-content:space-between; gap:16px;
+                       width:100%; padding:0; border:0; background:transparent; color:inherit;
+                       font:inherit; text-align:left; cursor:pointer; }
+.radar-coverage-head > span:first-child { display:grid; gap:4px; min-width:0; }
+.radar-coverage-head:focus-visible { outline:2px solid var(--accent); outline-offset:4px; border-radius:8px; }
+.radar-coverage-title { font-family:"Fraunces","Space Grotesk",serif; font-size:1.22rem; }
+.radar-coverage-caret { font-size:.9rem; color:var(--muted); flex-shrink:0; line-height:1.8; }
+.radar-coverage.is-collapsed { padding-bottom:16px; }

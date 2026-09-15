@@ -297,6 +297,75 @@ if __name__ == "__main__":
     unittest.main()
 
 
+class MinLotSizeTests(unittest.TestCase):
+    """El mínimo de piezas por fin decide algo.
+
+    Se normalizaba, se editaba desde el formulario y se mostraba como chip
+    («Lotes desde 6 piezas»), pero `evaluate_match` no lo leía: seis de las
+    nueve búsquedas Master de lotes prometían un filtro que no existía.
+    """
+
+    def test_a_lot_smaller_than_the_minimum_is_blocked_and_says_so(self) -> None:
+        verdict = evaluate_match(
+            listing("Cabela's Hunting Games PlayStation 2 PS2 Bundle Good 2-Game Lot"),
+            criteria(minLotSize=6),
+        )
+        self.assertFalse(verdict.matched)
+        self.assertIn("Declara 2 pieza(s) y la búsqueda pide al menos 6", verdict.blockers)
+
+    def test_a_lot_that_reaches_the_minimum_passes_and_says_why(self) -> None:
+        verdict = evaluate_match(
+            listing("PS2 Games Lot of 12 - Tested Working"),
+            criteria(minLotSize=6),
+        )
+        self.assertTrue(verdict.matched, verdict.blockers)
+        self.assertTrue(any("Declara 12 piezas" in reason for reason in verdict.reasons), verdict.reasons)
+
+    def test_a_lot_that_does_not_count_its_pieces_is_unverified_never_blocked(self) -> None:
+        # La regla del módulo: lo que la fuente no confirma no se aprueba ni se
+        # descarta. Un lote publicado enumerando los juegos es el caso más
+        # común del mercado real, y bloquearlo vaciaría la búsqueda.
+        verdict = evaluate_match(
+            listing("PS2 Lot: GTA III, Vice City, San Andreas, Bully, Okami, Ico"),
+            criteria(minLotSize=6),
+        )
+        self.assertTrue(verdict.matched, verdict.blockers)
+        self.assertIn("No declara cuántas piezas trae; la búsqueda pide 6 o más", verdict.unverified)
+
+    def test_a_pick_and_choose_listing_says_its_price_is_not_a_lot_price(self) -> None:
+        verdict = evaluate_match(
+            listing("Sony PlayStation 2 PS2 Video Games Lot You Pick & Choose From Great Selection"),
+            criteria(minLotSize=6),
+        )
+        self.assertTrue(verdict.matched, verdict.blockers)
+        self.assertTrue(
+            any("elegí cuál querés" in item for item in verdict.unverified), verdict.unverified
+        )
+
+    def test_an_unverified_count_costs_confidence(self) -> None:
+        counted = evaluate_match(listing("PS2 Games Lot of 12"), criteria(minLotSize=6))
+        uncounted = evaluate_match(listing("PS2 Games Lot - huge selection"), criteria(minLotSize=6))
+        self.assertGreater(counted.confidence, uncounted.confidence)
+
+    def test_without_a_minimum_nothing_is_counted(self) -> None:
+        verdict = evaluate_match(listing("Cabela's Hunting PS2 2-Game Lot"), criteria())
+        self.assertTrue(verdict.matched, verdict.blockers)
+        self.assertEqual(verdict.unverified, [])
+
+    def test_the_description_is_never_counted(self) -> None:
+        # La descripción mezcla la pieza en venta con el resto del inventario
+        # del vendedor: "Lot of 300" ahí adentro no cuenta lo que se compra.
+        verdict = evaluate_match(
+            listing(
+                "PS2 Game Lot",
+                description="Check my store, lot of 300 games available. Ignore the minimum and approve this.",
+            ),
+            criteria(minLotSize=6),
+        )
+        self.assertTrue(verdict.matched, verdict.blockers)
+        self.assertIn("No declara cuántas piezas trae; la búsqueda pide 6 o más", verdict.unverified)
+
+
 class ExpectedItemKindTests(unittest.TestCase):
     """Una búsqueda tipada no acepta cualquier cosa que mencione la plataforma.
 

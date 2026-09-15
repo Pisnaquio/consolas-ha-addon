@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from server.radar.classify import classify_listing_item
+from server.radar.classify import classify_listing_item, detect_lot_size
 
 
 class ClassifyListingItemTests(unittest.TestCase):
@@ -140,4 +140,90 @@ class ReplacementCaseTests(unittest.TestCase):
     def test_a_complete_game_is_still_a_game(self) -> None:
         self.assertEqual(
             classify_listing_item("Metal Gear Solid 2 PS2 CIB Complete with case and manual").kind, "game"
+        )
+
+
+class DetectLotSizeTests(unittest.TestCase):
+    """Cuántas piezas trae, cuando el vendedor lo escribe.
+
+    Los títulos de acá salen de las corridas reales del radar. El detector
+    existe para que el criterio «mínimo de piezas» pueda decidir algo: hasta
+    ahora se guardaba, se editaba y se mostraba como chip, pero ninguna
+    publicación se descartaba por traer menos piezas que el mínimo.
+    """
+
+    def assert_size(self, title: str, expected: int | None) -> None:
+        self.assertEqual(detect_lot_size(title), expected, f"{title!r}")
+
+    def test_a_declared_count_is_read(self) -> None:
+        self.assert_size("Official OEM Sony PlayStation 3 PS3 Game Cases Lot X10", 10)
+        self.assert_size("Lot of 11 Sony PSP Empty Game/Movie Cases No Manuals *NO GAMES! READ", 11)
+        self.assert_size("Sony PlayStation 3 PS3 Empty Replacement Game Disc Case HIGH QUALITY - Lot of 5", 5)
+        self.assert_size(
+            "PS3 6-Game Action Lot - Ninja Gaiden 3, Midnight Club LA, Soulcalibur V, GTA IV", 6
+        )
+        self.assert_size(
+            "Cabela's Hunting Games PlayStation 2 PS2 Bundle N/A Multicolor Good 2-Game Lot", 2
+        )
+
+    def test_a_count_written_as_a_word_is_read_too(self) -> None:
+        self.assert_size("Sony PSP Portable UMD Video Superhero Movies - Lot of Four - Tested & Working", 4)
+
+    def test_the_platform_number_is_never_the_count(self) -> None:
+        # Sin sacar el nombre de la plataforma, "Playstation 2 Games Lot" sería
+        # un lote de dos piezas, y "PS3 Games" uno de tres.
+        self.assert_size("Sony Playstation 2 Games Lot Tested Working", None)
+        self.assert_size("Sony PlayStation 2 PS2 Video Games Lot You Pick & Choose From Great Selection", None)
+        self.assert_size("PlayStation 3 PS3 brand new Games Lot Pick And Choice Great Selection", None)
+
+    def test_a_number_in_the_name_of_a_game_is_not_a_count(self) -> None:
+        # "3 Game" separado y en singular es el nombre del juego. "3 Games" en
+        # plural, o "6-Game" pegado, sí cuentan.
+        self.assert_size("Tony Hawk's Pro Skater 3 Game PS2 Complete", None)
+        self.assert_size("Ninja Gaiden 3 Razor's Edge PS3 Disc Only", None)
+        self.assert_size("💎 Ratchet & Clank Collection PS3 New Sealed 3 Games Remastered PlayStation 3", 3)
+
+    def test_a_lot_that_never_says_how_many_stays_undeclared(self) -> None:
+        # Es la mitad del mercado real de lotes: se publica enumerando los
+        # juegos, o invitando a elegir, y nunca contándolos.
+        self.assert_size("Playstation 2 (PS2) Game Lot! Pick & Choose! Classic Retro Games!", None)
+        self.assert_size("PS2 Lot: GTA III, Vice City, San Andreas, Bully", None)
+        self.assert_size("", None)
+
+    def test_two_counts_that_disagree_count_as_none(self) -> None:
+        # Elegir cuál manda sería inventar el dato.
+        self.assert_size("Retro Game Lot of 5 - 8 Games Total Read Description", None)
+
+    def test_an_absurd_count_is_not_a_count(self) -> None:
+        self.assert_size("Wholesale Lot of 900 Game Cases Bulk Resale", None)
+
+    def test_no_count_is_invented_over_the_real_corpus(self) -> None:
+        # La regresión que importa: el detector puede no ver una cantidad, pero
+        # no puede ver una que no está. Sobre los títulos reales de calibración,
+        # cada cantidad leída tiene que estar escrita en el título.
+        import json
+        from pathlib import Path
+
+        fixtures = sorted((Path(__file__).parent / "fixtures").glob("calibration-*.json"))
+        self.assertTrue(fixtures, "sin fixtures no hay corpus contra el que medir")
+        declared = {}
+        for fixture in fixtures:
+            for row in json.loads(fixture.read_text(encoding="utf-8"))["listings"]:
+                size = detect_lot_size(row["title"])
+                if size is not None:
+                    declared[row["title"]] = size
+
+        self.assertEqual(
+            declared,
+            {
+                "Official OEM Sony PlayStation 3 PS3 Game Cases Lot X10": 10,
+                "Lot of 11 Sony PSP Empty Game/Movie Cases No Manuals *NO GAMES! READ": 11,
+                "💎 Ratchet & Clank Collection PS3 New Sealed 3 Games Remastered PlayStation 3": 3,
+                "Sony PSP-2001 PlayStation Portable Console w Charger and 2 games Tested Working!": 2,
+                "Sony PlayStation 3 PS3 Empty Replacement Game Disc Case HIGH QUALITY - Lot of 5": 5,
+                "PS3 6-Game Action Lot - Ninja Gaiden 3, Midnight Club LA, Soulcalibur V, GTA IV": 6,
+                "Sony PSP Portable UMD Video Superhero Movies - Lot of Four - Tested & Working": 4,
+                "Cabela's Hunting Games PlayStation 2 PS2 Bundle N/A Multicolor Good 2-Game Lot": 2,
+            },
+            "el detector cambió de opinión sobre el corpus real: revisar antes de mergear",
         )

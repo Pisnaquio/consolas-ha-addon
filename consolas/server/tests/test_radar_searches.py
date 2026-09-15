@@ -167,8 +167,9 @@ class MigrationTests(RadarSearchTestCase):
 
     def test_a_fresh_database_seeds_the_first_chase_once(self) -> None:
         init_db(self.config)
-        self.assertEqual(self.ids(), ["iss-deluxe-snes"])
+        self.assertEqual(self.ids(), ["iss-deluxe-snes", "radar-psp-library"])
         delete_radar_search(self.config, "iss-deluxe-snes")
+        delete_radar_search(self.config, "radar-psp-library")
         init_db(self.config)
         self.assertEqual(self.ids(), [])
 
@@ -629,6 +630,7 @@ class ChasingGamesCompatibilityTests(RadarSearchTestCase):
 
     def test_an_archived_search_is_hidden_from_the_legacy_listing(self) -> None:
         set_radar_search_status(self.config, "iss-deluxe-snes", "archived")
+        set_radar_search_status(self.config, "radar-psp-library", "archived")
         self.assertEqual(list_chasing_games(self.config)["items"], [])
         self.assertEqual(self.find("iss-deluxe-snes")["status"], "archived")
 

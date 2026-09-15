@@ -155,6 +155,9 @@
         <input id="budgetInput" name="monthlyBudgetUsd" type="number" min="0" step="1"
           value="${budget.monthlyBudgetUsd != null ? budget.monthlyBudgetUsd : ""}"
           placeholder="Sin configurar" />
+        <label for="capInput">Búsquedas activas como máximo</label>
+        <input id="capInput" name="maxActiveSearches" type="number" min="1" step="1"
+          value="${budget.maxActiveSearches != null ? budget.maxActiveSearches : ""}" />
         <button class="btn-link btn-primary" type="submit">Guardar</button>
         <button class="btn-link" type="button" data-cancel-budget="1">Cancelar</button>
       </form>`;
@@ -465,10 +468,11 @@
       event.preventDefault();
       const data = new FormData(event.currentTarget);
       const raw = String(data.get("monthlyBudgetUsd") || "").trim();
+      const cap = String(data.get("maxActiveSearches") || "").trim();
       await perform(
-        "Guardando presupuesto…",
-        () => repository.updateBudget(raw === "" ? null : Number(raw)),
-        "Presupuesto actualizado."
+        "Guardando preferencias…",
+        () => repository.updateBudget(raw === "" ? null : Number(raw), cap === "" ? undefined : Number(cap)),
+        "Preferencias actualizadas."
       );
       editingBudget = false;
       render();

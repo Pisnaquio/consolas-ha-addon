@@ -68,6 +68,30 @@ PART_MARKERS = (
     r"\bcase\s+only\b",
     r"\bdisplay\b",
     r"\bdust\s+cover\b",
+    # Merchandising y piezas que aparecen buscando un juego por su nombre: una
+    # bandera de God of War o la funda de batería de una PSP comparten título
+    # con el juego y no tienen ninguna marca que las delate. Medido el
+    # 2026-09-15 contra una corrida real: 3 de 11 resultados de «God of War
+    # PSP» eran una funda de batería, una bandera y un estuche de metal, y los
+    # tres pasaban como «probablemente un juego».
+    #
+    # `case` a secas sigue afuera a propósito: rompía «game w/ case». Van sólo
+    # las variantes que nunca son el juego.
+    r"\bbattery\s+cover\b",
+    r"\bcarrying\s+case\b",
+    r"\bcarry\s+case\b",
+    r"\btravel\s+case\b",
+    r"\bmetal\s+case\b",
+    r"\bfaceplate\b",
+    r"\bfront\s+shell\b",
+    r"\bdecals?\b",
+    r"\bskins?\b",
+    r"\bflags?\b",
+    r"\bbanners?\b",
+    r"\bposters?\b",
+    r"\bkeychains?\b",
+    r"\blanyards?\b",
+    r"\bmousepads?\b",
 )
 
 # "Elegí cuál querés": el precio que muestra la publicación es el de la opción
@@ -132,6 +156,42 @@ GAME_MARKERS = (
     r"\bvideo\s+games?\b",
     r"\bgames?\b",
 )
+
+# Cuántas piezas declara el vendedor, cuando lo escribe con todas las letras.
+#
+# Contar piezas leyendo un título es frágil por definición: "Lot of 10 games"
+# es inequívoco, pero una enumeración de diez nombres no lo es, y el título que
+# no dice nada es el caso más común. Por eso acá sólo se leen declaraciones
+# explícitas de cantidad y una duda devuelve `None`, nunca un número
+# aproximado: el criterio de mínimo de piezas bloquea una cifra declarada, y lo
+# que no está declarado queda sin verificar, que es la regla que ya gobierna al
+# resto del radar.
+NUMBER_WORDS = (
+    "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+    "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen",
+    "eighteen", "nineteen", "twenty",
+)
+NUMBER_WORD_VALUES = {word: index + 1 for index, word in enumerate(NUMBER_WORDS)}
+
+# Igual que el máximo que acepta la API para `minLotSize`: por encima de eso el
+# número no está contando piezas, está contando otra cosa.
+MAX_DECLARED_LOT_SIZE = 500
+
+# Las palabras van de más larga a más corta para que "seventeen" no se lea como
+# "seven"; el `\b` del patrón lo cubre igual, pero el orden lo hace evidente.
+_COUNT = r"(\d{1,3}|" + "|".join(sorted(NUMBER_WORDS, key=len, reverse=True)) + r")"
+
+# Un "3" pegado a la unidad en singular ("6-Game Lot") cuenta; separado
+# ("Pro Skater 3 Game") es el nombre del juego, no la cantidad. La unidad en
+# plural sí cuenta separada ("Sealed 3 Games").
+LOT_SIZE_PATTERNS = (
+    rf"\blots?\s+of\s+{_COUNT}\b",
+    rf"\blots?\s*[x#]\s*{_COUNT}\b",
+    rf"\b(?:bundle|set|pack|group)\s+of\s+{_COUNT}\b",
+    rf"\b{_COUNT}\s*-\s*(?:games?|discs?|titles?|pieces?|carts?|cartridges?|pack)\b",
+    rf"\b{_COUNT}\s+(?:games|discs|titles|pieces|carts|cartridges|juegos|piezas)\b",
+)
+
 
 ITEM_KINDS = ("console", "game", "accessory", "lot")
 
@@ -217,4 +277,35 @@ def classify_listing_item(title: str) -> ItemKind:
     return ItemKind("", False)
 
 
-__all__ = ["ItemKind", "ITEM_KINDS", "classify_listing_item", "detect_console_variant"]
+def detect_lot_size(title: str) -> int | None:
+    """Cuántas piezas declara el título, o `None` cuando no lo dice claro.
+
+    Se lee sólo el título: la descripción de una publicación mezcla la pieza en
+    venta con el resto del inventario del vendedor, y un número sacado de ahí no
+    cuenta lo que se está comprando.
+
+    Dos declaraciones que no coinciden se tratan como ninguna. Si el vendedor
+    escribió "Lot of 5" en un lado y "8 games" en el otro, el radar no tiene
+    forma de elegir cuál manda, y elegir una sería inventar el dato.
+    """
+
+    text = _strip_platforms(f" {str(title or '').lower()} ")
+    declared: set[int] = set()
+    for pattern in LOT_SIZE_PATTERNS:
+        for raw in re.findall(pattern, text):
+            value = NUMBER_WORD_VALUES.get(raw) or (int(raw) if raw.isdigit() else 0)
+            if 1 <= value <= MAX_DECLARED_LOT_SIZE:
+                declared.add(value)
+    if len(declared) != 1:
+        return None
+    return declared.pop()
+
+
+__all__ = [
+    "ItemKind",
+    "ITEM_KINDS",
+    "MAX_DECLARED_LOT_SIZE",
+    "classify_listing_item",
+    "detect_console_variant",
+    "detect_lot_size",
+]
