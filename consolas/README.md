@@ -12,6 +12,9 @@ runtime.
   (`America/Montevideo`) y puede dispararse desde Oportunidades.
 - Las opciones SMTP se configuran en Home Assistant y nunca forman parte del
   paquete ni del repositorio.
+- `auction_watch_link_base_url` es la URL del panel de Consolas en HA (por
+  ejemplo `https://<tu-instancia>.ui.nabu.casa/d522fbd3_consolas`). Los botones
+  **Descartar** del mail la usan; si queda vacía, el mail sale sin ellos.
 
 No usar una instancia local, puertos LAN, `homeassistant.local`, launchd, cron
 ni Mail.app como alternativa de producción.

@@ -7,7 +7,8 @@
     "Tramos de condición por variante: loose, loose completo, boxed, CIB y nuevo.",
     "Rareza, volumen de ventas y confianza de cada referencia.",
     "Disponibilidad de repuestos y accesorios por variante.",
-    "Premium porcentual y absoluto frente al modelo común."
+    "Premium porcentual y absoluto frente al modelo común.",
+    "Qué región tenés no se puede registrar todavía: la ficha guarda la variante de chasis (`varianteId`) y no la región, así que una PAL-N se lee en la guía pero no queda marcada."
   ],
   "ladders": {
     "ps2": {
@@ -78,9 +79,25 @@
         {
           "label": "PriceCharting — Heavy Sixer",
           "url": "https://www.pricecharting.com/game/atari-2600/atari-2600-system-heavy-sixer"
+        },
+        {
+          "label": "Retro Games Collector — Heavy Sixer vs Light Sixer",
+          "url": "https://www.retrogamescollector.com/how-to-tell-an-atari-cx2600-heavy-sixer-from-a-light-sixer/"
+        },
+        {
+          "label": "Wikipedia — PAL (especificación de PAL-N)",
+          "url": "https://en.wikipedia.org/wiki/PAL"
+        },
+        {
+          "label": "Atari Compendium — VCS/2600 scanline list (NTSC/PAL/SECAM)",
+          "url": "https://www.ataricompendium.com/faq/vcs_scanlines.html"
+        },
+        {
+          "label": "Retrogaming.com.ar — foro argentino, conversiones a PAL-N (fuente única, sin confirmar)",
+          "url": "https://www.retrogaming.com.ar/forum/viewtopic.php?t=9843"
         }
       ],
-      "verifiedAt": "2026-09-11",
+      "verifiedAt": "2026-09-23",
       "confidence": "alta para identificación; el premium del Heavy Sixer es conocido pero no está cuantificado acá",
       "playPick": "four-switch",
       "collectPick": "heavy-sixer",
@@ -98,10 +115,10 @@
           "id": "light-sixer",
           "name": "Light Sixer",
           "years": "1978-1980",
-          "region": "NTSC",
+          "region": "NTSC · también hubo series cortas PAL",
           "identify": "También seis switches, pero 1,52 kg contra los 2,05 de una Heavy. El panel de madera corre por detrás del zócalo del frente, el zócalo es más angosto y de esquinas más angulares, y el reborde de los switches es más plano con agujeros algo más grandes.",
           "technical": "Misma electrónica esencial, construcción aligerada para abaratar producción.",
-          "note": "Las primeras salieron de Sunnyvale con la misma etiqueta que una Heavy: por eso la etiqueta no alcanza para descartarla. Las posteriores dicen Atari-Wong, Hong Kong o Taiwán, y ahí no hay duda."
+          "note": "Las primeras salieron de Sunnyvale con la misma etiqueta que una Heavy: por eso la etiqueta no alcanza para descartarla. Las posteriores dicen Atari-Wong, Hong Kong o Taiwán, y ahí no hay duda. De Sunnyvale salieron además series cortas para regiones PAL, así que una sixer de Sunnyvale con etiqueta PAL-N es una combinación posible."
         },
         {
           "id": "four-switch",
@@ -132,8 +149,35 @@
       "pending": [
         "Premium porcentual del Heavy Sixer frente a una cuatro switches, con fuente y fecha.",
         "Diferencias de fiabilidad entre revisiones.",
-        "Variantes PAL y su compatibilidad."
-      ]
+        "Si una PAL-N salía configurada así de fábrica o si es una NTSC convertida. Un foro argentino describe la práctica local —una plaqueta chica envuelta en cinta, o un integrado y pasivos soldados «en araña», más un capacitor que corre el cristal de 3.579575 a 3.5820 MHz— pero es fuente única y no se confirmó contra nada más. Se resuelve abriendo la consola y mirando si hay circuito agregado.",
+        "A qué frecuencia entrega vertical la PAL-N del dueño. Si es PAL de verdad son 50 Hz y un cartucho NTSC corre lento; si es una NTSC con codificador agregado, son 60 Hz y corre bien. Decide qué cartuchos conviene comprarle, y todavía no está medido.",
+        "Qué TIA lleva —la PAL o la NTSC—, que es lo que determina la paleta real en pantalla."
+      ],
+      "regions": [
+        {
+          "id": "ntsc",
+          "name": "NTSC",
+          "where": "Estados Unidos, Canadá, Japón",
+          "identify": "262 líneas por cuadro a 60 Hz. Es la región de casi todo lo que aparece en eBay USA.",
+          "technical": "Cristal de color de 3.579575 MHz. Es el estándar con el que se programó la mayoría del catálogo."
+        },
+        {
+          "id": "pal",
+          "name": "PAL (B/G)",
+          "where": "Europa occidental, Australia",
+          "identify": "312 líneas por cuadro a 50 Hz. La etiqueta del fondo suele venir sin el párrafo de la FCC que exige la venta en Estados Unidos, y muchas llevan una «U» después del número de parte.",
+          "technical": "Subportadora de color de 4.43361875 MHz. Un cartucho NTSC en una consola PAL corre más lento y con colores equivocados: el cartucho decide cuándo se generan los pulsos de sincronismo, pero la TIA que pinta el color es la de la consola."
+        },
+        {
+          "id": "pal-n",
+          "name": "PAL-N — la rioplatense",
+          "where": "Argentina, Uruguay y Paraguay",
+          "identify": "La etiqueta del fondo lo dice, sellado debajo del número de serie: «PAL-N». Es el único lugar donde se lee sin abrir nada. No se deduce del chasis: una PAL-N puede ser sixer, cuatro switches o Jr.",
+          "technical": "Mismas 625 líneas y 50 campos por segundo del PAL europeo, pero en canal de 6 MHz, con subportadora de color de 3.582056 MHz —muy cerca de la del NTSC— y audio a 4,5 MHz. Se creó en Argentina por la Resolución 100 ME/76 y lo adoptaron también Uruguay y Paraguay.",
+          "note": "Ojo con no confundirlo con PAL-M, el brasileño: ése es 525 líneas a 59,94 campos, o sea temporizado como NTSC con colores PAL. PAL-N no es lo mismo."
+        }
+      ],
+      "regionNote": "La región es independiente del chasis: se combina con cualquier variante de arriba. Los cartuchos no tienen bloqueo regional y entran en cualquier consola — lo que cambia es a qué velocidad corren y con qué colores se ven."
     },
     "snes": {
       "family": "Super Nintendo",

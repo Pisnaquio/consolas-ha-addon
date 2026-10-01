@@ -25,6 +25,11 @@ const sample = {
       collectPick: "a",
       sources: [{ label: "Fuente demo", url: "https://example.com/demo" }],
       pending: ["Falta el premium porcentual."],
+      regionNote: "La región se combina con cualquier variante.",
+      regions: [
+        { id: "ntsc", name: "NTSC", where: "Estados Unidos", identify: "262 líneas a 60 Hz", technical: "Cristal de 3.579575 MHz" },
+        { id: "pal-n", name: "PAL-N", where: "Uruguay", identify: "Dice PAL-N en la etiqueta", technical: "625 líneas a 50 Hz", note: "No confundir con PAL-M" },
+      ],
       variants: [
         { id: "a", name: "Primera", years: "1977", region: "NTSC", identify: "Plástico grueso", technical: "Original", note: "La histórica" },
         { id: "b", name: "Tardía", years: "1985", region: "NTSC", identify: "Más chica", technical: "Fuente integrada", reliability: "La más confiable" },
@@ -64,6 +69,38 @@ test("what is not verified is declared, not filled in", () => {
   assert.match(html, /Falta el premium porcentual/);
   assert.match(html, /verificado 2026-09-11/);
   assert.match(html, /https:\/\/example\.com\/demo/);
+});
+
+test("the region is shown apart from the chassis ladder, because it crosses with all of them", () => {
+  const html = ValueLadder.render(ValueLadder.findLadder(sample, "demo"), {});
+
+  assert.match(html, /Región/);
+  assert.match(html, /La región se combina con cualquier variante/);
+  assert.match(html, /PAL-N[\s\S]*Dice PAL-N en la etiqueta/);
+  assert.match(html, /No confundir con PAL-M/);
+  // Una región no es una variante: no puede ofrecerse como «esta es la mía»,
+  // porque la consola es una variante Y una región al mismo tiempo.
+  assert.doesNotMatch(html, /data-ladder-own="pal-n"/);
+});
+
+test("a ladder without regions simply does not draw the section", () => {
+  const html = ValueLadder.render(
+    ValueLadder.findLadder({ ladders: { x: { family: "X", variants: [{ id: "1", name: "Única", identify: "ok" }] } } }, "x"),
+    {},
+  );
+  assert.doesNotMatch(html, /ladder-regions/);
+});
+
+test("region text is escaped too", () => {
+  const html = ValueLadder.render(
+    ValueLadder.findLadder(
+      { ladders: { x: { family: "X", variants: [{ id: "1", name: "U", identify: "ok" }], regions: [{ id: "r", name: "<script>alert(1)</script>", identify: "ok" }] } } },
+      "x",
+    ),
+    {},
+  );
+  assert.doesNotMatch(html, /<script>alert/);
+  assert.match(html, /&lt;script&gt;/);
 });
 
 test("a console without a guide says so instead of showing an empty section", () => {
@@ -155,6 +192,18 @@ test("the shipped guide never states a price and always cites its source", () =>
       assert.ok(variant.identify, `${consoleId}/${variant.id} sin señal visual para identificarla`);
       const text = JSON.stringify(variant);
       assert.doesNotMatch(text, /US\$|USD|\$\s?\d/, `${consoleId}/${variant.id} declara un precio inventado`);
+    }
+
+    // Una región tiene que decir cómo reconocerla y dónde se usó, y no puede
+    // colisionar con un id de variante: son dos ejes distintos de la misma consola.
+    const regionIds = new Set();
+    for (const region of ladder.regions || []) {
+      assert.ok(region.identify, `${consoleId}/${region.id} sin señal para reconocer la región`);
+      assert.ok(region.where, `${consoleId}/${region.id} sin decir dónde se usó`);
+      assert.ok(!ids.has(region.id), `${consoleId}/${region.id} choca con un id de variante`);
+      assert.ok(!regionIds.has(region.id), `${consoleId}: ids de región duplicados`);
+      regionIds.add(region.id);
+      assert.doesNotMatch(JSON.stringify(region), /US\$|USD|\$\s?\d/, `${consoleId}/${region.id} declara un precio inventado`);
     }
   }
 });

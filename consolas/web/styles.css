@@ -2260,6 +2260,44 @@ h2 {
   line-height: 1.4;
 }
 .ladder-pick { align-self: flex-start; }
+
+/* La región cruza con cualquier variante de chasis, así que se muestra como una
+   franja aparte y con menos peso visual que la escalera de arriba. */
+.ladder-regions {
+  margin-top: 1rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--line);
+}
+.ladder-regions-title {
+  margin: 0;
+  font-size: 0.9rem;
+  letter-spacing: 0.02em;
+}
+.ladder-regions-note {
+  margin: 0.3rem 0 0.75rem;
+  color: var(--muted);
+  font-size: 0.83rem;
+  line-height: 1.45;
+}
+.ladder-region-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0.75rem;
+}
+.ladder-region {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-2, var(--surface));
+}
+.ladder-region h4 {
+  margin: 0;
+  font-size: 0.95rem;
+  text-wrap: balance;
+}
 .ladder-price-note,
 .ladder-pending,
 .ladder-sources {

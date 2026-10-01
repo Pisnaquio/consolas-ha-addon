@@ -20,7 +20,7 @@ from datetime import datetime, timedelta
 from email.message import EmailMessage
 from email.utils import format_datetime
 from pathlib import Path
-from urllib.parse import urlencode, urlparse
+from urllib.parse import quote, urlparse
 from urllib.request import Request, urlopen
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -858,18 +858,24 @@ def filter_dismissed_match_views(
     return visible, dismissed
 
 
-def discard_action_url(app_base_url: str, item: MatchView) -> str:
-    base_url = str(app_base_url or "").strip().rstrip("/")
+def email_link_base_url(config: dict[str, str]) -> str:
+    """Base de los links de los correos: el panel de Consolas en Home Assistant.
+
+    `AUCTION_WATCH_APP_BASE_URL` es la dirección interna del add-on
+    (`127.0.0.1`) y no sirve para abrir nada desde el teléfono. Sin una URL de
+    panel configurada, los correos salen sin links de acción.
+    """
+    base_url = config.get("AUCTION_WATCH_LINK_BASE_URL", "").strip().rstrip("/")
+    return base_url if urlparse(base_url).scheme in {"http", "https"} else ""
+
+
+def discard_action_url(link_base_url: str, item: MatchView) -> str:
+    base_url = str(link_base_url or "").strip().rstrip("/")
     key = match_view_dismissal_key(item)
     if not base_url or key is None:
         return ""
-    query = urlencode(
-        {
-            "source": key[0],
-            "lot": key[1],
-        }
-    )
-    return f"{base_url}/auction-watch-action.html?{query}"
+    source_id, lot_id = (quote(part, safe="") for part in key)
+    return f"{base_url}/auction-watch/discard/{source_id}/{lot_id}"
 
 
 def total_match_count(counts: dict[str, object]) -> int:
@@ -2988,7 +2994,7 @@ def prepare_email_delivery(
     recipients = parse_recipients(config.get("AUCTION_WATCH_EMAIL_TO", ""))
     prefix = config.get("AUCTION_WATCH_EMAIL_SUBJECT_PREFIX", "[Auction Watch]").strip()
     method = config.get("AUCTION_WATCH_EMAIL_METHOD", "smtp").strip().lower()
-    app_base_url = config.get("AUCTION_WATCH_APP_BASE_URL", "").strip()
+    app_base_url = email_link_base_url(config)
 
     subject = build_email_subject(prefix, status, total_matches, watch_hits)
     body = build_email_body(
@@ -5193,7 +5199,7 @@ def run_scan(args: argparse.Namespace) -> int:
             match_views,
             watch_hits,
             hero_image_src=preview_image_src,
-            app_base_url=delivery_config.get("AUCTION_WATCH_APP_BASE_URL", ""),
+            app_base_url=email_link_base_url(delivery_config),
         ),
     )
 

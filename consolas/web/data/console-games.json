@@ -1240,10 +1240,10 @@
             "notes": ""
           },
           "priceRange": {
-            "low": 0,
-            "mid": 0,
-            "high": 0,
-            "notes": "Sin benchmark definido en esta carga."
+            "low": null,
+            "mid": 36.99,
+            "high": null,
+            "notes": "Copia suelta (game only), USD. Precio de lista consultado el 2026-09-15: DKOldies USD 36.99. Una sola tienda: no hay rango, sólo ese número. Reemplaza un 0/0/0 que estaba cargado y que no era un precio medido: un cero se lee como dato y le diría al radar que todo está caro."
           },
           "coverUrl": "./assets/game-covers/gba/mario-kart-super-circuit.png",
           "coverImage": "./assets/game-covers/gba/mario-kart-super-circuit.png",
@@ -12153,7 +12153,12 @@
           "imageSource": "ddg-image-search",
           "imageStatus": "found",
           "priceGuide": {},
-          "priceRange": {}
+          "priceRange": {
+            "low": null,
+            "mid": 11.99,
+            "high": null,
+            "notes": "Copia suelta (game only), USD. Precio de lista consultado el 2026-09-15: DKOldies USD 11.99. Una sola tienda: no hay rango, sólo ese número. Es precio minorista retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          }
         },
         {
           "id": "xbox-360-halo-reach",
@@ -12167,7 +12172,12 @@
           "imageSource": "wikipedia",
           "imageStatus": "found",
           "priceGuide": {},
-          "priceRange": {}
+          "priceRange": {
+            "low": null,
+            "mid": 6.99,
+            "high": null,
+            "notes": "Copia suelta (game only), USD. Precio de lista consultado el 2026-09-15: DKOldies USD 6.99. Una sola tienda: no hay rango, sólo ese número. Es precio minorista retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          }
         },
         {
           "id": "xbox-360-gears-of-war",
@@ -12181,7 +12191,12 @@
           "imageSource": "ddg-image-search",
           "imageStatus": "found",
           "priceGuide": {},
-          "priceRange": {}
+          "priceRange": {
+            "low": 7.99,
+            "mid": 11.49,
+            "high": 14.99,
+            "notes": "Copia suelta (game only), USD. Precios de lista consultados el 2026-09-15: DKOldies USD 7.99; Game Over Videogames USD 14.99. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          }
         },
         {
           "id": "xbox-360-gears-of-war-2",
@@ -12195,7 +12210,12 @@
           "imageSource": "wikipedia",
           "imageStatus": "found",
           "priceGuide": {},
-          "priceRange": {}
+          "priceRange": {
+            "low": 6.99,
+            "mid": 8.49,
+            "high": 9.99,
+            "notes": "Copia suelta (game only), USD. Precios de lista consultados el 2026-09-15: DKOldies USD 6.99; Game Over Videogames USD 9.99. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          }
         },
         {
           "id": "xbox-360-gears-of-war-3",
@@ -12209,7 +12229,12 @@
           "imageSource": "wikipedia",
           "imageStatus": "found",
           "priceGuide": {},
-          "priceRange": {}
+          "priceRange": {
+            "low": 7.99,
+            "mid": 11.49,
+            "high": 14.99,
+            "notes": "Copia suelta (game only), USD. Precios de lista consultados el 2026-09-15: DKOldies USD 7.99; Game Over Videogames USD 14.99. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          }
         },
         {
           "id": "xbox-360-forza-horizon",
@@ -12223,7 +12248,12 @@
           "imageSource": "wikipedia",
           "imageStatus": "found",
           "priceGuide": {},
-          "priceRange": {}
+          "priceRange": {
+            "low": null,
+            "mid": 29.99,
+            "high": null,
+            "notes": "Copia suelta (game only), USD. Precio de lista consultado el 2026-09-15: DKOldies USD 29.99. Una sola tienda: no hay rango, sólo ese número. Es precio minorista retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          }
         },
         {
           "id": "xbox-360-forza-motorsport-4",
@@ -12237,7 +12267,12 @@
           "imageSource": "wikipedia",
           "imageStatus": "found",
           "priceGuide": {},
-          "priceRange": {}
+          "priceRange": {
+            "low": 9.99,
+            "mid": 12.49,
+            "high": 14.99,
+            "notes": "Copia suelta (game only), USD. Precios de lista consultados el 2026-09-15: DKOldies USD 9.99; Game Over Videogames USD 14.99. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          }
         },
         {
           "id": "xbox-360-red-dead-redemption",
@@ -12251,7 +12286,12 @@
           "imageSource": "wikipedia",
           "imageStatus": "found",
           "priceGuide": {},
-          "priceRange": {}
+          "priceRange": {
+            "low": null,
+            "mid": 13.99,
+            "high": null,
+            "notes": "Copia suelta (game only), USD. Precio de lista consultado el 2026-09-15: DKOldies USD 13.99. Una sola tienda: no hay rango, sólo ese número. Es precio minorista retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          }
         },
         {
           "id": "xbox-360-fable-ii",
@@ -12265,7 +12305,12 @@
           "imageSource": "wikipedia",
           "imageStatus": "found",
           "priceGuide": {},
-          "priceRange": {}
+          "priceRange": {
+            "low": null,
+            "mid": 15.99,
+            "high": null,
+            "notes": "Copia suelta (game only), USD. Precio de lista consultado el 2026-09-15: DKOldies USD 15.99. Una sola tienda: no hay rango, sólo ese número. Es precio minorista retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          }
         },
         {
           "id": "xbox-360-lost-odyssey",
@@ -12279,7 +12324,12 @@
           "imageSource": "ddg-image-search",
           "imageStatus": "found",
           "priceGuide": {},
-          "priceRange": {}
+          "priceRange": {
+            "low": null,
+            "mid": 25.99,
+            "high": null,
+            "notes": "Copia suelta (game only), USD. Precio de lista consultado el 2026-09-15: DKOldies USD 25.99. Una sola tienda: no hay rango, sólo ese número. Es precio minorista retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          }
         },
         {
           "id": "xbox-360-mass-effect",
@@ -12293,7 +12343,12 @@
           "imageSource": "wikipedia",
           "imageStatus": "found",
           "priceGuide": {},
-          "priceRange": {}
+          "priceRange": {
+            "low": 5.99,
+            "mid": 7.99,
+            "high": 9.99,
+            "notes": "Copia suelta (game only), USD. Precios de lista consultados el 2026-09-15: DKOldies USD 5.99; Game Over Videogames USD 9.99. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          }
         },
         {
           "id": "xbox-360-mass-effect-2",
@@ -12307,7 +12362,12 @@
           "imageSource": "wikipedia",
           "imageStatus": "found",
           "priceGuide": {},
-          "priceRange": {}
+          "priceRange": {
+            "low": 3.99,
+            "mid": 5.99,
+            "high": 7.99,
+            "notes": "Copia suelta (game only), USD. Precios de lista consultados el 2026-09-15: DKOldies USD 3.99; Game Over Videogames USD 7.99. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          }
         },
         {
           "id": "xbox-360-mass-effect-3",
@@ -12321,7 +12381,12 @@
           "imageSource": "ddg-image-search",
           "imageStatus": "found",
           "priceGuide": {},
-          "priceRange": {}
+          "priceRange": {
+            "low": 2.49,
+            "mid": 6.24,
+            "high": 9.99,
+            "notes": "Copia suelta (game only), USD. Precios de lista consultados el 2026-09-15: DKOldies USD 2.49; Game Over Videogames USD 9.99. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          }
         },
         {
           "id": "xbox-360-bioshock",
@@ -12335,7 +12400,12 @@
           "imageSource": "ddg-image-search",
           "imageStatus": "found",
           "priceGuide": {},
-          "priceRange": {}
+          "priceRange": {
+            "low": null,
+            "mid": 7.99,
+            "high": null,
+            "notes": "Copia suelta (game only), USD. Precio de lista consultado el 2026-09-15: DKOldies USD 7.99. Una sola tienda: no hay rango, sólo ese número. Es precio minorista retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          }
         },
         {
           "id": "xbox-360-fallout-new-vegas",
@@ -12349,7 +12419,12 @@
           "imageSource": "wikipedia",
           "imageStatus": "found",
           "priceGuide": {},
-          "priceRange": {}
+          "priceRange": {
+            "low": null,
+            "mid": 14.99,
+            "high": null,
+            "notes": "Copia suelta (game only), USD. Precio de lista consultado el 2026-09-15: DKOldies USD 14.99. Una sola tienda: no hay rango, sólo ese número. Es precio minorista retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          }
         },
         {
           "id": "xbox-360-portal-2",
@@ -12363,7 +12438,12 @@
           "imageSource": "ddg-image-search",
           "imageStatus": "found",
           "priceGuide": {},
-          "priceRange": {}
+          "priceRange": {
+            "low": null,
+            "mid": 7.99,
+            "high": null,
+            "notes": "Copia suelta (game only), USD. Precio de lista consultado el 2026-09-15: DKOldies USD 7.99. Una sola tienda: no hay rango, sólo ese número. Es precio minorista retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          }
         },
         {
           "id": "xbox-360-batman-arkham-city",
@@ -12377,7 +12457,12 @@
           "imageSource": "wikipedia",
           "imageStatus": "found",
           "priceGuide": {},
-          "priceRange": {}
+          "priceRange": {
+            "low": 5.99,
+            "mid": 7.99,
+            "high": 9.99,
+            "notes": "Copia suelta (game only), USD. Precios de lista consultados el 2026-09-15: DKOldies USD 5.99; Game Over Videogames USD 9.99. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          }
         },
         {
           "id": "xbox-360-grand-theft-auto-iv",
@@ -12391,7 +12476,12 @@
           "imageSource": "ddg-image-search",
           "imageStatus": "found",
           "priceGuide": {},
-          "priceRange": {}
+          "priceRange": {
+            "low": null,
+            "mid": 13.99,
+            "high": null,
+            "notes": "Copia suelta (game only), USD. Precio de lista consultado el 2026-09-15: DKOldies USD 13.99. Una sola tienda: no hay rango, sólo ese número. Es precio minorista retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          }
         },
         {
           "id": "xbox-360-skate-3",
@@ -12405,7 +12495,12 @@
           "imageSource": "ddg-image-search",
           "imageStatus": "found",
           "priceGuide": {},
-          "priceRange": {}
+          "priceRange": {
+            "low": 8.99,
+            "mid": 13.49,
+            "high": 17.99,
+            "notes": "Copia suelta (game only), USD. Precios de lista consultados el 2026-09-15: DKOldies USD 8.99; Game Over Videogames USD 17.99. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo."
+          }
         }
       ]
     },

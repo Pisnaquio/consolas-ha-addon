@@ -1,5 +1,5 @@
 name: "Consolas"
-version: "0.1.59"
+version: "0.1.60"
 slug: "consolas"
 description: "Coleccion de consolas y juegos como add-on de Home Assistant con SQLite server-side."
 arch:
@@ -20,12 +20,6 @@ panel_title: "Consolas"
 panel_admin: false
 watchdog: "http://[HOST]:[PORT:8788]/api/health"
 
-webui: "http://[HOST]:[PORT:8788]"
-ports:
-  8788/tcp: 8788
-ports_description:
-  8788/tcp: "Consolas web/API para acceso LAN; Ingress no usa este puerto externo."
-
 map:
   - type: data
     read_only: false
@@ -44,6 +38,7 @@ options:
   auction_watch_smtp_password: ""
   auction_watch_email_from: ""
   auction_watch_email_to: ""
+  auction_watch_link_base_url: ""
   radar_email_mode: disabled
   radar_email_from: ""
   radar_email_to: ""
@@ -64,6 +59,7 @@ schema:
   auction_watch_smtp_password: password?
   auction_watch_email_from: str?
   auction_watch_email_to: str?
+  auction_watch_link_base_url: str?
   radar_email_mode: list(disabled|digest|digest_and_alerts)
   radar_email_from: str?
   radar_email_to: str?

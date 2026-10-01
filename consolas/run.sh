@@ -29,6 +29,9 @@ if command -v bashio::config >/dev/null 2>&1; then
   export AUCTION_WATCH_SMTP_PASSWORD="${AUCTION_WATCH_SMTP_PASSWORD:-$(bashio::config 'auction_watch_smtp_password' 2>/dev/null || true)}"
   export AUCTION_WATCH_EMAIL_FROM="${AUCTION_WATCH_EMAIL_FROM:-$(bashio::config 'auction_watch_email_from' 2>/dev/null || true)}"
   export AUCTION_WATCH_EMAIL_TO="${AUCTION_WATCH_EMAIL_TO:-$(bashio::config 'auction_watch_email_to' 2>/dev/null || true)}"
+  # URL del panel de Consolas en HA (por ejemplo la de Nabu Casa seguida de
+  # /d522fbd3_consolas). Sin ella, los correos salen sin links de acción.
+  export AUCTION_WATCH_LINK_BASE_URL="${AUCTION_WATCH_LINK_BASE_URL:-$(bashio::config 'auction_watch_link_base_url' 2>/dev/null || true)}"
   # Collection Radar entrega por su cuenta: asunto y destinatarios propios, con
   # el transporte SMTP de Auction Watch como respaldo (ver server/app.py).
   export RADAR_EMAIL_MODE="${RADAR_EMAIL_MODE:-$(bashio::config 'radar_email_mode' 2>/dev/null || true)}"

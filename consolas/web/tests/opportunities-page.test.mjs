@@ -12,9 +12,11 @@ async function renderOpportunitiesPage({
   runRequests = [],
   syncStates = [],
   scanStatus = "success",
-  issues = []
+  issues = [],
+  search = ""
 } = {}) {
   let html = "";
+  const focusedSelectors = [];
   let nextTimerId = 1;
   let runRequestIndex = 0;
   let snapshotLoadIndex = 0;
@@ -27,8 +29,9 @@ async function renderOpportunitiesPage({
       return html;
     },
     addEventListener() {},
-    querySelector() {
-      return null;
+    querySelector(selector) {
+      focusedSelectors.push(selector);
+      return { focus() {} };
     }
   };
   const snapshot = {
@@ -107,6 +110,7 @@ async function renderOpportunitiesPage({
     }
   };
   const window = {
+    location: { search },
     AuctionWatchRepository: repository,
     CollectionRepository: {
       getHomeHref() {
@@ -160,6 +164,7 @@ async function renderOpportunitiesPage({
     window,
     document,
     fetch,
+    URLSearchParams,
     console: { error() {}, info() {} },
     setTimeout,
     clearTimeout
@@ -175,6 +180,7 @@ async function renderOpportunitiesPage({
     get html() {
       return html;
     },
+    focusedSelectors,
     async runNextPoll() {
       const timer = scheduledTimers.shift();
       if (!timer) return false;
@@ -568,4 +574,38 @@ test("keeps a failed canonical scan visibly degraded instead of calling it curre
   assert.match(page.html, /En snapshot/);
   assert.match(page.html, /La corrida fallida no confirmó oportunidades/);
   assert.doesNotMatch(page.html, /Activas ahora/);
+});
+
+test("focuses the discard button of the lot a mail link points to", async () => {
+  const page = await renderOpportunitiesPage({
+    search: "?focus=Remotes%3A7919%3A58",
+    active: [
+      {
+        id: "remotes-7919-58",
+        source: "remotes",
+        sourceId: "remotes",
+        lotId: "7919:58",
+        title: "Nintendo 64 con joystick",
+        lotUrl: "https://www.remotes.com.uy/participar/remate/7919?lote=58"
+      }
+    ]
+  });
+
+  assert.deepEqual(page.focusedSelectors, [
+    '[data-opportunity-action="dismiss"][data-opportunity-key="remotes:7919:58"]'
+  ]);
+  assert.match(page.html, /data-opportunity-view="active" aria-pressed="true"/);
+});
+
+test("explains a mail link whose lot is no longer active", async () => {
+  const page = await renderOpportunitiesPage({
+    search: "?focus=remotes%3A1%3A1",
+    dismissed: [
+      { id: "remotes-1-1", source: "remotes", sourceId: "remotes", lotId: "1:1", title: "Game Boy" }
+    ]
+  });
+
+  assert.deepEqual(page.focusedSelectors, ["#opportunityFeedback"]);
+  assert.match(page.html, /data-opportunity-view="dismissed" aria-pressed="true"/);
+  assert.match(page.html, /id="opportunityFeedback"/);
 });

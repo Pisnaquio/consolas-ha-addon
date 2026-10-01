@@ -186,9 +186,10 @@ def peer_listing_benchmark(
 ) -> PriceReference | None:
     """Mediana de las publicaciones activas que trajo la misma búsqueda.
 
-    Es la única referencia disponible para juegos: el catálogo tiene precios de
-    consolas y `priceGuide` vacío en los 574 registros de juegos. Sin esto, cada
-    búsqueda de un juego queda sin benchmark y su precio no se puede juzgar.
+    Fue durante un tiempo la única referencia disponible para juegos, cuando el
+    catálogo sólo tenía precios de consolas. Desde que los juegos tienen
+    `priceRange` con fuente, convive con esa referencia y queda por debajo de
+    ella en el orden de evidencia.
 
     Es evidencia real y propia —son precios que alguien está pidiendo hoy— pero
     **pedidos, no vendidos**, así que entra con confianza baja y por debajo de
@@ -210,6 +211,54 @@ def peer_listing_benchmark(
         confidence=0.5,
         independent=True,
         notes=f"Mediana de {len(usable)} publicaciones activas de esta búsqueda; son precios pedidos, no vendidos.",
+    )
+
+
+def reference_from_price_range(
+    price_range: dict[str, Any] | None,
+    *,
+    entity_id: str = "",
+    observed_at: str = "",
+) -> PriceReference | None:
+    """El precio que el catálogo ya tiene para un juego, como referencia.
+
+    `priceRange.mid` es el precio típico de copia suelta que se cargó con
+    fuente y fecha en las notas. Hasta ahora el radar no lo miraba: tenía el
+    dato en el repo y seguía juzgando cada juego contra la mediana de su propia
+    corrida, que es compararse consigo mismo.
+
+    Entra como `retail` porque eso es literalmente lo que es —precio de lista
+    de tiendas retro— y por eso pesa más que la mediana de publicaciones
+    activas, que son pedidos sueltos de cualquiera. Pero un precio de tienda
+    está por encima de lo que cierra una compra entre particulares, y la nota
+    lo dice: quien mire el veredicto tiene que poder calibrarlo.
+
+    Sin fecha no se puede saber si envejeció, así que la confianza baja. Es
+    preferible a no tener con qué comparar, y se declara.
+    """
+
+    if not isinstance(price_range, dict):
+        return None
+    mid = to_amount(price_range.get("mid"))
+    if mid is None:
+        return None
+    low = to_amount(price_range.get("low"))
+    high = to_amount(price_range.get("high"))
+    banda = f" Rango cargado: {low}–{high}." if low is not None and high is not None else ""
+    return PriceReference(
+        entity_id=entity_id,
+        source="retail",
+        value=mid,
+        completeness="loose",
+        observed_at=observed_at,
+        confidence=0.6 if observed_at else 0.45,
+        independent=True,
+        notes=(
+            "Precio típico del catálogo para copia suelta."
+            + banda
+            + " Es precio de lista de tiendas retro: una compra entre particulares suele cerrar por debajo."
+            + ("" if observed_at else " Sin fecha de verificación en el catálogo, así que no se puede saber si envejeció.")
+        ),
     )
 
 
@@ -656,6 +705,7 @@ __all__ = [
     "ScoreCard",
     "cost_breakdown",
     "peer_listing_benchmark",
+    "reference_from_price_range",
     "decision_band",
     "pick_benchmark",
     "references_from_console_entry",

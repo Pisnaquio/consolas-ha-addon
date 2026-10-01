@@ -421,6 +421,33 @@ function selectInitialOpportunityView() {
   if (!active.length && following.length) opportunityView = "following";
 }
 
+// Los correos llegan con ?focus=<fuente>:<lote> (ver ha-deep-link.js).
+function readRequestedFocusKey() {
+  const raw = String(new URLSearchParams(window.location?.search || "").get("focus") || "");
+  const separator = raw.indexOf(":");
+  if (separator <= 0 || separator === raw.length - 1) return "";
+  return `${raw.slice(0, separator).trim().toLowerCase()}:${raw.slice(separator + 1).trim()}`;
+}
+
+function applyRequestedFocus(key = "") {
+  if (!key) return "";
+  const repo = window.AuctionWatchRepository;
+  const { active, dismissed } = getPageOpportunities();
+  const includesKey = (items) => items.some((item) => repo?.getOpportunityKey?.(item) === key);
+  if (includesKey(active)) {
+    opportunityView = "active";
+    const selectorValue = key.replace(/["\\]/g, "\\$&");
+    return `[data-opportunity-action="dismiss"][data-opportunity-key="${selectorValue}"]`;
+  }
+  if (includesKey(dismissed)) {
+    opportunityView = "dismissed";
+    opportunityFeedback = { message: "Esta oportunidad ya estaba descartada." };
+  } else {
+    opportunityFeedback = { message: "La oportunidad del correo ya no está entre las activas." };
+  }
+  return "#opportunityFeedback";
+}
+
 function renderViewSwitch(activeCount, followingCount, dismissedCount) {
   return `
     <div class="opportunity-view-switch" role="group" aria-label="Estado de las oportunidades">
@@ -955,7 +982,7 @@ async function init() {
   await loadAuctionWatchSnapshot();
   await refreshManualRunState();
   selectInitialOpportunityView();
-  renderPage();
+  renderPage({ focusSelector: applyRequestedFocus(readRequestedFocusKey()) });
   document.getElementById("opportunitiesRoot")?.addEventListener("click", handleOpportunityClick);
 }
 

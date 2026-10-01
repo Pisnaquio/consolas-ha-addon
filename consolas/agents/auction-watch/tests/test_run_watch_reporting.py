@@ -23,6 +23,7 @@ from scripts.run_watch import (  # noqa: E402
     build_mailapp_rich_paragraphs,
     build_newsletter_html,
     discard_action_url,
+    email_link_base_url,
     filter_dismissed_match_views,
     group_match_views_by_closing_day,
     load_state,
@@ -240,7 +241,7 @@ class ReportingTests(unittest.TestCase):
 
     def test_discard_action_is_in_every_mail_format_when_app_url_is_configured(self) -> None:
         item = self.sample_match()
-        app_base_url = "http://homeassistant.local:8788"
+        app_base_url = "https://ha.example.test/d522fbd3_consolas"
         action_url = discard_action_url(app_base_url, item)
         counts: dict[str, object] = {"total_matches": 1}
 
@@ -273,13 +274,36 @@ class ReportingTests(unittest.TestCase):
             )
         )
 
-        self.assertIn("/auction-watch-action.html?", action_url)
-        self.assertIn("source=remotes", action_url)
-        self.assertIn("lot=lot-42", action_url)
+        self.assertEqual(
+            action_url,
+            "https://ha.example.test/d522fbd3_consolas/auction-watch/discard/remotes/lot-42",
+        )
         self.assertIn(action_url, plain)
         self.assertIn(action_url.replace("&", "&amp;"), html)
         self.assertIn(action_url, rich_text)
         self.assertIn("Descartar", html)
+
+    def test_discard_action_escapes_lot_ids_into_one_path_segment(self) -> None:
+        item = self.sample_match(lot_id="7919:58/b")
+        self.assertEqual(
+            discard_action_url("https://ha.example.test/d522fbd3_consolas/", item),
+            "https://ha.example.test/d522fbd3_consolas/auction-watch/discard/remotes/7919%3A58%2Fb",
+        )
+
+    def test_mail_links_use_the_panel_url_never_the_internal_app_url(self) -> None:
+        internal_only = {"AUCTION_WATCH_APP_BASE_URL": "http://127.0.0.1:8788"}
+        self.assertEqual(email_link_base_url(internal_only), "")
+        self.assertEqual(discard_action_url(email_link_base_url(internal_only), self.sample_match()), "")
+        self.assertEqual(
+            email_link_base_url(
+                {
+                    **internal_only,
+                    "AUCTION_WATCH_LINK_BASE_URL": " https://ha.example.test/d522fbd3_consolas/ ",
+                }
+            ),
+            "https://ha.example.test/d522fbd3_consolas",
+        )
+        self.assertEqual(email_link_base_url({"AUCTION_WATCH_LINK_BASE_URL": "javascript:alert(1)"}), "")
 
     def test_featured_discard_uses_stable_identity_even_if_url_format_differs(self) -> None:
         item = self.sample_match()
@@ -301,7 +325,7 @@ class ReportingTests(unittest.TestCase):
             matched_keywords="consola, controles",
             price_label="Base c/cargos: $1.250",
         )
-        app_base_url = "http://homeassistant.local:8788"
+        app_base_url = "https://ha.example.test/d522fbd3_consolas"
         action_url = discard_action_url(app_base_url, item)
 
         html = build_newsletter_html(

@@ -73,6 +73,36 @@
     </article>`;
   }
 
+  /**
+   * La región no es una variante más. Una PAL-N puede ser sixer, cuatro
+   * switches o Jr., así que ponerla en la misma lista obligaría a elegir entre
+   * «es una sixer» y «es PAL-N» cuando una consola es las dos cosas a la vez.
+   * Va en su propia sección, cruzada con cualquier variante de arriba.
+   */
+  function regions(ladder) {
+    const list = (ladder.regions || [])
+      .map(
+        (region) => `<article class="ladder-region" data-region="${escapeHtml(region.id)}">
+        <header>
+          <h4>${escapeHtml(region.name)}</h4>
+          ${region.where ? `<p class="ladder-meta">${escapeHtml(region.where)}</p>` : ""}
+        </header>
+        <div class="ladder-facts">
+          ${fact("Cómo reconocerla", region.identify)}
+          ${fact("Diferencias técnicas", region.technical)}
+        </div>
+        ${region.note ? `<p class="ladder-note">${escapeHtml(region.note)}</p>` : ""}
+      </article>`
+      )
+      .join("");
+    if (!list) return "";
+    return `<div class="ladder-regions">
+      <h4 class="ladder-regions-title">Región</h4>
+      ${ladder.regionNote ? `<p class="ladder-regions-note">${escapeHtml(ladder.regionNote)}</p>` : ""}
+      <div class="ladder-region-list">${list}</div>
+    </div>`;
+  }
+
   function sources(ladder) {
     const list = (ladder.sources || [])
       .map((source) =>
@@ -147,6 +177,7 @@
       <p class="ladder-intro">Qué variante conviene para jugar, cuál para coleccionar y por qué una cuesta más que otra.</p>
       ${ownedLine(ladder, context.ownedVariantId, context.owned)}
       <div class="ladder-variants">${(ladder.variants || []).map((variant) => variantCard(variant, context)).join("")}</div>
+      ${regions(ladder)}
       <p class="ladder-price-note">${escapeHtml(options.priceNote || "")}</p>
       ${pending(ladder, options.pendingAll)}
       ${sources(ladder)}

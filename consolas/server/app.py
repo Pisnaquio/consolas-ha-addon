@@ -48,6 +48,7 @@ from radar.valuation import (  # noqa: E402
     lot_valuation,
     peer_listing_benchmark,
     pick_benchmark,
+    reference_from_price_range,
     references_from_console_entry,
     score_listing,
 )
@@ -58,7 +59,7 @@ from radar.sources import registry as radar_registry  # noqa: E402
 
 
 SERVICE_NAME = "consolas-server"
-SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.59")
+SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.60")
 DEFAULT_DATA_DIR = "/data"
 DEFAULT_STATIC_DIR = "/app/web"
 DATABASE_NAME = "consolas.sqlite"
@@ -3589,13 +3590,51 @@ def upsert_radar_listing(conn: sqlite3.Connection, listing: MarketplaceListing, 
     return listing_id
 
 
-def radar_entity_references(config: AppConfig, entity_type: str, entity_id: str) -> list[Any]:
+# La fecha de verificación de un precio del catálogo vive dentro de la nota en
+# prosa («consultados el 2026-09-15»), no en un campo propio. Se lee de ahí
+# mientras no exista el campo: sin fecha no se puede saber si el precio
+# envejeció, y eso cambia cuánta confianza merece.
+_FECHA_EN_NOTA = re.compile(r"\b(\d{4}-\d{2}-\d{2})\b")
+
+
+def radar_game_price_reference(config: AppConfig, console_id: str, game_id: str) -> Any:
+    """El precio que el catálogo ya tiene para ese juego, si lo tiene."""
+
+    if not console_id or not game_id:
+        return None
+    path = config.static_dir / "data" / "console-games.json"
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    bucket = ((payload.get("byConsole") or {}).get(console_id) or {}) if isinstance(payload, dict) else {}
+    for entry in bucket.get("juegosCatalogo") or []:
+        if not isinstance(entry, dict) or str(entry.get("id") or "") != game_id:
+            continue
+        price_range = entry.get("priceRange")
+        notes = str((price_range or {}).get("notes") or "")
+        found = _FECHA_EN_NOTA.search(notes)
+        return reference_from_price_range(
+            price_range, entity_id=game_id, observed_at=found.group(1) if found else ""
+        )
+    return None
+
+
+def radar_entity_references(
+    config: AppConfig, entity_type: str, entity_id: str, entity_console_id: str = ""
+) -> list[Any]:
     """Referencias de precio de la entidad vinculada, con su procedencia.
 
-    Hoy sólo hay catálogo de consolas; una búsqueda sin entidad vinculada se
-    queda sin benchmark y lo dice, en vez de compararse contra cualquier cosa.
+    Una búsqueda sin entidad vinculada se queda sin benchmark y lo dice, en vez
+    de compararse contra cualquier cosa.
+
+    Un juego se identifica por el par {consoleId, gameId}: el mismo id existe en
+    varias plataformas y un God of War de PS2 no vale lo que uno de PS4.
     """
 
+    if entity_type == "game":
+        reference = radar_game_price_reference(config, entity_console_id, entity_id)
+        return [reference] if reference else []
     if entity_type != "console" or not entity_id:
         return []
     for entry in load_console_catalog(config):
@@ -3774,7 +3813,10 @@ def score_radar_pages(
     capabilities_by_source = {source_id: radar_source_capabilities(source_id) for source_id in sources}
     expected_kind = radar_expected_item_kind(str(row["search_type"]), str(row["entity_type"]))
     console_weight = radar_console_weight_declaration(config, str(row["entity_id"]))
-    references = radar_entity_references(config, str(row["entity_type"]), str(row["entity_id"]))
+    references = radar_entity_references(
+        config, str(row["entity_type"]), str(row["entity_id"]),
+        str(row["entity_console_id"] if "entity_console_id" in row.keys() else ""),
+    )
     # Sin catálogo de precios para esta entidad, las publicaciones de esta misma
     # corrida son la única referencia disponible. Entra al final de la lista: la
     # preferencia de fuentes ya la deja por debajo de cualquier curada.
@@ -4097,7 +4139,10 @@ def create_manual_radar_listing(config: AppConfig, payload: Any) -> dict[str, An
             {"blockers": verdict.blockers},
         )
 
-    references = radar_entity_references(config, str(row["entity_type"]), str(row["entity_id"]))
+    references = radar_entity_references(
+        config, str(row["entity_type"]), str(row["entity_id"]),
+        str(row["entity_console_id"] if "entity_console_id" in row.keys() else ""),
+    )
     card = valuate_radar_match(
         listing, verdict, criteria, references,
         radar_expected_item_kind(str(row["search_type"]), str(row["entity_type"])),
