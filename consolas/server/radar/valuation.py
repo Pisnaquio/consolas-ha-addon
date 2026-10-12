@@ -35,7 +35,10 @@ DECISION_BANDS = (
 EXPENSIVE_BAND = ("caro", "Caro")
 
 # Orden de preferencia de evidencia (PRD §10.2). Menor es mejor.
-SOURCE_RANK = {"ebay-sold": 0, "pricecharting": 1, "retail": 2, "manual": 3, "peer-listings": 4, "editorial": 5}
+SOURCE_RANK = {
+    "ebay-sold": 0, "pricecharting": 1, "retail": 2, "manual": 3, "peer-listings": 4, "editorial": 5,
+    "lot-ceiling": 6,
+}
 
 SOURCE_LABELS = {
     "ebay-sold": "ventas cerradas en eBay",
@@ -44,6 +47,7 @@ SOURCE_LABELS = {
     "manual": "referencia manual",
     "peer-listings": "publicaciones activas comparables",
     "editorial": "rango editorial",
+    "lot-ceiling": "tu techo por pieza",
 }
 
 # Pesos del score (PRD §10.4).
@@ -325,6 +329,37 @@ def bundle_adjusted_benchmark(
             f"{game_value:g} {benchmark.currency} cada uno, el cuartil bajo del precio mínimo de "
             f"{catalog_sample} juegos del catálogo de esta consola. Qué juegos trae no se sabe."
         ).strip(),
+    )
+
+
+def lot_ceiling_benchmark(
+    *, declared_pieces: int | None, per_piece_ceiling: float | None, entity_id: str = "", currency: str = "USD"
+) -> PriceReference | None:
+    """La vara de un lote con cantidad declarada: tu techo por pieza por las piezas.
+
+    La mediana de los lotes de la misma corrida mezcla lotes de cuatro y de
+    veintidós juegos: un lote de 22 juegos de PS2 a 2,27 dólares cada uno salía
+    «caro» porque su total superaba al de lotes chicos. Lo que hace barato a un
+    lote es lo que cuesta cada pieza, y el umbral de «barato» lo eligió el dueño.
+
+    No es un precio de mercado y la nota lo dice: es el criterio propio puesto
+    en el lugar donde el radar compara.
+    """
+
+    if not declared_pieces or not per_piece_ceiling or per_piece_ceiling <= 0:
+        return None
+    return PriceReference(
+        entity_id=entity_id,
+        source="lot-ceiling",
+        value=round(declared_pieces * per_piece_ceiling, 2),
+        currency=currency,
+        completeness="loose",
+        confidence=0.5,
+        independent=True,
+        notes=(
+            f"Tu techo de {per_piece_ceiling:g} {currency} por pieza por las {declared_pieces} piezas que "
+            "declara el título. No es un precio de mercado: es el umbral que elegiste para «barato»."
+        ),
     )
 
 
@@ -780,6 +815,7 @@ __all__ = [
     "peer_listing_benchmark",
     "reference_from_price_range",
     "bundle_adjusted_benchmark",
+    "lot_ceiling_benchmark",
     "decision_band",
     "pick_benchmark",
     "references_from_console_entry",

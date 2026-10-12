@@ -96,7 +96,10 @@ PART_MARKERS = (
     # un juego por su nombre trae publicidades de revista, imanes, láminas,
     # discos demo y repuestos, y todos pasaban como «ganga» de ese juego.
     r"\badvertisements?\b",
-    r"\b(?:original|print|vintage|magazine)\s+ads?\b",
+    r"\b(?:original|print|vintage|magazine)\s+(?:\d{4}\s+)?ads?\b",
+    r"\b(?:strategy|official|player'?s?|secrets)\s+guides?\b",
+    r"\bguide\s*books?\b",
+    r"\bplug\s*(?:and|&|n)\s*play\b",
     r"\bmagnets?\b",
     r"\b(?:wall|pixel|box)\s+art\b",
     r"\bart\s+prints?\b",
@@ -117,7 +120,7 @@ PART_MARKERS = (
 # Un manual sin nada que diga que viene el juego es el manual solo: «Pokemon
 # Yellow Game Boy Manual». Con cualquiera de estas palabras al lado, el manual
 # es parte de una copia completa.
-MANUAL_MARKER = r"\bmanuals?\b"
+MANUAL_MARKER = r"\b(?:manuals?|booklets?)\b"
 WITH_THE_GAME = (
     # «with manual», «w/ manual» y «no manual» hablan del juego: dicen si el
     # manual viene con él.

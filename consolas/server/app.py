@@ -46,6 +46,7 @@ from radar.master import propose_master_searches, rank_game, wanted_games  # noq
 from radar.valuation import (  # noqa: E402
     LotPiece,
     bundle_adjusted_benchmark,
+    lot_ceiling_benchmark,
     lot_valuation,
     peer_listing_benchmark,
     pick_benchmark,
@@ -61,7 +62,7 @@ from radar.sources import registry as radar_registry  # noqa: E402
 
 
 SERVICE_NAME = "consolas-server"
-SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.63")
+SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.64")
 DEFAULT_DATA_DIR = "/data"
 DEFAULT_STATIC_DIR = "/app/web"
 DATABASE_NAME = "consolas.sqlite"
@@ -3931,8 +3932,21 @@ def valuate_radar_match(
     item_kind = classify_listing_item(listing.title)
     scoped = usable_radar_references(references, entity_type, item_kind)
     benchmark = pick_benchmark(scoped, completeness=completeness if completeness != "any" else "loose")
+    # Un lote con cantidad declarada se mide por pieza contra el techo propio.
+    per_piece_reference = (
+        lot_ceiling_benchmark(
+            declared_pieces=detect_lot_size(listing.title),
+            per_piece_ceiling=criteria.get("maxPricePerPiece"),
+            entity_id=listing.external_id,
+            currency=str(criteria.get("currency") or "USD"),
+        )
+        if criteria.get("maxPricePerPiece") is not None and not item_kind.variable_price
+        else None
+    )
+    if per_piece_reference is not None:
+        benchmark = per_piece_reference
     # Una consola que trae juegos se compara contra la consola más sus juegos.
-    if item_kind.kind == "console" and bundle_game_value:
+    elif item_kind.kind == "console" and bundle_game_value:
         benchmark = bundle_adjusted_benchmark(
             benchmark,
             declared_games=detect_lot_size(listing.title),

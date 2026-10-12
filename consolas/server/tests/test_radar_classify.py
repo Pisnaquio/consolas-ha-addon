@@ -132,6 +132,10 @@ class MerchandiseTests(unittest.TestCase):
             'Mega Man 2 MAGNET 2"x3" Refrigerator Locker Nintendo NES FREE SHIP Game Box',
             "Original OEM SPR-003 Battery Replacement 1750mAh For New Nintendo 3DS XL Console",
             "Super Nintendo SNES Cartridge Dust Cover sleeve case replacement 6 pc GGG0018",
+            "Breath of Fire II SNES Original 1995 Ad - Capcom Video Game Promo",
+            "Secret Of Mana Official Game Secrets Guide Prima Rusel DeMaria Nintendo SNES",
+            "Kirby's Dream Land 3 Original Instructional Booklet SNES RARE - VERY GOOD/CLEAN",
+            "Mega Man 2 Plug and Play TV Arcade NES Style MSI/Capcom Video Game",
         ):
             with self.subTest(title=title):
                 self.assertEqual(classify_listing_item(title).kind, "accessory")

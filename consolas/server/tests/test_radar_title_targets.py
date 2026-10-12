@@ -40,7 +40,12 @@ from server.app import (
 )
 from server.radar.matching import best_title_target, evaluate_match
 from server.radar.model import MarketplaceListing
-from server.radar.valuation import bundle_adjusted_benchmark, peer_listing_benchmark, reference_from_price_range
+from server.radar.valuation import (
+    bundle_adjusted_benchmark,
+    lot_ceiling_benchmark,
+    peer_listing_benchmark,
+    reference_from_price_range,
+)
 
 
 def ebay_summary(item_id: str, title: str, price: str = "24.00") -> dict:
@@ -444,6 +449,44 @@ class LotAccessoryAndDefectTests(unittest.TestCase):
         """Sin pregunta de funcionamiento, «Bad» puede ser el nombre de un juego."""
         verdict = evaluate_match(listing("Bad Dudes NES cartridge", 15), {})
         self.assertTrue(verdict.matched)
+
+
+class LotVerdictTests(RadarCatalogTestCase):
+    """Un lote se juzga por lo que cuesta cada pieza, contra el techo por pieza propio."""
+
+    def test_the_reference_is_the_ceiling_times_the_declared_pieces(self) -> None:
+        reference = lot_ceiling_benchmark(declared_pieces=22, per_piece_ceiling=4)
+        self.assertEqual(reference.value, 88)
+        self.assertEqual(reference.source, "lot-ceiling")
+        self.assertIn("No es un precio de mercado", reference.notes)
+
+    def test_without_a_count_there_is_no_per_piece_reference(self) -> None:
+        self.assertIsNone(lot_ceiling_benchmark(declared_pieces=None, per_piece_ceiling=4))
+
+    def test_a_big_cheap_lot_is_not_expensive_next_to_small_lots(self) -> None:
+        search = self.create(
+            {
+                "name": "Lotes de Zeta",
+                "platform": "Zeta",
+                "searchType": "lot",
+                "searchQuery": "zeta game lot",
+                "criteria": {"minLotSize": 4, "maxPricePerPiece": 4, "resultLimit": 20},
+            }
+        )
+        self.run_with(
+            search,
+            {
+                "zeta game lot": [
+                    ebay_summary("chico-1", "Zeta game lot of 4 games", "12.00"),
+                    ebay_summary("chico-2", "Zeta game lot of 4 games tested", "13.00"),
+                    ebay_summary("chico-3", "Zeta game lot of 5 games", "14.00"),
+                    ebay_summary("grande", "Zeta game lot of 22 games", "50.00"),
+                ]
+            },
+        )
+        (grande,) = [r for r in self.results(search["id"]) if r["externalId"] == "grande"]
+        self.assertEqual(grande["valuation"]["benchmark"]["source"], "lot-ceiling")
+        self.assertNotEqual(grande["band"], "caro")
 
 
 class PreferTermsTests(unittest.TestCase):
