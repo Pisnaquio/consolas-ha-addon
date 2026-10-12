@@ -198,6 +198,9 @@
     const currency = criteria.currency || "USD";
     const chips = [];
     if (criteria.region) chips.push(`Región ${criteria.region}`);
+    if ((criteria.excludeRegions || []).length) {
+      chips.push(`Sin ediciones ${criteria.excludeRegions.map((region) => region.toUpperCase()).join(", ")}`);
+    }
     if (criteria.condition && criteria.condition !== "any") chips.push(CONDITION_LABELS[criteria.condition]);
     if (criteria.completeness && criteria.completeness !== "any") chips.push(COMPLETENESS_LABELS[criteria.completeness]);
     if (criteria.tested && criteria.tested !== "any") chips.push(`Probado ${REQUIREMENT_LABELS[criteria.tested]}`);

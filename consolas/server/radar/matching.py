@@ -62,7 +62,7 @@ REGION_SIGNALS = {
     # consola americana sin adaptador.
     "ntsc-j": (
         "ntsc-j", "japan", "japanese", "jp region", "jpn", "japon", "japonesa",
-        "super famicom", "famicom",
+        "super famicom", "famicom", "sfc", "jp",
     ),
     "pal": ("pal", "europe", "european", "uk region", "australia"),
     "ntsc-u/c": ("ntsc-u", "ntsc u", "usa", "us region", "american", "north america"),
@@ -377,6 +377,16 @@ def evaluate_match(
             verdict.reasons.append(f"Región {detected_region.upper()} como pide la búsqueda")
         else:
             verdict.unverified.append(f"Región sin declarar; la búsqueda pide {str(criteria['region']).upper()}")
+
+    # Regiones que el dueño no quiere ver, aunque se acepte cualquier otra: hoy
+    # las japonesas, que no puede jugar (formato de cartucho e idioma). Se lee
+    # sólo el título, y sin «made in Japan»: la mitad de las consolas americanas
+    # se fabricaron allá y lo dicen.
+    excluded_regions = [str(region) for region in criteria.get("excludeRegions") or []]
+    if excluded_regions:
+        title_region = detect_region(normalize(listing.title).replace("made in japan", " "))
+        if title_region in excluded_regions:
+            verdict.blockers.append(f"Es una edición {title_region.upper()} y la búsqueda excluye esa región")
 
     # --- Requisitos que la fuente todavía no puede confirmar -------------------
 

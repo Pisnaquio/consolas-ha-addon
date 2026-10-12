@@ -62,7 +62,7 @@ from radar.sources import registry as radar_registry  # noqa: E402
 
 
 SERVICE_NAME = "consolas-server"
-SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.67")
+SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.68")
 DEFAULT_DATA_DIR = "/data"
 DEFAULT_STATIC_DIR = "/app/web"
 DATABASE_NAME = "consolas.sqlite"
@@ -99,6 +99,8 @@ RADAR_ENTITY_TYPES = ("", "console", "game", "accessory", "manual")
 RADAR_CONDITIONS = ("any", "new", "used", "refurbished")
 RADAR_COMPLETENESS = ("any", "loose", "boxed", "cib", "sealed")
 RADAR_REQUIREMENT_LEVELS = ("any", "preferred", "required")
+# Las regiones que el matcher sabe reconocer (radar/matching.py REGION_SIGNALS).
+RADAR_REGIONS = ("ntsc-j", "pal", "ntsc-u/c")
 RADAR_MAX_TERMS = 24
 RADAR_MAX_TERM_LENGTH = 80
 # Consultas adicionales de una misma búsqueda (PRD §9 "Consulta"). Una búsqueda
@@ -2698,6 +2700,7 @@ def default_radar_criteria() -> dict[str, Any]:
         "queries": [],
         "titleTargets": [],
         "region": "",
+        "excludeRegions": [],
         "condition": "any",
         "completeness": "any",
         "tested": "any",
@@ -2967,6 +2970,14 @@ def normalize_radar_criteria(value: Any, base: dict[str, Any] | None = None) -> 
         criteria["titleTargets"] = normalize_radar_title_targets(value.get("titleTargets"))
     if "region" in value:
         criteria["region"] = normalize_radar_text(value.get("region"), "region", 60, required=False)
+    if "excludeRegions" in value:
+        regions = [term.lower() for term in normalize_radar_terms(value.get("excludeRegions"), "excludeRegions")]
+        unknown = [region for region in regions if region not in RADAR_REGIONS]
+        if unknown:
+            raise ApiError(
+                HTTPStatus.BAD_REQUEST, f"excludeRegions must be any of: {', '.join(RADAR_REGIONS)}"
+            )
+        criteria["excludeRegions"] = regions
     if "condition" in value:
         criteria["condition"] = normalize_radar_enum(value.get("condition"), RADAR_CONDITIONS, "any", "condition")
     if "completeness" in value:

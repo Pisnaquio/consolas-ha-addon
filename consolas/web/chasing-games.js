@@ -291,6 +291,11 @@
           <label>Región
             <input name="region" maxlength="60" value="${escapeHtml(criteria.region || "")}" placeholder="NTSC-U/C" />
           </label>
+          <label>Regiones excluidas
+            <input name="excludeRegions" maxlength="40" value="${escapeHtml((criteria.excludeRegions || []).join(", "))}"
+                   placeholder="ntsc-j" />
+            <small class="radar-field-hint">ntsc-j, pal o ntsc-u/c. Se lee del título; «made in Japan» no cuenta.</small>
+          </label>
           <label>Qué persigue
             <select name="entityType">${optionList(ENTITY_TYPE_OPTIONS, item.entityType || "", (value) =>
               ENTITY_TYPE_LABELS[value]
@@ -462,6 +467,7 @@
         anyTerms: text("anyTerms"),
         excludeTerms: text("excludeTerms"),
         region: text("region"),
+        excludeRegions: text("excludeRegions"),
         condition: text("condition") || "any",
         completeness: text("completeness") || "any",
         tested: text("tested") || "any",

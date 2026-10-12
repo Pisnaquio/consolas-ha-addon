@@ -575,6 +575,46 @@ class BoxedCeilingTests(RadarCatalogTestCase):
         self.assertEqual(self.results(search["id"]), [])
 
 
+class ExcludedRegionTests(unittest.TestCase):
+    """Hoy el dueño no quiere ediciones japonesas: no puede jugarlas."""
+
+    criteria = {"excludeRegions": ["ntsc-j"]}
+
+    def test_japanese_editions_are_rejected(self) -> None:
+        for title in (
+            "Nintendo Super Famicom Console Boxed Working Complete With Manuals 2 Controllers",
+            "*TESTED* JAPANESE Nintendo 3DS Aqua Blue Console Complete In Box CIB #G65",
+            "Mario Golf GB - Japanese - Nintendo Game Boy Color",
+            "Final Fantasy 6 / VI - battery tested US ship boxed Japan Super Famicom SFC",
+            "Nintendo 64 N64 Console Japanese NTCS-J Complete In Box CIB US Seller",
+        ):
+            with self.subTest(title=title):
+                self.assertFalse(evaluate_match(listing(title), self.criteria).matched)
+
+    def test_made_in_japan_is_not_a_japanese_edition(self) -> None:
+        verdict = evaluate_match(
+            listing("Sony PlayStation SCPH-5501 NTSC Made in Japan Console Tested"), self.criteria
+        )
+        self.assertTrue(verdict.matched)
+
+    def test_only_the_title_decides(self) -> None:
+        """Una descripción que menciona Japón no convierte en japonesa una consola americana."""
+        item = listing("Super Nintendo SNES Console SNS-001 Tested")
+        item.description = "Plays US games. Not compatible with Japanese Super Famicom cartridges."
+        self.assertTrue(evaluate_match(item, self.criteria).matched)
+
+    def test_other_regions_still_pass(self) -> None:
+        self.assertTrue(evaluate_match(listing("Sega Mega Drive PAL Europe Console"), self.criteria).matched)
+
+
+class ExcludedRegionCriteriaTests(RadarCatalogTestCase):
+    def test_regions_are_normalized_and_unknown_ones_refused(self) -> None:
+        created = self.create({"name": "Sin Japón", "criteria": {"excludeRegions": "NTSC-J, ntsc-j"}})
+        self.assertEqual(created["criteria"]["excludeRegions"], ["ntsc-j"])
+        with self.assertRaises(ApiError):
+            self.create({"name": "Otra", "criteria": {"excludeRegions": ["marte"]}})
+
+
 class PreferTermsTests(unittest.TestCase):
     def test_a_preferred_term_never_rejects(self) -> None:
         verdict = evaluate_match(listing("Consola X console tested"), {"preferTerms": ["games"]})
