@@ -449,6 +449,13 @@ class LotAccessoryAndDefectTests(unittest.TestCase):
         self.assertFalse(verdict.matched)
         self.assertTrue(any("defecto" in blocker for blocker in verdict.blockers))
 
+    def test_some_issues_is_a_declared_defect(self) -> None:
+        verdict = evaluate_match(
+            listing("Sony PlayStation 1 Console SCPH-1001 w/ Controller - Tested - Some Issues- READ", 30),
+            {"tested": "preferred"},
+        )
+        self.assertFalse(verdict.matched)
+
     def test_a_game_named_bad_is_not_a_defect(self) -> None:
         """Sin pregunta de funcionamiento, «Bad» puede ser el nombre de un juego."""
         verdict = evaluate_match(listing("Bad Dudes NES cartridge", 15), {})

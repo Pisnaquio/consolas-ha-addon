@@ -100,6 +100,11 @@ PART_MARKERS = (
     r"\b(?:strategy|official|player'?s?|secrets)\s+guides?\b",
     r"\bguide\s*books?\b",
     r"\bplug\s*(?:and|&|n)\s*play\b",
+    # Repuestos que nombran el modelo de la consola: «Power Reset Button Flex
+    # Cable SCPH-50001» se leía como una PS2 de cinco dólares.
+    r"\bflex\s+(?:cable|ribbon)s?\b",
+    r"\bribbon\s+cables?\b",
+    r"\b(?:power|reset|eject|open)\s+(?:reset\s+)?buttons?\b",
     r"\bmagnets?\b",
     r"\b(?:wall|pixel|box)\s+art\b",
     r"\bart\s+prints?\b",

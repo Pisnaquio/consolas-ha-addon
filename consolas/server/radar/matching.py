@@ -43,7 +43,7 @@ UNTESTED_SIGNALS = ("untested", "not tested", "as-is", "as is", "for parts", "pa
 DEFECT_SIGNALS = (
     "bad", "needs", "defective", "faulty", "dead pixel", "dead pixels", "screen line", "screen lines",
     "no sound", "no audio", "no video", "not reading", "doesn t read", "doesnt read", "won t read",
-    "read error", "cracked",
+    "read error", "cracked", "some issues", "has issues",
 )
 OEM_SIGNALS = ("oem", "original", "genuine", "official")
 AFTERMARKET_SIGNALS = ("aftermarket", "third party", "generic", "clone", "replica", "reproduction", "repro")
