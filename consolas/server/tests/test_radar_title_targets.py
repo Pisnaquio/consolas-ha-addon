@@ -38,7 +38,7 @@ from server.app import (
     run_radar_search,
     update_radar_search,
 )
-from server.radar.matching import evaluate_match
+from server.radar.matching import best_title_target, evaluate_match
 from server.radar.model import MarketplaceListing
 from server.radar.valuation import bundle_adjusted_benchmark, peer_listing_benchmark, reference_from_price_range
 
@@ -327,6 +327,74 @@ class CoverageTests(RadarCatalogTestCase):
         self.assertEqual((match["entityType"], match["entityId"]), ("", ""))
 
 
+class TitleAttributionTests(RadarCatalogTestCase):
+    """eBay contesta una consulta con otros juegos: cada uno va al título que nombra."""
+
+    def test_a_listing_brought_by_one_query_is_filed_under_the_title_it_names(self) -> None:
+        search = self.wishlist()
+        self.run_with(
+            search, {"Juego A zeta": [ebay_summary("b-1", "Juego B Zeta cartridge", "50.00")]}
+        )
+        (result,) = self.results(search["id"])
+        self.assertEqual(result["titleTarget"]["gameId"], "juego-b")
+        self.assertEqual(result["valuation"]["benchmark"]["value"], 60)
+
+    def test_it_is_judged_with_the_ceiling_of_the_title_it_names(self) -> None:
+        """Un Juego A de 45 que llega por la consulta de Juego B no pasa: el techo de A es 30."""
+        search = self.wishlist()
+        self.run_with(
+            search, {"Juego B zeta": [ebay_summary("a-cara", "Juego A Zeta cartridge", "45.00")]}
+        )
+        self.assertEqual(self.results(search["id"]), [])
+
+    def test_a_listing_that_names_no_wished_title_is_not_part_of_the_search(self) -> None:
+        search = self.wishlist()
+        self.run_with(
+            search, {"Juego A zeta": [ebay_summary("otro", "Pelota Zeta cartridge", "10.00")]}
+        )
+        self.assertEqual(self.results(search["id"]), [])
+
+
+class BestTitleTargetTests(unittest.TestCase):
+    TARGETS = [
+        {"name": name}
+        for name in (
+            "Donkey Kong Country",
+            "Donkey Kong Country 2: Diddy's Kong Quest",
+            "Crash Bandicoot",
+            "Crash Bandicoot 3: Warped",
+            "The Legend of Zelda: A Link to the Past",
+            "Oddworld: Abe’s Oddysee",
+            "Oddworld: Abe’s Exoddus",
+            "Kirby's Dream Land 3",
+            "Sonic 3 & Knuckles",
+        )
+    ]
+
+    def name_for(self, title: str) -> str | None:
+        target = best_title_target(title, self.TARGETS)
+        return target["name"] if target else None
+
+    def test_the_more_specific_title_wins(self) -> None:
+        self.assertEqual(self.name_for("Donkey Kong Country 2 SNES authentic"), "Donkey Kong Country 2: Diddy's Kong Quest")
+        self.assertEqual(self.name_for("Donkey Kong Country SNES cart"), "Donkey Kong Country")
+
+    def test_a_subtitle_names_the_game_without_its_number(self) -> None:
+        self.assertEqual(self.name_for("Crash Bandicoot Warped PS1 Black Label"), "Crash Bandicoot 3: Warped")
+        self.assertEqual(self.name_for("Zelda Link to the Past SNES"), "The Legend of Zelda: A Link to the Past")
+
+    def test_twin_titles_are_told_apart_by_their_subtitle(self) -> None:
+        self.assertEqual(self.name_for("Oddworld Abes Exoddus PS1"), "Oddworld: Abe’s Exoddus")
+
+    def test_apostrophes_and_ampersands_do_not_matter(self) -> None:
+        self.assertEqual(self.name_for("Kirbys Dream Land 3 SNES"), "Kirby's Dream Land 3")
+        self.assertEqual(self.name_for("Sonic 3 and Knuckles Genesis"), "Sonic 3 & Knuckles")
+
+    def test_a_different_game_is_none_of_them(self) -> None:
+        self.assertIsNone(self.name_for("Sonic & Knuckles Genesis"))
+        self.assertIsNone(self.name_for("NBA Jam SNES"))
+
+
 class PricePerPieceTests(unittest.TestCase):
     def test_a_lot_that_costs_too_much_per_piece_is_rejected(self) -> None:
         verdict = evaluate_match(listing("Consola X lot of 5 games", 60), {"maxPricePerPiece": 8})
@@ -349,6 +417,33 @@ class PricePerPieceTests(unittest.TestCase):
             listing("Consola X games bundle", 120), {"maxPricePerPiece": 8, "minLotSize": 10}
         )
         self.assertEqual(len(verdict.unverified), 1)
+
+
+class LotAccessoryAndDefectTests(unittest.TestCase):
+    def test_a_lot_search_rejects_a_lot_of_accessories(self) -> None:
+        verdict = evaluate_match(
+            listing("LOT OF 9 ORIGINAL GAME BOY CARTRIDGE DUST CASES", 20), {}, rejects_accessories=True
+        )
+        self.assertFalse(verdict.matched)
+        self.assertIn("Es un accesorio, no un lote de juegos", verdict.blockers)
+
+    def test_a_game_lot_with_a_case_is_still_a_game_lot(self) -> None:
+        verdict = evaluate_match(
+            listing("Nintendo DS & 3DS Game Cartridge Lot with carrying case", 40), {}, rejects_accessories=True
+        )
+        self.assertTrue(verdict.matched)
+
+    def test_a_declared_defect_rejects_a_unit_that_has_to_work(self) -> None:
+        verdict = evaluate_match(
+            listing("PS3 CECH-3001A 160GB Console | Bad HDMI, AV Works, Tested", 50), {"tested": "preferred"}
+        )
+        self.assertFalse(verdict.matched)
+        self.assertTrue(any("defecto" in blocker for blocker in verdict.blockers))
+
+    def test_a_game_named_bad_is_not_a_defect(self) -> None:
+        """Sin pregunta de funcionamiento, «Bad» puede ser el nombre de un juego."""
+        verdict = evaluate_match(listing("Bad Dudes NES cartridge", 15), {})
+        self.assertTrue(verdict.matched)
 
 
 class PreferTermsTests(unittest.TestCase):

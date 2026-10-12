@@ -22,7 +22,7 @@ import unicodedata
 from dataclasses import dataclass, field
 from typing import Any
 
-from .classify import classify_listing_item, detect_lot_size
+from .classify import classify_listing_item, detect_lot_size, names_games
 from .model import MarketplaceListing
 
 
@@ -38,6 +38,13 @@ ITEM_KIND_LABELS = {
 # razones y confianza, y sólo bloquean cuando la contradicción es explícita.
 TESTED_SIGNALS = ("tested", "working", "fully functional", "functional", "probado", "funciona")
 UNTESTED_SIGNALS = ("untested", "not tested", "as-is", "as is", "for parts", "parts only", "sin probar")
+# Un defecto declarado no es «sin probar»: es probada y con una falla. Medido en
+# la primera corrida del portafolio retro: «PS3 Bad HDMI», «GBC Needs LCD».
+DEFECT_SIGNALS = (
+    "bad", "needs", "defective", "faulty", "dead pixel", "dead pixels", "screen line", "screen lines",
+    "no sound", "no audio", "no video", "not reading", "doesn t read", "doesnt read", "won t read",
+    "read error", "cracked",
+)
 OEM_SIGNALS = ("oem", "original", "genuine", "official")
 AFTERMARKET_SIGNALS = ("aftermarket", "third party", "generic", "clone", "replica", "reproduction", "repro")
 CIB_SIGNALS = ("cib", "complete in box", "complete with box", "box and manual", "with manual")
@@ -124,6 +131,7 @@ def evaluate_match(
     criteria: dict[str, Any],
     capabilities: dict[str, Any] | None = None,
     expected_kind: str = "",
+    rejects_accessories: bool = False,
 ) -> MatchVerdict:
     """Aplica los criterios de una búsqueda a una publicación normalizada.
 
@@ -150,6 +158,11 @@ def evaluate_match(
             f"Es {ITEM_KIND_LABELS.get(item.kind, item.kind)} y esta búsqueda pide "
             f"{ITEM_KIND_LABELS.get(expected_kind, expected_kind)}"
         )
+
+    # Una búsqueda de lotes acepta cosas mezcladas, pero no un lote de fundas o
+    # de memory cards: si el título dice accesorio y no nombra juegos, no es.
+    if rejects_accessories and item.confident and item.kind == "accessory" and not names_games(listing.title):
+        verdict.blockers.append("Es un accesorio, no un lote de juegos")
 
     for term in criteria.get("excludeTerms") or []:
         if contains_term(haystack, term):
@@ -275,6 +288,11 @@ def evaluate_match(
     # --- Condición y completitud ---------------------------------------------
 
     tested_requirement = str(criteria.get("tested") or "any")
+    # Sólo cuando la búsqueda pregunta si funciona: en un juego, «Bad» puede
+    # ser parte del nombre.
+    defect_signal = any_signal(haystack, DEFECT_SIGNALS) if tested_requirement != "any" else ""
+    if defect_signal:
+        verdict.blockers.append(f"Declara un defecto («{defect_signal}»)")
     untested_signal = any_signal(haystack, UNTESTED_SIGNALS)
     tested_signal = "" if untested_signal else any_signal(haystack, TESTED_SIGNALS)
     if tested_requirement != "any":
@@ -379,6 +397,68 @@ def evaluate_match(
     return verdict
 
 
+# Palabras que no distinguen un título de otro: «The Legend of Zelda» se
+# reconoce por «legend» y «zelda».
+TITLE_STOPWORDS = frozenset({"the", "a", "an", "of", "and", "y", "el", "la", "los", "las", "de"})
+
+
+def title_tokens(text: str) -> list[str]:
+    """Las palabras que identifican un título, sin apóstrofos ni relleno.
+
+    El apóstrofo se borra en vez de separar: «Kirby's» y «Kirbys» tienen que
+    ser la misma palabra, y separarlo dejaba una «s» suelta que ninguna
+    publicación escribe igual.
+    """
+
+    without_apostrophes = re.sub(r"['’`´]", "", str(text or ""))
+    return [token for token in normalize(without_apostrophes).split() if token not in TITLE_STOPWORDS]
+
+
+def best_title_target(title: str, targets: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Qué título de la búsqueda nombra esta publicación, o `None` si ninguno.
+
+    eBay no devuelve sólo lo que se le pidió: la consulta «Super Mario World
+    snes» trae también un Donkey Kong Country barato. Atribuirlo a la consulta
+    que lo trajo lo etiquetaba como Super Mario World —con su techo, su precio
+    de referencia y su «Registrar compra»—. La publicación se atribuye al
+    título que su propio título nombra.
+
+    Un objetivo califica si la publicación trae todas las palabras de la parte
+    principal del nombre (antes de los dos puntos), o el subtítulo completo más
+    alguna palabra de la parte principal: «Crash Bandicoot Warped» es Crash 3
+    aunque no diga «3», y «Zelda Link to the Past» no necesita «Legend».
+    Entre los que califican gana el que más palabras del nombre completo
+    comparte, y después el de nombre principal más largo: así «Donkey Kong
+    Country 2» le gana a «Donkey Kong Country».
+    """
+
+    words = set(title_tokens(title))
+    best: tuple[int, int] | None = None
+    chosen: dict[str, Any] | None = None
+    for target in targets:
+        name = str(target.get("name") or "")
+        if not name:
+            continue
+        core_text, _, subtitle_text = name.partition(":")
+        core = title_tokens(core_text)
+        subtitle = title_tokens(subtitle_text)
+        if not core:
+            continue
+        by_core = all(token in words for token in core)
+        by_subtitle = (
+            bool(subtitle)
+            and any(token in words for token in core)
+            and all(token in words for token in subtitle)
+        )
+        if not (by_core or by_subtitle):
+            continue
+        shared = sum(1 for token in set(core + subtitle) if token in words)
+        rank = (shared, len(core))
+        if best is None or rank > best:
+            best, chosen = rank, target
+    return chosen
+
+
 def detect_completeness(haystack: str) -> str:
     """El orden importa: «complete in box» es CIB, no simplemente boxed."""
     if any_signal(haystack, SEALED_SIGNALS):
@@ -403,9 +483,11 @@ def confidence_for(signals_hit: int, signals_total: int, verdict: MatchVerdict) 
 
 __all__ = [
     "MatchVerdict",
+    "best_title_target",
     "contains_term",
     "detect_completeness",
     "detect_region",
     "evaluate_match",
     "normalize",
+    "title_tokens",
 ]

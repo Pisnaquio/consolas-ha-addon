@@ -55,13 +55,13 @@ from radar.valuation import (  # noqa: E402
     sold_comparables_link,
 )
 from radar.classify import classify_listing_item, detect_console_variant, detect_lot_size  # noqa: E402
-from radar.matching import evaluate_match  # noqa: E402
+from radar.matching import best_title_target, evaluate_match  # noqa: E402
 from radar.model import MarketplaceListing  # noqa: E402
 from radar.sources import registry as radar_registry  # noqa: E402
 
 
 SERVICE_NAME = "consolas-server"
-SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.61")
+SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.62")
 DEFAULT_DATA_DIR = "/data"
 DEFAULT_STATIC_DIR = "/app/web"
 DATABASE_NAME = "consolas.sqlite"
@@ -4010,18 +4010,35 @@ def score_radar_pages(
     # Con objetivos de título, los pares se agrupan por título: la mediana de
     # cinco Super Mario World dice algo; la de un Super Mario World con un
     # Chrono Trigger, no.
+    #
+    # Qué título es cada publicación lo dice su propio título, no la consulta
+    # que la trajo: eBay contesta «Super Mario World snes» con cualquier otro
+    # juego barato de SNES, y atribuírselo a la consulta lo etiquetaba como
+    # Super Mario World. Lo que no nombra ninguno de los títulos perseguidos
+    # no es de esta búsqueda.
+    title_targets = [target for target in criteria.get("titleTargets") or [] if target.get("name")]
+    lot_search = str(row["search_type"]) == "lot"
     matched: list[tuple[MarketplaceListing, Any, dict[str, Any] | None, dict[str, Any], str]] = []
     rejected = 0
     for page in pages:
-        query = str(page.receipt.query if page.receipt else "")
-        target = radar_title_target(criteria, query)
-        page_criteria = radar_query_criteria(criteria, query)
+        page_query = str(page.receipt.query if page.receipt else "")
         for listing in page.listings:
+            if title_targets:
+                target = best_title_target(listing.title, title_targets)
+                if target is None:
+                    rejected += 1
+                    continue
+                query = str(target.get("query") or page_query)
+            else:
+                target = radar_title_target(criteria, page_query)
+                query = page_query
+            listing_criteria = radar_query_criteria(criteria, query)
             verdict = evaluate_match(
-                listing, page_criteria, capabilities_by_source.get(listing.source_id, {}), expected_kind
+                listing, listing_criteria, capabilities_by_source.get(listing.source_id, {}), expected_kind,
+                rejects_accessories=lot_search,
             )
             if verdict.matched:
-                matched.append((listing, verdict, target, page_criteria, query))
+                matched.append((listing, verdict, target, listing_criteria, query))
             else:
                 rejected += 1
 
@@ -4365,7 +4382,9 @@ def create_manual_radar_listing(config: AppConfig, payload: Any) -> dict[str, An
     )
 
     capabilities = radar_source_capabilities(source_id)
-    verdict = evaluate_match(listing, criteria, capabilities)
+    verdict = evaluate_match(
+        listing, criteria, capabilities, rejects_accessories=str(row["search_type"]) == "lot"
+    )
     if not verdict.matched:
         raise ApiError(
             HTTPStatus.UNPROCESSABLE_ENTITY,

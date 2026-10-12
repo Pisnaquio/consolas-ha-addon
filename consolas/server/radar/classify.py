@@ -92,6 +92,48 @@ PART_MARKERS = (
     r"\bkeychains?\b",
     r"\blanyards?\b",
     r"\bmousepads?\b",
+    # Medido el 2026-10-12 en la primera corrida del portafolio retro: buscar
+    # un juego por su nombre trae publicidades de revista, imanes, láminas,
+    # discos demo y repuestos, y todos pasaban como «ganga» de ese juego.
+    r"\badvertisements?\b",
+    r"\b(?:original|print|vintage|magazine)\s+ads?\b",
+    r"\bmagnets?\b",
+    r"\b(?:wall|pixel|box)\s+art\b",
+    r"\bart\s+prints?\b",
+    r"\bdemo\s+discs?\b",
+    r"\bdust\s+(?:covers?|cases?|sleeves?)\b",
+    r"\bbattery\s+(?:replacement|pack)\b",
+    r"\breplacement\s+battery\b",
+    r"\b(?:manual|booklet)s?\s+only\b",
+    r"\binstruction\s+booklet\b",
+    # Medidas: «17 x 5.5» o «2"x3"» es un mapa, un póster o una lámina. Hace
+    # falta un decimal o una unidad: «Hardcore 4x4» es el nombre de un juego.
+    r"\b\d+\.\d+\s*\"?\s*x\s*\d+",
+    r"\b\d+\s*\"?\s*x\s*\d+\.\d+",
+    r"\b\d+\s*(?:\"|in\b|inch(?:es)?\b|cm\b)\s*x\s*\d+",
+    r"\b\d+\s*x\s*\d+\s*(?:\"|in\b|inch(?:es)?\b|cm\b)",
+)
+
+# Un manual sin nada que diga que viene el juego es el manual solo: «Pokemon
+# Yellow Game Boy Manual». Con cualquiera de estas palabras al lado, el manual
+# es parte de una copia completa.
+MANUAL_MARKER = r"\bmanuals?\b"
+WITH_THE_GAME = (
+    # «with manual», «w/ manual» y «no manual» hablan del juego: dicen si el
+    # manual viene con él.
+    r"\b(?:with|no)\s+manuals?\b",
+    r"\bw/\s*manuals?\b",
+    r"\bcart(?:ridge)?s?\b",
+    r"\bgames?\b",
+    r"\bdiscs?\b",
+    r"\bcib\b",
+    r"\bcomplete\b",
+    r"\bbox(?:ed)?\b",
+    r"\bcase\b",
+    r"\bloose\b",
+    r"\bsealed\b",
+    r"\btested\b",
+    r"\bworking\b",
 )
 
 # "Elegí cuál querés": el precio que muestra la publicación es el de la opción
@@ -274,6 +316,8 @@ def classify_listing_item(title: str) -> ItemKind:
         return ItemKind("console", True)
     if re.search(SYSTEM_MARKER, residual) and not re.search(FOR_SYSTEM, residual):
         return ItemKind("console", True)
+    if re.search(MANUAL_MARKER, residual) and not _matches(WITH_THE_GAME, residual):
+        return ItemKind("accessory", True)
     if _matches(LOT_MARKERS, residual):
         return ItemKind("lot", True, _matches(VARIABLE_PRICE_MARKERS, residual))
     if _matches(ACCESSORY_MARKERS, residual):
@@ -286,6 +330,23 @@ def classify_listing_item(title: str) -> ItemKind:
     if re.search(r"[a-z]{3}", residual):
         return ItemKind("game", False)
     return ItemKind("", False)
+
+
+# Lo que dice que un lote trae juegos aunque también traiga un estuche o un
+# adaptador: «N64 Game Lot + Adapter» es un lote de juegos; «Cartridge Dust
+# Cases» no.
+GAME_LOT_EVIDENCE = (
+    r"\bgames\b",
+    r"\bgame\s+(?:cartridge\s+)?(?:lot|bundle)\b",
+    r"\bcartridges\b",
+    r"\bcarts\b",
+    r"\bdiscs\b",
+)
+
+
+def names_games(title: str) -> bool:
+    """Si el título dice que la publicación trae juegos, en plural o como lote."""
+    return _matches(GAME_LOT_EVIDENCE, _strip_platforms(f" {str(title or '').lower()} "))
 
 
 def detect_lot_size(title: str) -> int | None:
@@ -319,4 +380,5 @@ __all__ = [
     "classify_listing_item",
     "detect_console_variant",
     "detect_lot_size",
+    "names_games",
 ]

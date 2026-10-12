@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from server.radar.classify import classify_listing_item, detect_lot_size
+from server.radar.classify import classify_listing_item, detect_lot_size, names_games
 
 
 class ClassifyListingItemTests(unittest.TestCase):
@@ -115,6 +115,56 @@ class SystemComboTests(unittest.TestCase):
     def test_the_original_game_boy_model_is_a_console_and_a_cart_code_is_not(self) -> None:
         self.assertEqual(classify_listing_item("Original Nintendo Game Boy DMG-01 Tested").kind, "console")
         self.assertEqual(classify_listing_item("Pokemon Red Game Boy DMG-APEE-USA").kind, "game")
+
+
+class MerchandiseTests(unittest.TestCase):
+    """Títulos reales de la primera corrida del portafolio retro (2026-10-12)."""
+
+    def test_ads_magnets_art_and_demos_are_not_the_game(self) -> None:
+        for title in (
+            "1991 Castlevania IV SNES Original Advertisement / Retro Promo v1",
+            "1994 Castlevania Bloodlines The Plot Thickens Sega Genesis Video Game PRINT AD",
+            "Resident Evil 3 Nemesis PlayStation PS1 Authentic Magazine Ad",
+            "Contra Video Game Box Art NES High Quality Magnet",
+            "Sonic the Hedgehog 3 & Knuckles Magnets Sega Genesis Pixel Art 25 Magnet Pack",
+            "Sony Playstation 1 PS1 Ape Escape Demo Disc With Original Sleeve Working",
+            "LEGEND OF ZELDA MAP 17 x 5.5 • VINTAGE NINTENDO NES GAMES",
+            'Mega Man 2 MAGNET 2"x3" Refrigerator Locker Nintendo NES FREE SHIP Game Box',
+            "Original OEM SPR-003 Battery Replacement 1750mAh For New Nintendo 3DS XL Console",
+            "Super Nintendo SNES Cartridge Dust Cover sleeve case replacement 6 pc GGG0018",
+        ):
+            with self.subTest(title=title):
+                self.assertEqual(classify_listing_item(title).kind, "accessory")
+
+    def test_a_manual_alone_is_not_the_game(self) -> None:
+        for title in (
+            "Pokemon Yellow Game Boy Manual DMG-APSE-USA-2 & Player's Offer Insert OEM",
+            "kirbys adventure nes manual",
+            "Mario Paint (Super Nintendo SNES) Original Instruction Manual",
+            "PlayStation 1 PS1 PSX Black Label Manual Lot Of 12 Smurfs Harry Potter Clean",
+        ):
+            with self.subTest(title=title):
+                self.assertEqual(classify_listing_item(title).kind, "accessory")
+
+    def test_saying_whether_the_manual_comes_is_talking_about_the_game(self) -> None:
+        for title in (
+            "Alone In The Dark: The New Nightmare Nintendo Gameboy Color GBC with Manual",
+            "Driver 2 PlayStation 1 PS1 No Manual",
+            "Tomb Raider 3 III PS1 W/ Manual - No Rear Art - PlayStation",
+            "Super Mario 64 complete with manual N64",
+        ):
+            with self.subTest(title=title):
+                self.assertEqual(classify_listing_item(title).kind, "game")
+
+    def test_a_game_named_with_numbers_is_not_a_measurement(self) -> None:
+        title = "PS1 Game Lot Test Drive Off-Road TNN Hardcore 4x4 Putter Golf Disc Bundle"
+        self.assertEqual(classify_listing_item(title).kind, "lot")
+
+    def test_a_lot_names_games_even_with_a_case_or_an_adapter(self) -> None:
+        self.assertTrue(names_games("Nintendo 64 N64 Game Lot Tarzan Bug's Life Supercross 2000 + Adapter"))
+        self.assertTrue(names_games("Nintendo Game Boy Mixed Lot Dr. vintage Cartridges + Carrying Case TESTED"))
+        self.assertFalse(names_games("LOT OF 9 ORIGINAL GAME BOY CARTRIDGE DUST CASES"))
+        self.assertFalse(names_games("Lot2 New 1MB Memory Card For Playstation 1 One PS1 PSX Game 1 MB Fast Shipping"))
 
 
 class VariablePriceTests(unittest.TestCase):
