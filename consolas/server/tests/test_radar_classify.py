@@ -137,6 +137,7 @@ class MerchandiseTests(unittest.TestCase):
             "Kirby's Dream Land 3 Original Instructional Booklet SNES RARE - VERY GOOD/CLEAN",
             "Mega Man 2 Plug and Play TV Arcade NES Style MSI/Capcom Video Game",
             "Playstation 2 Power Reset Button Flex Cable Ribbon SCPH-50001 PS2 Fat New 12 Pin",
+            "SNES Super Nintendo System Cleaning Kit In Box OEM Official CIB Complete Receipt",
         ):
             with self.subTest(title=title):
                 self.assertEqual(classify_listing_item(title).kind, "accessory")

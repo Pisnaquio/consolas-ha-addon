@@ -104,6 +104,8 @@ PART_MARKERS = (
     # Cable SCPH-50001» se leía como una PS2 de cinco dólares.
     r"\bflex\s+(?:cable|ribbon)s?\b",
     r"\bribbon\s+cables?\b",
+    # «SNES System Cleaning Kit In Box» es un kit, no una consola en caja.
+    r"\bcleaning\s+(?:kits?|cartridges?|cards?)\b",
     r"\b(?:power|reset|eject|open)\s+(?:reset\s+)?buttons?\b",
     r"\bmagnets?\b",
     r"\b(?:wall|pixel|box)\s+art\b",
