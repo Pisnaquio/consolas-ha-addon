@@ -603,6 +603,27 @@ class ExcludedRegionTests(unittest.TestCase):
         item.description = "Plays US games. Not compatible with Japanese Super Famicom cartridges."
         self.assertTrue(evaluate_match(item, self.criteria).matched)
 
+    def test_shipped_from_japan_counts_as_japanese(self) -> None:
+        item = listing("Nintendo 3DS Cosmo Black Handheld Console System Complete in Box Used")
+        item.location_label = "JP"
+        self.assertFalse(evaluate_match(item, self.criteria).matched)
+
+    def test_ll_is_the_japanese_xl(self) -> None:
+        self.assertFalse(
+            evaluate_match(listing("Nintendo 3DS LL XL Console Various Colors Region Locked S Rank"), self.criteria).matched
+        )
+
+    def test_a_region_free_japanese_unit_is_still_japanese(self) -> None:
+        """La excepción del perfil la pide el dueño; el radar no la propone."""
+        item = listing("Region-free Sony PS2 Slim console, tested and working, color options available")
+        item.location_label = "JP"
+        self.assertFalse(evaluate_match(item, self.criteria).matched)
+
+    def test_an_american_console_shipped_from_the_us_passes(self) -> None:
+        item = listing("Nintendo 3DS Aqua Blue Handheld Console Charger Tested US Model")
+        item.location_label = "US"
+        self.assertTrue(evaluate_match(item, self.criteria).matched)
+
     def test_other_regions_still_pass(self) -> None:
         self.assertTrue(evaluate_match(listing("Sega Mega Drive PAL Europe Console"), self.criteria).matched)
 

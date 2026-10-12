@@ -63,6 +63,8 @@ REGION_SIGNALS = {
     "ntsc-j": (
         "ntsc-j", "japan", "japanese", "jp region", "jpn", "japon", "japonesa",
         "super famicom", "famicom", "sfc", "jp",
+        # «3DS LL» es el nombre japonés de la 3DS XL.
+        "ll",
     ),
     "pal": ("pal", "europe", "european", "uk region", "australia"),
     "ntsc-u/c": ("ntsc-u", "ntsc u", "usa", "us region", "american", "north america"),
@@ -382,11 +384,20 @@ def evaluate_match(
     # las japonesas, que no puede jugar (formato de cartucho e idioma). Se lee
     # sólo el título, y sin «made in Japan»: la mitad de las consolas americanas
     # se fabricaron allá y lo dicen.
+    #
+    # Lo que se envía desde Japón cuenta como japonés aunque el título no lo
+    # diga: medido el 2026-10-12, 23 publicaciones despachadas desde allá
+    # —3DS «LL», N64 y PS2— pasaban porque sólo se miraba el título. Las
+    # «region free» también quedan afuera: son japonesas modificadas, y la
+    # excepción del perfil para una así es algo que el dueño pide, no algo que
+    # el radar le propone.
     excluded_regions = [str(region) for region in criteria.get("excludeRegions") or []]
     if excluded_regions:
-        title_region = detect_region(normalize(listing.title).replace("made in japan", " "))
-        if title_region in excluded_regions:
-            verdict.blockers.append(f"Es una edición {title_region.upper()} y la búsqueda excluye esa región")
+        region = detect_region(normalize(listing.title).replace("made in japan", " "))
+        if not region and str(listing.location_label or "").strip().upper() == "JP":
+            region = "ntsc-j"
+        if region in excluded_regions:
+            verdict.blockers.append(f"Es una edición {region.upper()} y la búsqueda excluye esa región")
 
     # --- Requisitos que la fuente todavía no puede confirmar -------------------
 
