@@ -421,7 +421,10 @@
     const rows = targets
       .map((target) => {
         const ceiling = repository.formatAmount(target.maxItemPrice, currency);
-        return `<li>${escapeHtml(target.name || target.query)}${ceiling ? ` · hasta ${escapeHtml(ceiling)}` : ""}</li>`;
+        const boxed = repository.formatAmount(target.maxBoxedPrice, currency);
+        return `<li>${escapeHtml(target.name || target.query)}${ceiling ? ` · hasta ${escapeHtml(ceiling)}` : ""}${
+          boxed ? ` · en caja hasta ${escapeHtml(boxed)}` : ""
+        }</li>`;
       })
       .join("");
     return `<details class="radar-notes radar-title-targets">

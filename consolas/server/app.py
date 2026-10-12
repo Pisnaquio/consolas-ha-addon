@@ -56,13 +56,13 @@ from radar.valuation import (  # noqa: E402
     sold_comparables_link,
 )
 from radar.classify import classify_listing_item, detect_console_variant, detect_lot_size  # noqa: E402
-from radar.matching import best_title_target, evaluate_match  # noqa: E402
+from radar.matching import best_title_target, detect_completeness, evaluate_match, normalize  # noqa: E402
 from radar.model import MarketplaceListing  # noqa: E402
 from radar.sources import registry as radar_registry  # noqa: E402
 
 
 SERVICE_NAME = "consolas-server"
-SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.64")
+SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.65")
 DEFAULT_DATA_DIR = "/data"
 DEFAULT_STATIC_DIR = "/app/web"
 DATABASE_NAME = "consolas.sqlite"
@@ -2870,6 +2870,7 @@ def normalize_radar_title_targets(value: Any) -> list[dict[str, Any]]:
                 "gameId": normalize_radar_text(item.get("gameId"), "titleTargets.gameId", 120, required=False),
                 "name": normalize_radar_text(item.get("name"), "titleTargets.name", 200, required=False),
                 "maxItemPrice": normalize_radar_amount(item.get("maxItemPrice"), "titleTargets.maxItemPrice"),
+                "maxBoxedPrice": normalize_radar_amount(item.get("maxBoxedPrice"), "titleTargets.maxBoxedPrice"),
             }
         )
     if len(targets) > RADAR_MAX_TITLE_TARGETS:
@@ -2890,18 +2891,33 @@ def radar_title_target(criteria: dict[str, Any], query: Any) -> dict[str, Any] |
     return None
 
 
-def radar_query_criteria(criteria: dict[str, Any], query: Any) -> dict[str, Any]:
+def radar_query_criteria(
+    criteria: dict[str, Any], query: Any, *, completeness: str | None = None
+) -> dict[str, Any]:
     """Los criterios con los que se juzga lo que trajo una consulta concreta.
 
     El techo de un título nunca afloja el de la búsqueda: manda el más bajo de
     los dos. Así el techo general del dueño sigue siendo el límite y cada
     título sólo puede ajustarlo hacia abajo.
+
+    Un título puede tener además un techo para copias en caja: el del catálogo
+    es de copia suelta, y con él un Super Mario World CIB de 60 dólares no
+    llegaba nunca. `completeness` dice qué declara la publicación; sin ella
+    —cuando se le pide a la fuente— vale el más alto de los dos techos, para
+    que la fuente traiga ambas y el juicio por publicación decida.
     """
 
     target = radar_title_target(criteria, query)
     if target is None or target.get("maxItemPrice") is None:
         return criteria
-    ceiling = float(target["maxItemPrice"])
+    loose = float(target["maxItemPrice"])
+    boxed = target.get("maxBoxedPrice")
+    if boxed is None:
+        ceiling = loose
+    elif completeness is None:
+        ceiling = max(loose, float(boxed))
+    else:
+        ceiling = float(boxed) if completeness in {"cib", "boxed", "sealed"} else loose
     general = criteria.get("maxItemPrice")
     scoped = dict(criteria)
     scoped["maxItemPrice"] = ceiling if general is None else min(ceiling, float(general))
@@ -3931,7 +3947,22 @@ def valuate_radar_match(
     # con 3 kg de courier encima.
     item_kind = classify_listing_item(listing.title)
     scoped = usable_radar_references(references, entity_type, item_kind)
-    benchmark = pick_benchmark(scoped, completeness=completeness if completeness != "any" else "loose")
+    # Si la búsqueda acepta cualquier completitud, la vara es la de lo que la
+    # publicación declara: una consola en caja medida contra el precio de una
+    # suelta salía «cara» siempre, y el dueño quiere justamente ver las cajas.
+    # Una caja sin manual se mide como CIB antes que como suelta: está mucho
+    # más cerca de una que de la otra. Sin referencia para eso, se cae a la de
+    # copia suelta y la card lo avisa.
+    if completeness == "any":
+        declared = detect_completeness(normalize(listing.searchable_text()))
+        completeness = declared if declared in {"cib", "boxed", "sealed"} else "loose"
+    benchmark = pick_benchmark(scoped, completeness=completeness)
+    loose_fallback = False
+    if benchmark is None and completeness == "boxed":
+        benchmark = pick_benchmark(scoped, completeness="cib")
+    if benchmark is None and completeness != "loose":
+        benchmark = pick_benchmark(scoped, completeness="loose")
+        loose_fallback = benchmark is not None
     # Un lote con cantidad declarada se mide por pieza contra el techo propio.
     per_piece_reference = (
         lot_ceiling_benchmark(
@@ -3962,7 +3993,7 @@ def valuate_radar_match(
         match_confidence=verdict.confidence,
         match_reasons=verdict.reasons,
         match_unverified=verdict.unverified,
-        completeness=completeness if completeness != "any" else "loose",
+        completeness=completeness,
         seller_known=bool(listing.seller_label),
         # Un lote no recibe costo importado inventado: su peso depende de
         # cuántas piezas trae, y eso el título no lo dice.
@@ -3979,6 +4010,11 @@ def valuate_radar_match(
             criteria.get("targetItemPrice") if target_applies_to(item_kind, entity_type) else None
         ),
     )
+    if loose_fallback:
+        card.caveats.append(
+            f"Declara {completeness.upper()}, pero la única referencia es de copia suelta: "
+            "una copia con caja suele valer más, así que el veredicto exagera lo caro."
+        )
     # El benchmark que más falta es el de ventas cerradas, y el radar no lo
     # puede traer. Lo que sí puede es dejarlo a un click.
     card.sold_comparables = sold_comparables_link(sold_query)
@@ -4046,7 +4082,9 @@ def score_radar_pages(
             else:
                 target = radar_title_target(criteria, page_query)
                 query = page_query
-            listing_criteria = radar_query_criteria(criteria, query)
+            listing_criteria = radar_query_criteria(
+                criteria, query, completeness=detect_completeness(normalize(listing.searchable_text()))
+            )
             verdict = evaluate_match(
                 listing, listing_criteria, capabilities_by_source.get(listing.source_id, {}), expected_kind,
                 rejects_accessories=lot_search,
@@ -4116,6 +4154,7 @@ def radar_target_payload(target: dict[str, Any] | None, console_id: str) -> dict
         "consoleId": console_id,
         "name": str(target.get("name") or ""),
         "maxItemPrice": target.get("maxItemPrice"),
+        "maxBoxedPrice": target.get("maxBoxedPrice"),
     }
 
 

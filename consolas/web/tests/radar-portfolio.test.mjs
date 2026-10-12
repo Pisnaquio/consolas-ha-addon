@@ -92,6 +92,9 @@ test("la plantilla se vuelve una búsqueda con un objetivo por título", () => {
     [["a", 30], ["manual-1", 100], ["b", 60]]
   );
   assert.equal(search.searchQuery, "Juego A zeta");
+  // Una copia en caja llega hasta el techo general; uno sin precio ya está ahí.
+  assert.equal(search.criteria.titleTargets[0].maxBoxedPrice, 100);
+  assert.equal(search.criteria.titleTargets[1].maxBoxedPrice, undefined);
   assert.deepEqual(search.criteria.queries, ["Juego Manual zeta", "Juego B zeta"]);
   assert.deepEqual(search.criteria.anyTerms, ["zeta"]);
   assert.deepEqual(skipped.map((item) => item.name), ["Juego C: Edición"]);

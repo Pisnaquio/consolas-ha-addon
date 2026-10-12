@@ -103,6 +103,7 @@ CATALOG_CONSOLES = {
             "nombre": "Consola X",
             "precioPriceChart": 100,
             "precioEbaySold": 100,
+            "precioCIB": 200,
             "precioNotas": {"verificadoEn": "2026-10-01"},
         }
     ]
@@ -186,7 +187,10 @@ class TitleTargetCriteriaTests(RadarCatalogTestCase):
         )
         targets = created["criteria"]["titleTargets"]
         self.assertEqual(len(targets), 1)
-        self.assertEqual(targets[0], {"query": "Juego A zeta", "gameId": "juego-a", "name": "", "maxItemPrice": 30})
+        self.assertEqual(
+            targets[0],
+            {"query": "Juego A zeta", "gameId": "juego-a", "name": "", "maxItemPrice": 30, "maxBoxedPrice": None},
+        )
 
     def test_targets_must_be_objects(self) -> None:
         with self.assertRaises(ApiError):
@@ -487,6 +491,81 @@ class LotVerdictTests(RadarCatalogTestCase):
         (grande,) = [r for r in self.results(search["id"]) if r["externalId"] == "grande"]
         self.assertEqual(grande["valuation"]["benchmark"]["source"], "lot-ceiling")
         self.assertNotEqual(grande["band"], "caro")
+
+
+class BoxedVerdictTests(RadarCatalogTestCase):
+    """Una consola en caja se mide contra el precio en caja, no contra el de una suelta."""
+
+    def run_console(self, title: str, price: str) -> dict:
+        search = self.create(
+            {
+                "name": "Consola X lista",
+                "platform": "Consola X",
+                "searchType": "console",
+                "entityType": "console",
+                "entityId": "consola-x",
+                "searchQuery": "consola x console",
+                "criteria": {"resultLimit": 20},
+            }
+        )
+        self.run_with(search, {"consola x console": [ebay_summary("c-1", title, price)]})
+        (result,) = self.results(search["id"])
+        return result
+
+    def test_a_complete_in_box_console_is_judged_against_the_cib_price(self) -> None:
+        result = self.run_console("Consola X Console Complete in Box CIB tested", "190.00")
+        self.assertEqual(result["valuation"]["benchmark"]["value"], 200)
+        self.assertEqual(result["valuation"]["benchmark"]["completeness"], "cib")
+        self.assertNotEqual(result["band"], "caro")
+
+    def test_a_console_with_its_original_box_is_closer_to_cib_than_to_loose(self) -> None:
+        result = self.run_console("Consola X Console w Original Box tested", "180.00")
+        self.assertEqual(result["valuation"]["benchmark"]["value"], 200)
+
+    def test_a_loose_console_keeps_the_loose_price(self) -> None:
+        result = self.run_console("Consola X Console tested", "90.00")
+        self.assertEqual(result["valuation"]["benchmark"]["value"], 100)
+
+    def test_without_a_boxed_reference_it_says_the_verdict_overstates(self) -> None:
+        search = self.wishlist()
+        self.run_with(
+            search, {"Juego A zeta": [ebay_summary("a-cib", "Juego A Zeta CIB complete in box", "28.00")]}
+        )
+        (result,) = self.results(search["id"])
+        self.assertEqual(result["valuation"]["benchmark"]["completeness"], "loose")
+        self.assertTrue(any("exagera" in caveat for caveat in result["valuation"]["caveats"]))
+
+
+class BoxedCeilingTests(RadarCatalogTestCase):
+    """Una copia en caja tiene su propio techo: el del catálogo es de copia suelta."""
+
+    def boxed_wishlist(self) -> dict:
+        return self.wishlist(
+            titleTargets=[
+                {"query": "Juego A zeta", "gameId": "juego-a", "name": "Juego A", "maxItemPrice": 30, "maxBoxedPrice": 100},
+                {"query": "Juego B zeta", "gameId": "juego-b", "name": "Juego B", "maxItemPrice": 80},
+            ]
+        )
+
+    def test_the_source_is_asked_for_the_higher_of_both_ceilings(self) -> None:
+        seen = dict(self.run_with(self.boxed_wishlist(), {}))
+        self.assertEqual(seen["Juego A zeta"]["maxItemPrice"], 100)
+        self.assertEqual(seen["Juego B zeta"]["maxItemPrice"], 80)
+
+    def test_a_boxed_copy_uses_the_boxed_ceiling(self) -> None:
+        search = self.boxed_wishlist()
+        self.run_with(
+            search, {"Juego A zeta": [ebay_summary("a-cib", "Juego A Zeta CIB complete in box", "60.00")]}
+        )
+        (result,) = self.results(search["id"])
+        self.assertEqual(result["titleTarget"]["maxBoxedPrice"], 100)
+
+    def test_a_loose_copy_still_uses_the_loose_ceiling(self) -> None:
+        search = self.boxed_wishlist()
+        self.run_with(
+            search, {"Juego A zeta": [ebay_summary("a-suelto", "Juego A Zeta cartridge only", "60.00")]}
+        )
+        self.assertEqual(self.results(search["id"]), [])
 
 
 class PreferTermsTests(unittest.TestCase):
