@@ -45,21 +45,23 @@ if str(_SERVER_DIR) not in sys.path:
 from radar.master import propose_master_searches, rank_game, wanted_games  # noqa: E402
 from radar.valuation import (  # noqa: E402
     LotPiece,
+    bundle_adjusted_benchmark,
     lot_valuation,
     peer_listing_benchmark,
     pick_benchmark,
     reference_from_price_range,
     references_from_console_entry,
     score_listing,
+    sold_comparables_link,
 )
-from radar.classify import classify_listing_item, detect_console_variant  # noqa: E402
+from radar.classify import classify_listing_item, detect_console_variant, detect_lot_size  # noqa: E402
 from radar.matching import evaluate_match  # noqa: E402
 from radar.model import MarketplaceListing  # noqa: E402
 from radar.sources import registry as radar_registry  # noqa: E402
 
 
 SERVICE_NAME = "consolas-server"
-SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.60")
+SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.61")
 DEFAULT_DATA_DIR = "/data"
 DEFAULT_STATIC_DIR = "/app/web"
 DATABASE_NAME = "consolas.sqlite"
@@ -104,6 +106,8 @@ RADAR_MAX_TERM_LENGTH = 80
 # entrada se manda a cada fuente por separado y los resultados se unen.
 RADAR_MAX_QUERIES = 48
 RADAR_MAX_QUERY_LENGTH = 300
+# Un objetivo por consulta como máximo: la principal más las extra.
+RADAR_MAX_TITLE_TARGETS = RADAR_MAX_QUERIES + 1
 RADAR_DEFAULT_RESULT_LIMIT = 12
 RADAR_MAX_RESULT_LIMIT = 50
 RADAR_MIGRATION_CHASING_GAMES = "chasing_games_v1"
@@ -676,6 +680,28 @@ def init_db(config: AppConfig) -> None:
                    ON CONFLICT(id) DO UPDATE SET max_active_searches = excluded.max_active_searches""",
                 (seeded, utc_now()),
             )
+        # El destino de recepción. Sin él, la Browse API de eBay no devuelve
+        # opciones de envío para las publicaciones de envío CALCULADO, así que
+        # el radar guardaba envío desconocido y mostraba el precio del artículo
+        # como si fuera el total: un total corto es el peor error posible en una
+        # decisión de compra. El ZIP es preferencia privada server-side (PRD
+        # §15); la dirección completa nunca entra acá.
+        if "destination_country" not in preference_columns:
+            conn.execute("ALTER TABLE radar_preferences ADD COLUMN destination_country TEXT")
+        if "destination_zip" not in preference_columns:
+            conn.execute("ALTER TABLE radar_preferences ADD COLUMN destination_zip TEXT")
+        # Se siembra una sola vez y con marcador: si el dueño lo borra o lo
+        # cambia, no vuelve en el próximo arranque (misma lección que D2).
+        if not radar_migration_applied(conn, "radar_destination_v1"):
+            conn.execute(
+                """INSERT INTO radar_preferences (id, destination_country, destination_zip, updated_at)
+                   VALUES ('default', ?, ?, ?)
+                   ON CONFLICT(id) DO UPDATE SET
+                     destination_country = excluded.destination_country,
+                     destination_zip = excluded.destination_zip""",
+                (RADAR_DEFAULT_DESTINATION_COUNTRY, RADAR_DEFAULT_DESTINATION_ZIP, utc_now()),
+            )
+            mark_radar_migration(conn, "radar_destination_v1")
         purchase_columns = {
             str(row["name"]) for row in conn.execute("PRAGMA table_info(radar_purchases)").fetchall()
         }
@@ -709,6 +735,9 @@ def init_db(config: AppConfig) -> None:
             "score": "INTEGER",
             "band": "TEXT NOT NULL DEFAULT ''",
             "valuation_json": "TEXT NOT NULL DEFAULT '{}'",
+            # Qué título de la búsqueda encontró esta publicación, cuando la
+            # búsqueda persigue varios: es lo que «Registrar compra» escribe.
+            "target_json": "TEXT NOT NULL DEFAULT ''",
         }.items():
             if column_name not in match_columns:
                 conn.execute(f"ALTER TABLE radar_search_matches ADD COLUMN {column_name} {column_definition}")
@@ -2664,7 +2693,9 @@ def default_radar_criteria() -> dict[str, Any]:
         "includeTerms": [],
         "anyTerms": [],
         "excludeTerms": [],
+        "preferTerms": [],
         "queries": [],
+        "titleTargets": [],
         "region": "",
         "condition": "any",
         "completeness": "any",
@@ -2677,6 +2708,7 @@ def default_radar_criteria() -> dict[str, Any]:
         "maxTotalUsa": None,
         "targetItemPrice": None,
         "minLotSize": None,
+        "maxPricePerPiece": None,
         "resultLimit": RADAR_DEFAULT_RESULT_LIMIT,
     }
 
@@ -2796,6 +2828,85 @@ def radar_search_queries(search_query: Any, criteria: dict[str, Any]) -> list[st
     return queries
 
 
+def radar_query_key(value: Any) -> str:
+    """Cómo se reconoce una consulta: sin espacios de más ni mayúsculas."""
+    return " ".join(str(value or "").split()).strip().lower()
+
+
+def normalize_radar_title_targets(value: Any) -> list[dict[str, Any]]:
+    """Qué juego persigue cada consulta de una búsqueda de varios títulos.
+
+    Una búsqueda que persigue cuarenta títulos tenía un solo techo de precio y
+    ninguna referencia por título: un Super Mario World de 95 dólares entraba
+    porque el techo era 100, y se juzgaba contra la mediana de toda la corrida,
+    que mezcla un Chrono Trigger con un NBA Jam. Cada objetivo dice, para una
+    consulta, qué juego del catálogo es —para compararlo con su propio precio y
+    para que «Registrar compra» sepa qué escribir— y hasta cuánto vale la pena
+    pagarlo.
+
+    La consola del juego no va acá: es la de la búsqueda (`entityConsoleId`).
+    Un objetivo cuya consulta ya no existe en la búsqueda no rompe nada; sólo
+    deja de aplicarse.
+    """
+
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ApiError(HTTPStatus.BAD_REQUEST, "titleTargets must be a list of objects")
+    targets: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in value:
+        if not isinstance(item, dict):
+            raise ApiError(HTTPStatus.BAD_REQUEST, "titleTargets must be a list of objects")
+        query = normalize_radar_text(item.get("query"), "titleTargets.query", RADAR_MAX_QUERY_LENGTH)
+        key = radar_query_key(query)
+        if key in seen:
+            continue
+        seen.add(key)
+        targets.append(
+            {
+                "query": query,
+                "gameId": normalize_radar_text(item.get("gameId"), "titleTargets.gameId", 120, required=False),
+                "name": normalize_radar_text(item.get("name"), "titleTargets.name", 200, required=False),
+                "maxItemPrice": normalize_radar_amount(item.get("maxItemPrice"), "titleTargets.maxItemPrice"),
+            }
+        )
+    if len(targets) > RADAR_MAX_TITLE_TARGETS:
+        raise ApiError(
+            HTTPStatus.BAD_REQUEST, f"titleTargets accepts up to {RADAR_MAX_TITLE_TARGETS} targets"
+        )
+    return targets
+
+
+def radar_title_target(criteria: dict[str, Any], query: Any) -> dict[str, Any] | None:
+    """El objetivo declarado para esa consulta, si la búsqueda declaró uno."""
+    key = radar_query_key(query)
+    if not key:
+        return None
+    for target in criteria.get("titleTargets") or []:
+        if radar_query_key(target.get("query")) == key:
+            return target
+    return None
+
+
+def radar_query_criteria(criteria: dict[str, Any], query: Any) -> dict[str, Any]:
+    """Los criterios con los que se juzga lo que trajo una consulta concreta.
+
+    El techo de un título nunca afloja el de la búsqueda: manda el más bajo de
+    los dos. Así el techo general del dueño sigue siendo el límite y cada
+    título sólo puede ajustarlo hacia abajo.
+    """
+
+    target = radar_title_target(criteria, query)
+    if target is None or target.get("maxItemPrice") is None:
+        return criteria
+    ceiling = float(target["maxItemPrice"])
+    general = criteria.get("maxItemPrice")
+    scoped = dict(criteria)
+    scoped["maxItemPrice"] = ceiling if general is None else min(ceiling, float(general))
+    return scoped
+
+
 def normalize_radar_amount(value: Any, field: str) -> float | None:
     if value is None or value == "":
         return None
@@ -2830,11 +2941,13 @@ def normalize_radar_criteria(value: Any, base: dict[str, Any] | None = None) -> 
         return criteria
     if not isinstance(value, dict):
         raise ApiError(HTTPStatus.BAD_REQUEST, "criteria must be an object")
-    for field in ("includeTerms", "anyTerms", "excludeTerms"):
+    for field in ("includeTerms", "anyTerms", "excludeTerms", "preferTerms"):
         if field in value:
             criteria[field] = normalize_radar_terms(value.get(field), field)
     if "queries" in value:
         criteria["queries"] = normalize_radar_queries(value.get("queries"))
+    if "titleTargets" in value:
+        criteria["titleTargets"] = normalize_radar_title_targets(value.get("titleTargets"))
     if "region" in value:
         criteria["region"] = normalize_radar_text(value.get("region"), "region", 60, required=False)
     if "condition" in value:
@@ -2866,6 +2979,8 @@ def normalize_radar_criteria(value: Any, base: dict[str, Any] | None = None) -> 
         )
     if "minLotSize" in value:
         criteria["minLotSize"] = normalize_radar_count(value.get("minLotSize"), "minLotSize", 500)
+    if "maxPricePerPiece" in value:
+        criteria["maxPricePerPiece"] = normalize_radar_amount(value.get("maxPricePerPiece"), "maxPricePerPiece")
     if "resultLimit" in value:
         criteria["resultLimit"] = (
             normalize_radar_count(value.get("resultLimit"), "resultLimit", RADAR_MAX_RESULT_LIMIT)
@@ -3013,6 +3128,7 @@ def radar_result_row(row: sqlite3.Row) -> dict[str, Any]:
         "score": row["score"],
         "band": row["band"],
         "valuation": radar_json_field(row["valuation_json"], {}),
+        "titleTarget": radar_json_field(row["target_json"], None) if "target_json" in row.keys() else None,
         "reasons": reasons,
         "unverified": unverified,
         "matchedTerms": matched_terms,
@@ -3034,7 +3150,7 @@ def load_radar_search(conn: sqlite3.Connection, search_id: str) -> sqlite3.Row:
 
 RADAR_MATCH_SELECT = """
     SELECT l.*, m.search_id, m.listing_id, m.confidence, m.reasons_json, m.blockers_json,
-           m.unverified_json, m.matched_terms_json, m.score, m.band, m.valuation_json,
+           m.unverified_json, m.matched_terms_json, m.score, m.band, m.valuation_json, m.target_json,
            m.first_seen_at AS match_first_seen_at, m.last_seen_at AS match_last_seen_at
       FROM radar_search_matches m
       JOIN radar_listings l ON l.id = m.listing_id
@@ -3498,8 +3614,15 @@ def collect_radar_source_pages(
 
     Una publicación que aparece en dos consultas entra una sola vez: dos
     consultas son dos formas de encontrar la misma cosa, no dos oportunidades.
+
+    Cada consulta viaja con sus propios criterios: si su título tiene un techo
+    más bajo que el de la búsqueda, la fuente ya filtra por ese techo y no
+    devuelve cincuenta copias que se van a descartar después.
     """
 
+    # El destino sale de las preferencias, no de los criterios de la búsqueda:
+    # es dónde recibe el dueño, no qué está buscando. Una sola vez por corrida.
+    destination = radar_destination(config)
     pages: list[Any] = []
     receipts: list[dict[str, Any]] = []
     for source_id in executable_radar_sources(sources):
@@ -3511,7 +3634,7 @@ def collect_radar_source_pages(
             started_at = utc_now()
             try:
                 adapter = spec.load()
-                page = adapter.search(config, query, criteria)
+                page = adapter.search(config, query, radar_query_criteria(criteria, query), destination)
             except Exception as error:  # el adapter es código aislado: nunca tumba la corrida
                 receipts.append(
                     {
@@ -3597,19 +3720,27 @@ def upsert_radar_listing(conn: sqlite3.Connection, listing: MarketplaceListing, 
 _FECHA_EN_NOTA = re.compile(r"\b(\d{4}-\d{2}-\d{2})\b")
 
 
+def radar_catalog_games(config: AppConfig, console_id: str) -> list[dict[str, Any]]:
+    """Los juegos de catálogo de una consola, o lista vacía si no hay."""
+
+    if not console_id:
+        return []
+    path = config.static_dir / "data" / "console-games.json"
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    bucket = ((payload.get("byConsole") or {}).get(console_id) or {}) if isinstance(payload, dict) else {}
+    return [entry for entry in bucket.get("juegosCatalogo") or [] if isinstance(entry, dict)]
+
+
 def radar_game_price_reference(config: AppConfig, console_id: str, game_id: str) -> Any:
     """El precio que el catálogo ya tiene para ese juego, si lo tiene."""
 
     if not console_id or not game_id:
         return None
-    path = config.static_dir / "data" / "console-games.json"
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return None
-    bucket = ((payload.get("byConsole") or {}).get(console_id) or {}) if isinstance(payload, dict) else {}
-    for entry in bucket.get("juegosCatalogo") or []:
-        if not isinstance(entry, dict) or str(entry.get("id") or "") != game_id:
+    for entry in radar_catalog_games(config, console_id):
+        if str(entry.get("id") or "") != game_id:
             continue
         price_range = entry.get("priceRange")
         notes = str((price_range or {}).get("notes") or "")
@@ -3618,6 +3749,38 @@ def radar_game_price_reference(config: AppConfig, console_id: str, game_id: str)
             price_range, entity_id=game_id, observed_at=found.group(1) if found else ""
         )
     return None
+
+
+# Un bundle de consola se compara contra la consola más sus juegos, y para eso
+# hace falta cuánto vale un juego cualquiera de esa consola. Se usa el cuartil
+# bajo del precio mínimo del catálogo: los juegos que vienen con una consola
+# usada son casi siempre los más comunes, no los que el catálogo destaca.
+RADAR_BUNDLE_MIN_CATALOG_GAMES = 5
+# Más allá de esto, el número cuenta un lote entero que viene de regalo, y el
+# valor de un lote no se estima sumando piezas que nadie eligió.
+RADAR_BUNDLE_MAX_GAMES = 10
+
+
+def radar_bundle_game_value(config: AppConfig, console_id: str) -> dict[str, Any] | None:
+    """Cuánto vale, siendo prudentes, un juego cualquiera que viene con la consola.
+
+    `None` cuando el catálogo de esa consola no tiene suficientes precios para
+    decirlo: sin dato, el bundle se compara contra la consola sola y la card lo
+    avisa, en vez de inventar cuánto valen sus juegos.
+    """
+
+    lows = sorted(
+        amount
+        for amount in (
+            radar_listing_amount((entry.get("priceRange") or {}).get("low"))
+            for entry in radar_catalog_games(config, console_id)
+            if isinstance(entry.get("priceRange"), dict)
+        )
+        if amount is not None and amount > 0
+    )
+    if len(lows) < RADAR_BUNDLE_MIN_CATALOG_GAMES:
+        return None
+    return {"value": lows[len(lows) // 4], "sample": len(lows)}
 
 
 def radar_entity_references(
@@ -3757,7 +3920,8 @@ def target_applies_to(item_kind: Any, entity_type: str) -> bool:
 
 def valuate_radar_match(
     listing: MarketplaceListing, verdict: Any, criteria: dict[str, Any], references: list[Any],
-    entity_type: str = "", console_weight: Any = None,
+    entity_type: str = "", console_weight: Any = None, sold_query: str = "",
+    bundle_game_value: dict[str, Any] | None = None,
 ) -> Any:
     """Puntúa una coincidencia que ya pasó los filtros obligatorios."""
     completeness = str(criteria.get("completeness") or "any")
@@ -3767,7 +3931,16 @@ def valuate_radar_match(
     item_kind = classify_listing_item(listing.title)
     scoped = usable_radar_references(references, entity_type, item_kind)
     benchmark = pick_benchmark(scoped, completeness=completeness if completeness != "any" else "loose")
-    return score_listing(
+    # Una consola que trae juegos se compara contra la consola más sus juegos.
+    if item_kind.kind == "console" and bundle_game_value:
+        benchmark = bundle_adjusted_benchmark(
+            benchmark,
+            declared_games=detect_lot_size(listing.title),
+            game_value=bundle_game_value.get("value"),
+            catalog_sample=int(bundle_game_value.get("sample") or 0),
+            max_games=RADAR_BUNDLE_MAX_GAMES,
+        )
+    card = score_listing(
         price_amount=listing.price_amount,
         shipping_amount=listing.shipping_amount,
         currency=listing.price_currency or str(criteria.get("currency") or "USD"),
@@ -3792,6 +3965,10 @@ def valuate_radar_match(
             criteria.get("targetItemPrice") if target_applies_to(item_kind, entity_type) else None
         ),
     )
+    # El benchmark que más falta es el de ventas cerradas, y el radar no lo
+    # puede traer. Lo que sí puede es dejarlo a un click.
+    card.sold_comparables = sold_comparables_link(sold_query)
+    return card
 
 
 def score_radar_pages(
@@ -3801,22 +3978,27 @@ def score_radar_pages(
     sources: list[str],
     pages: list[Any],
     now: str,
-) -> tuple[list[tuple[MarketplaceListing, Any, Any]], int]:
+) -> tuple[list[tuple[MarketplaceListing, Any, Any, dict[str, Any] | None]], int]:
     """Evalúa y valúa lo que trajeron las fuentes, sin tocar la base.
 
     Vive separado de `execute_radar_search` porque la previsualización tiene que
     contestar exactamente lo mismo que contestaría una corrida real: si el
     veredicto de una previa se calculara por otro camino, la previa dejaría de
     ser una previa.
+
+    Cada resultado lleva, además, el objetivo de título que lo encontró (o
+    `None`): en una búsqueda de varios títulos, una publicación se juzga con el
+    techo y el precio de su juego, no con los de la búsqueda entera.
     """
 
     capabilities_by_source = {source_id: radar_source_capabilities(source_id) for source_id in sources}
-    expected_kind = radar_expected_item_kind(str(row["search_type"]), str(row["entity_type"]))
-    console_weight = radar_console_weight_declaration(config, str(row["entity_id"]))
-    references = radar_entity_references(
-        config, str(row["entity_type"]), str(row["entity_id"]),
-        str(row["entity_console_id"] if "entity_console_id" in row.keys() else ""),
-    )
+    entity_type = str(row["entity_type"])
+    entity_id = str(row["entity_id"])
+    entity_console_id = str(row["entity_console_id"] if "entity_console_id" in row.keys() else "")
+    expected_kind = radar_expected_item_kind(str(row["search_type"]), entity_type)
+    console_weight = radar_console_weight_declaration(config, entity_id)
+    references = radar_entity_references(config, entity_type, entity_id, entity_console_id)
+    bundle_value = radar_bundle_game_value(config, entity_id) if entity_type == "console" else None
     # Sin catálogo de precios para esta entidad, las publicaciones de esta misma
     # corrida son la única referencia disponible. Entra al final de la lista: la
     # preferencia de fuentes ya la deja por debajo de cualquier curada.
@@ -3824,41 +4006,86 @@ def score_radar_pages(
     # tipo que persigue. Antes promediaba todo lo que devolvía la fuente,
     # incluidas las publicaciones que la propia búsqueda había rechazado: una
     # búsqueda de consolas se comparaba contra los juegos sueltos que descartó.
-    matched: list[tuple[MarketplaceListing, Any]] = []
+    #
+    # Con objetivos de título, los pares se agrupan por título: la mediana de
+    # cinco Super Mario World dice algo; la de un Super Mario World con un
+    # Chrono Trigger, no.
+    matched: list[tuple[MarketplaceListing, Any, dict[str, Any] | None, dict[str, Any], str]] = []
     rejected = 0
     for page in pages:
+        query = str(page.receipt.query if page.receipt else "")
+        target = radar_title_target(criteria, query)
+        page_criteria = radar_query_criteria(criteria, query)
         for listing in page.listings:
             verdict = evaluate_match(
-                listing, criteria, capabilities_by_source.get(listing.source_id, {}), expected_kind
+                listing, page_criteria, capabilities_by_source.get(listing.source_id, {}), expected_kind
             )
             if verdict.matched:
-                matched.append((listing, verdict))
+                matched.append((listing, verdict, target, page_criteria, query))
             else:
                 rejected += 1
 
-    peers = peer_listing_benchmark(
-        [
-            listing.price_amount
-            for listing, _ in matched
-            if listing.price_amount
-            and (not expected_kind or classify_listing_item(listing.title).kind == expected_kind)
-        ],
-        entity_id=str(row["entity_id"]) or str(row["id"]),
-        completeness=str(criteria.get("completeness") or "loose"),
-        observed_at=now,
-    )
-    if peers is not None:
-        references = [*references, peers]
+    def group_key(target: dict[str, Any] | None) -> str:
+        return radar_query_key(target.get("query")) if target else ""
+
+    peer_prices: dict[str, list[float]] = {}
+    for listing, _, target, _, _ in matched:
+        if listing.price_amount and (
+            not expected_kind or classify_listing_item(listing.title).kind == expected_kind
+        ):
+            peer_prices.setdefault(group_key(target), []).append(listing.price_amount)
+
+    references_by_group: dict[str, list[Any]] = {}
+
+    def group_references(target: dict[str, Any] | None) -> list[Any]:
+        key = group_key(target)
+        if key in references_by_group:
+            return references_by_group[key]
+        base = references
+        peer_entity = entity_id or str(row["id"])
+        if target:
+            game_id = str(target.get("gameId") or "")
+            reference = radar_game_price_reference(config, entity_console_id, game_id) if game_id else None
+            base = [reference] if reference else []
+            peer_entity = game_id or str(target.get("query") or "")
+        peers = peer_listing_benchmark(
+            peer_prices.get(key, []),
+            entity_id=peer_entity,
+            completeness=str(criteria.get("completeness") or "loose"),
+            observed_at=now,
+        )
+        references_by_group[key] = [*base, peers] if peers is not None else list(base)
+        return references_by_group[key]
 
     scored = [
         (
             listing,
             verdict,
-            valuate_radar_match(listing, verdict, criteria, references, expected_kind, console_weight),
+            valuate_radar_match(
+                listing, verdict, page_criteria, group_references(target), expected_kind, console_weight,
+                # Ventas cerradas de lo que encontró esta publicación: en una
+                # búsqueda de varios títulos, ese título y no la consulta principal.
+                sold_query=query or str(row["search_query"] or ""),
+                bundle_game_value=bundle_value,
+            ),
+            radar_target_payload(target, entity_console_id),
         )
-        for listing, verdict in matched
+        for listing, verdict, target, page_criteria, query in matched
     ]
     return scored, rejected
+
+
+def radar_target_payload(target: dict[str, Any] | None, console_id: str) -> dict[str, Any] | None:
+    """El objetivo tal como se guarda junto a la coincidencia y viaja a la UI."""
+    if not target:
+        return None
+    return {
+        "query": str(target.get("query") or ""),
+        "gameId": str(target.get("gameId") or ""),
+        "consoleId": console_id,
+        "name": str(target.get("name") or ""),
+        "maxItemPrice": target.get("maxItemPrice"),
+    }
 
 
 def preview_radar_search(config: AppConfig, search_id: Any) -> dict[str, Any]:
@@ -3913,12 +4140,15 @@ def preview_radar_search(config: AppConfig, search_id: Any) -> dict[str, Any]:
         "checkedAt": now,
         "receipts": receipts,
         "results": [
-            radar_preview_result(listing, verdict, card) for listing, verdict, card in ranked[:limit]
+            radar_preview_result(listing, verdict, card, target)
+            for listing, verdict, card, target in ranked[:limit]
         ],
     }
 
 
-def radar_preview_result(listing: MarketplaceListing, verdict: Any, card: Any) -> dict[str, Any]:
+def radar_preview_result(
+    listing: MarketplaceListing, verdict: Any, card: Any, target: dict[str, Any] | None = None
+) -> dict[str, Any]:
     """La forma mínima de un resultado que nunca se guardó.
 
     No lleva `id` de listing ni fechas de inventario a propósito: nada de esto
@@ -3951,6 +4181,7 @@ def radar_preview_result(listing: MarketplaceListing, verdict: Any, card: Any) -
         "reasons": list(verdict.reasons),
         "unverified": list(verdict.unverified),
         "matchedTerms": list(verdict.matched_terms),
+        "titleTarget": target,
     }
 
 
@@ -4008,19 +4239,21 @@ def execute_radar_search(config: AppConfig, target_id: str, run_id: str = "") ->
     matched_ids: list[str] = []
 
     with _RADAR_LOCK, connect_db(config) as conn:
-        for listing, verdict, card in scored:
+        for listing, verdict, card, title_target in scored:
             listing_id = upsert_radar_listing(conn, listing, now)
             conn.execute(
                 """
                 INSERT INTO radar_search_matches (
                   search_id, listing_id, confidence, reasons_json, blockers_json, unverified_json,
-                  matched_terms_json, score, band, valuation_json, is_active, first_seen_at, last_seen_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+                  matched_terms_json, score, band, valuation_json, target_json, is_active,
+                  first_seen_at, last_seen_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
                 ON CONFLICT(search_id, listing_id) DO UPDATE SET
                   confidence=excluded.confidence, reasons_json=excluded.reasons_json,
                   blockers_json=excluded.blockers_json, unverified_json=excluded.unverified_json,
                   matched_terms_json=excluded.matched_terms_json, score=excluded.score,
-                  band=excluded.band, valuation_json=excluded.valuation_json, is_active=1,
+                  band=excluded.band, valuation_json=excluded.valuation_json,
+                  target_json=excluded.target_json, is_active=1,
                   last_seen_at=excluded.last_seen_at
                 """,
                 (
@@ -4031,6 +4264,7 @@ def execute_radar_search(config: AppConfig, target_id: str, run_id: str = "") ->
                     json.dumps(verdict.matched_terms, ensure_ascii=False),
                     card.score, card.band,
                     json.dumps(card.to_dict(), ensure_ascii=False, separators=(",", ":")),
+                    json.dumps(title_target, ensure_ascii=False, separators=(",", ":")) if title_target else "",
                     now, now,
                 ),
             )
@@ -4147,6 +4381,7 @@ def create_manual_radar_listing(config: AppConfig, payload: Any) -> dict[str, An
         listing, verdict, criteria, references,
         radar_expected_item_kind(str(row["search_type"]), str(row["entity_type"])),
         radar_console_weight_declaration(config, str(row["entity_id"])),
+        sold_query=str(row["search_query"] or ""),
     )
     now = utc_now()
 
@@ -5016,6 +5251,10 @@ def clear_radar_decision(config: AppConfig, listing_id: Any) -> dict[str, Any]:
 # feed. Pasado cierto punto el feed deja de ser una lista de decisiones y pasa
 # a ser un volcado que nadie lee.
 RADAR_DEFAULT_MAX_ACTIVE = 25
+# Destino de recepción por defecto: Miami, Florida (PRD §24, decisión cerrada).
+# Es el ZIP y nada más — la dirección completa es privada y no vive en el repo.
+RADAR_DEFAULT_DESTINATION_COUNTRY = "US"
+RADAR_DEFAULT_DESTINATION_ZIP = "33166"
 RADAR_MAX_PENDING_DRAFTS = 12
 
 
@@ -5025,16 +5264,55 @@ def radar_preferences_row(row: sqlite3.Row | None) -> dict[str, Any]:
             "monthlyBudgetUsd": None,
             "currency": "USD",
             "maxActiveSearches": RADAR_DEFAULT_MAX_ACTIVE,
+            "destinationCountry": "",
+            "destinationZip": "",
             "updatedAt": None,
         }
     keys = row.keys()
     cap = row["max_active_searches"] if "max_active_searches" in keys else None
+    country = row["destination_country"] if "destination_country" in keys else None
+    zip_code = row["destination_zip"] if "destination_zip" in keys else None
     return {
         "monthlyBudgetUsd": row["monthly_budget_usd"],
         "currency": "USD",
         "maxActiveSearches": int(cap) if cap is not None else RADAR_DEFAULT_MAX_ACTIVE,
+        "destinationCountry": str(country or ""),
+        "destinationZip": str(zip_code or ""),
         "updatedAt": row["updated_at"],
     }
+
+
+def normalize_radar_destination_country(value: Any, field: str) -> str:
+    text = str(value or "").strip().upper()
+    if not text:
+        return ""
+    if len(text) != 2 or not text.isalpha():
+        raise ApiError(HTTPStatus.BAD_REQUEST, f"{field} must be a two-letter country code")
+    return text
+
+
+def normalize_radar_destination_zip(value: Any, field: str) -> str:
+    """Un ZIP, no una dirección. Se acepta el formato corto de EE.UU. y poco más."""
+    text = str(value or "").strip().upper()
+    if not text:
+        return ""
+    if len(text) > 10 or not all(char.isalnum() or char in {"-", " "} for char in text):
+        raise ApiError(HTTPStatus.BAD_REQUEST, f"{field} must be a postal code")
+    return text
+
+
+def radar_destination(config: AppConfig) -> dict[str, str] | None:
+    """El destino que las fuentes usan para cotizar envío, o None si no está.
+
+    Devolver None es deliberado: sin destino, una fuente no debe inventar un
+    envío ni presentar el precio del artículo como total.
+    """
+    prefs = get_radar_preferences(config)
+    country = str(prefs.get("destinationCountry") or "")
+    zip_code = str(prefs.get("destinationZip") or "")
+    if not country:
+        return None
+    return {"country": country, "zip": zip_code}
 
 
 def get_radar_preferences(config: AppConfig) -> dict[str, Any]:
@@ -5047,11 +5325,19 @@ def update_radar_preferences(config: AppConfig, payload: Any) -> dict[str, Any]:
     """El monto es una preferencia privada, nunca un campo de colección (PRD §10.6)."""
     if not isinstance(payload, dict):
         raise ApiError(HTTPStatus.BAD_REQUEST, "JSON body must be an object")
-    monthly_budget = normalize_radar_amount(payload.get("monthlyBudgetUsd"), "monthlyBudgetUsd")
     now = utc_now()
     with _RADAR_LOCK, connect_db(config) as conn:
         current = radar_preferences_row(
             conn.execute("SELECT * FROM radar_preferences WHERE id = 'default'").fetchone()
+        )
+        # Una preferencia que no viene en el payload no se toca. Antes el monto
+        # se leía siempre, así que guardar el destino —o cualquier otra cosa—
+        # borraba el presupuesto sin que nadie lo pidiera. Mandar la clave con
+        # `null` sigue siendo la forma de vaciarlo a propósito.
+        monthly_budget = (
+            normalize_radar_amount(payload.get("monthlyBudgetUsd"), "monthlyBudgetUsd")
+            if "monthlyBudgetUsd" in payload
+            else current["monthlyBudgetUsd"]
         )
         # Bajar el techo no apaga nada: sólo frena la próxima activación. Apagar
         # búsquedas por un cambio de preferencia sería decidir por el usuario
@@ -5061,14 +5347,27 @@ def update_radar_preferences(config: AppConfig, payload: Any) -> dict[str, Any]:
             if "maxActiveSearches" in payload
             else current["maxActiveSearches"]
         )
+        country = (
+            normalize_radar_destination_country(payload.get("destinationCountry"), "destinationCountry")
+            if "destinationCountry" in payload
+            else current["destinationCountry"]
+        )
+        zip_code = (
+            normalize_radar_destination_zip(payload.get("destinationZip"), "destinationZip")
+            if "destinationZip" in payload
+            else current["destinationZip"]
+        )
         conn.execute(
-            """INSERT INTO radar_preferences (id, monthly_budget_usd, max_active_searches, updated_at)
-               VALUES ('default', ?, ?, ?)
+            """INSERT INTO radar_preferences
+                 (id, monthly_budget_usd, max_active_searches, destination_country, destination_zip, updated_at)
+               VALUES ('default', ?, ?, ?, ?, ?)
                ON CONFLICT(id) DO UPDATE SET
                  monthly_budget_usd=excluded.monthly_budget_usd,
                  max_active_searches=excluded.max_active_searches,
+                 destination_country=excluded.destination_country,
+                 destination_zip=excluded.destination_zip,
                  updated_at=excluded.updated_at""",
-            (monthly_budget, max_active, now),
+            (monthly_budget, max_active, country, zip_code, now),
         )
         row = conn.execute("SELECT * FROM radar_preferences WHERE id = 'default'").fetchone()
     return radar_preferences_row(row)
@@ -5123,7 +5422,7 @@ def radar_targeted_entities(
     come el cupo de la tanda sin crear nada.
     """
 
-    query = "SELECT search_type, entity_type, entity_id, entity_console_id FROM radar_searches"
+    query = "SELECT search_type, entity_type, entity_id, entity_console_id, criteria_json FROM radar_searches"
     conditions = []
     if not include_deleted:
         conditions.append("deleted_at IS NULL")
@@ -5144,10 +5443,20 @@ def radar_targeted_entities(
         if str(row["search_type"] or "") == "lot":
             if is_console_entity:
                 lots.add(entity_id)
+            # Un lote se vincula a su consola sin ser la consola: así «Registrar
+            # compra» de un lote nunca marca la consola como comprada.
+            elif console_id and not entity_id:
+                lots.add(console_id)
         elif is_console_entity:
             consoles.add(entity_id)
         if console_id and entity_id:
             games.add((console_id, entity_id))
+        # Una búsqueda de varios títulos persigue cada juego de sus objetivos.
+        if console_id:
+            criteria = radar_json_field(row["criteria_json"], {}) if "criteria_json" in row.keys() else {}
+            for target in criteria.get("titleTargets") or []:
+                if isinstance(target, dict) and target.get("gameId"):
+                    games.add((console_id, str(target["gameId"])))
     return consoles, lots, games
 
 
@@ -5559,31 +5868,47 @@ RADAR_FEED_SELECT = """
 
 def radar_match_reasons(conn: sqlite3.Connection, listing_id: str) -> list[dict[str, Any]]:
     rows = conn.execute(
-        """SELECT m.search_id, m.confidence, m.reasons_json, m.unverified_json, s.name AS search_name,
-                  s.entity_type, s.entity_id, s.entity_console_id
+        """SELECT m.search_id, m.confidence, m.reasons_json, m.unverified_json, m.target_json,
+                  s.name AS search_name, s.entity_type, s.entity_id, s.entity_console_id
              FROM radar_search_matches m
              JOIN radar_searches s ON s.id = m.search_id AND s.deleted_at IS NULL
             WHERE m.listing_id = ? AND m.is_active = 1
             ORDER BY m.confidence DESC""",
         (listing_id,),
     ).fetchall()
-    return [
-        {
-            "searchId": row["search_id"],
-            "searchName": row["search_name"],
-            "confidence": row["confidence"],
-            "reasons": radar_json_field(row["reasons_json"], []),
-            "unverified": radar_json_field(row["unverified_json"], []),
-            # Qué escribiría "Registrar compra" si se confirma esta oportunidad.
-            # Vacío cuando la búsqueda no está vinculada a nada del catálogo.
-            # Para un juego hace falta el par completo: sin `entityConsoleId`
-            # no se sabe a qué biblioteca escribirlo, y la UI no lo ofrece.
-            "entityType": row["entity_type"] or "",
-            "entityId": row["entity_id"] or "",
-            "entityConsoleId": (row["entity_console_id"] or "") if "entity_console_id" in row.keys() else "",
-        }
-        for row in rows
-    ]
+    return [radar_match_reason_row(row) for row in rows]
+
+
+def radar_match_reason_row(row: sqlite3.Row) -> dict[str, Any]:
+    entity_type = row["entity_type"] or ""
+    entity_id = row["entity_id"] or ""
+    entity_console_id = (row["entity_console_id"] or "") if "entity_console_id" in row.keys() else ""
+    entity_name = ""
+    # En una búsqueda de varios títulos, la entidad es el juego que encontró
+    # esta publicación, no la búsqueda entera: «Deseados de SNES» no es algo
+    # que se pueda marcar como comprado, «Super Mario World» sí.
+    target = radar_json_field(row["target_json"], None) if "target_json" in row.keys() else None
+    if target and target.get("gameId") and target.get("consoleId"):
+        entity_type = "game"
+        entity_id = str(target["gameId"])
+        entity_console_id = str(target["consoleId"])
+        entity_name = str(target.get("name") or "")
+    return {
+        "searchId": row["search_id"],
+        "searchName": row["search_name"],
+        "confidence": row["confidence"],
+        "reasons": radar_json_field(row["reasons_json"], []),
+        "unverified": radar_json_field(row["unverified_json"], []),
+        # Qué escribiría "Registrar compra" si se confirma esta oportunidad.
+        # Vacío cuando la búsqueda no está vinculada a nada del catálogo.
+        # Para un juego hace falta el par completo: sin `entityConsoleId`
+        # no se sabe a qué biblioteca escribirlo, y la UI no lo ofrece.
+        "entityType": entity_type,
+        "entityId": entity_id,
+        "entityConsoleId": entity_console_id,
+        "entityName": entity_name,
+        "titleTarget": target,
+    }
 
 
 def read_radar_decisions(conn: sqlite3.Connection) -> dict[str, dict[str, Any]]:

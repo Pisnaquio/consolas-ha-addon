@@ -51,7 +51,13 @@ class RadarSource(Protocol):
     source_id: str
     label: str
 
-    def search(self, config: Any, query: str, criteria: dict[str, Any]) -> SourcePage: ...
+    def search(
+        self,
+        config: Any,
+        query: str,
+        criteria: dict[str, Any],
+        destination: dict[str, str] | None = None,
+    ) -> SourcePage: ...
 
     def health(self, config: Any) -> SourceHealth: ...
 

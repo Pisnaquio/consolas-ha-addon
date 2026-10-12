@@ -91,6 +91,32 @@ class ClassifyListingItemTests(unittest.TestCase):
         self.assertEqual(item.weighable, "")
 
 
+class SystemComboTests(unittest.TestCase):
+    """«System» es como se publica un combo retro; «for … system», un accesorio."""
+
+    def test_a_system_with_controllers_is_a_console(self) -> None:
+        for title in (
+            "Super Nintendo SNES System with 2 controllers and 3 games",
+            "Nintendo 64 N64 System Bundle Controller",
+            "Sega Genesis System Model 1 with controllers",
+        ):
+            with self.subTest(title=title):
+                self.assertEqual(classify_listing_item(title).kind, "console")
+                self.assertTrue(classify_listing_item(title).confident)
+
+    def test_an_accessory_for_a_system_stays_an_accessory(self) -> None:
+        self.assertEqual(classify_listing_item("NES Zapper light gun for Nintendo system").kind, "accessory")
+
+    def test_the_platform_name_alone_does_not_make_a_console(self) -> None:
+        self.assertEqual(
+            classify_listing_item("Super Mario World Super Nintendo Entertainment System").kind, "game"
+        )
+
+    def test_the_original_game_boy_model_is_a_console_and_a_cart_code_is_not(self) -> None:
+        self.assertEqual(classify_listing_item("Original Nintendo Game Boy DMG-01 Tested").kind, "console")
+        self.assertEqual(classify_listing_item("Pokemon Red Game Boy DMG-APEE-USA").kind, "game")
+
+
 class VariablePriceTests(unittest.TestCase):
     """Un "elegí cuál querés" publica el precio de su opción más barata."""
 

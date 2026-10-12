@@ -283,6 +283,11 @@
             <input name="excludeTerms" maxlength="400" value="${escapeHtml((criteria.excludeTerms || []).join(", "))}"
                    placeholder="parts, repair, as-is" />
           </label>
+          <label>Términos preferidos
+            <input name="preferTerms" maxlength="400" value="${escapeHtml((criteria.preferTerms || []).join(", "))}"
+                   placeholder="games, 2 controllers" />
+            <small class="radar-field-hint">No filtran: lo que los trae sube en el ranking.</small>
+          </label>
           <label>Región
             <input name="region" maxlength="60" value="${escapeHtml(criteria.region || "")}" placeholder="NTSC-U/C" />
           </label>
@@ -341,6 +346,11 @@
                    value="${escapeHtml(criteria.minLotSize ?? "")}" placeholder="6" />
             <small class="radar-field-hint">Descarta lo que declare menos piezas. Un lote que no las cuenta no se descarta: queda marcado como sin verificar.</small>
           </label>
+          <label>Precio máximo por pieza
+            <input name="maxPricePerPiece" type="number" min="0" step="0.5"
+                   value="${escapeHtml(criteria.maxPricePerPiece ?? "")}" placeholder="8" />
+            <small class="radar-field-hint">Para lotes: precio dividido por las piezas que declara el título.</small>
+          </label>
         </div>
         <div class="radar-form-checks">
           <label><input type="checkbox" name="returnsRequired"${criteria.returnsRequired ? " checked" : ""} /> Exigir devolución</label>
@@ -361,6 +371,7 @@
                     )}</textarea>
           <small class="radar-field-hint">Una por línea. Cada una se busca por separado, además de la consulta principal: así una sola búsqueda persigue una lista de títulos. Los criterios y los términos excluidos se aplican igual a todas.</small>
         </label>
+        ${titleTargetsSummary(criteria)}
         <label class="radar-notes">Notas
           <textarea name="notes" maxlength="600" rows="2"
                     placeholder="Qué verificar antes de comprar">${escapeHtml(item.notes || "")}</textarea>
@@ -396,6 +407,28 @@
         <button class="btn-link" type="button" data-cancel-manual="1">Cancelar</button>
       </div>
     </form>`;
+  }
+
+  /**
+   * Qué juego persigue cada consulta y hasta cuánto. Se muestra, no se edita
+   * acá: lo arma el script del portafolio a partir de tus deseados, y el
+   * formulario no lo manda, así que guardar otros cambios no lo borra.
+   */
+  function titleTargetsSummary(criteria = {}) {
+    const targets = criteria.titleTargets || [];
+    if (!targets.length) return "";
+    const currency = criteria.currency || "USD";
+    const rows = targets
+      .map((target) => {
+        const ceiling = repository.formatAmount(target.maxItemPrice, currency);
+        return `<li>${escapeHtml(target.name || target.query)}${ceiling ? ` · hasta ${escapeHtml(ceiling)}` : ""}</li>`;
+      })
+      .join("");
+    return `<details class="radar-notes radar-title-targets">
+      <summary>${escapeHtml(String(targets.length))} títulos con precio propio</summary>
+      <ul>${rows}</ul>
+      <small class="radar-field-hint">Cada título se busca con su techo y se compara con su precio de catálogo. «Registrar compra» marca ese juego.</small>
+    </details>`;
   }
 
   function readForm(form) {
@@ -434,13 +467,23 @@
         freeShippingOnly: data.get("freeShippingOnly") !== null,
         maxItemPrice: number("maxItemPrice"),
         targetItemPrice: number("targetItemPrice"),
-        minLotSize: number("minLotSize")
+        minLotSize: number("minLotSize"),
+        maxPricePerPiece: number("maxPricePerPiece"),
+        preferTerms: text("preferTerms")
       }
     };
   }
 
+  /** En una búsqueda de varios títulos, qué título la encontró y con qué techo. */
+  function titleTargetLabel(result) {
+    const target = result.titleTarget;
+    if (!target) return "";
+    const ceiling = repository.formatAmount(target.maxItemPrice, result.priceCurrency || "USD");
+    return `Como ${target.name || target.query}${ceiling ? ` · techo ${ceiling}` : ""}`;
+  }
+
   function resultCard(result) {
-    const meta = [result.conditionLabel, result.shippingLabel, result.locationLabel, result.sellerLabel]
+    const meta = [titleTargetLabel(result), result.conditionLabel, result.shippingLabel, result.locationLabel, result.sellerLabel]
       .filter(Boolean)
       .map((item) => `<span>${escapeHtml(item)}</span>`)
       .join("");
@@ -756,6 +799,9 @@
   function unlinkedNote(item) {
     if (["lot", "discovery"].includes(item.searchType)) return "";
     if (item.entityId && (item.entityType !== "game" || item.entityConsoleId)) return "";
+    // Una búsqueda de varios títulos apunta al catálogo título por título.
+    const targeted = (item.criteria?.titleTargets || []).some((target) => target.gameId);
+    if (targeted && item.entityConsoleId) return "";
     const falta =
       item.entityType === "game" && item.entityId && !item.entityConsoleId
         ? "no dice de qué consola es ese juego"

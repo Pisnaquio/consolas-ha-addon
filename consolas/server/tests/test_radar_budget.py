@@ -487,3 +487,22 @@ class UndoPurchaseTests(RadarBudgetTestCase):
         self.assertEqual(len(items), 1)
         self.assertEqual(items[0]["entityId"], "ps3")
         self.assertIsNone(items[0]["shippedAt"])
+
+
+class PartialPreferenceUpdateTests(RadarBudgetTestCase):
+    """Guardar una preferencia no puede borrar otra.
+
+    El monto se leía siempre del payload, así que un guardado que no lo
+    mencionaba lo dejaba en `None`. Con tres preferencias en la misma fila, eso
+    dejó de ser teórico.
+    """
+
+    def test_saving_another_preference_keeps_the_budget(self) -> None:
+        update_radar_preferences(self.config, {"monthlyBudgetUsd": 150})
+        update_radar_preferences(self.config, {"maxActiveSearches": 30})
+        self.assertEqual(get_radar_preferences(self.config)["monthlyBudgetUsd"], 150)
+
+    def test_sending_the_key_as_null_still_clears_it(self) -> None:
+        update_radar_preferences(self.config, {"monthlyBudgetUsd": 150})
+        update_radar_preferences(self.config, {"monthlyBudgetUsd": None})
+        self.assertIsNone(get_radar_preferences(self.config)["monthlyBudgetUsd"])

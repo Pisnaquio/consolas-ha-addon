@@ -135,7 +135,7 @@ class MultiQueryRunTests(RadarQueryTestCase):
         search = self.build()
         seen: list[str] = []
 
-        def fake(self_source, config, query, criteria):  # noqa: ANN001 - firma del adapter
+        def fake(self_source, config, query, criteria, destination=None):  # noqa: ANN001 - firma del adapter
             seen.append(query)
             return []
 
@@ -149,7 +149,7 @@ class MultiQueryRunTests(RadarQueryTestCase):
         search = self.build()
         shared = ebay_summary("v1|1|0", "Daxter PSP complete")
 
-        def fake(self_source, config, query, criteria):  # noqa: ANN001
+        def fake(self_source, config, query, criteria, destination=None):  # noqa: ANN001
             return [shared]
 
         with patch("radar.sources.ebay.EbayBrowseSource.fetch_item_summaries", new=fake):
@@ -161,7 +161,7 @@ class MultiQueryRunTests(RadarQueryTestCase):
     def test_one_failing_query_does_not_sink_the_others(self) -> None:
         search = self.build()
 
-        def fake(self_source, config, query, criteria):  # noqa: ANN001
+        def fake(self_source, config, query, criteria, destination=None):  # noqa: ANN001
             if query == "Daxter PSP":
                 raise RuntimeError("eBay caído")
             return [ebay_summary("v1|2|0", "Patapon PSP complete in box")]
@@ -178,7 +178,7 @@ class MultiQueryRunTests(RadarQueryTestCase):
     def test_a_run_where_every_query_fails_is_an_error(self) -> None:
         search = self.build()
 
-        def fake(self_source, config, query, criteria):  # noqa: ANN001
+        def fake(self_source, config, query, criteria, destination=None):  # noqa: ANN001
             raise RuntimeError("eBay caído")
 
         with patch("radar.sources.ebay.EbayBrowseSource.fetch_item_summaries", new=fake):

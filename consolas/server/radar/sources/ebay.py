@@ -44,6 +44,33 @@ EBAY_CONDITION_FILTERS = {
 }
 
 
+def end_user_context(destination: dict[str, str] | None) -> str:
+    """Header `X-EBAY-C-ENDUSERCTX` con el destino de recepción.
+
+    eBay lo documenta como opcional, pero no lo es para lo que este radar
+    necesita: **para los ítems de envío CALCULADO, el array de opciones de
+    envío sólo se devuelve si este header viaja**. Sin él, esas publicaciones
+    llegaban sin envío y el feed mostraba el precio del artículo como total.
+    Un total corto es peor que un total ausente: parece una oportunidad.
+
+    Sin destino configurado no se inventa uno. Se devuelve cadena vacía, no se
+    manda el header, y el envío desconocido se declara como desconocido.
+
+    https://developer.ebay.com/api-docs/buy/static/api-browse.html
+    """
+    if not destination:
+        return ""
+    country = str(destination.get("country") or "").strip().upper()
+    if not country:
+        return ""
+    pairs = [f"country={country}"]
+    zip_code = str(destination.get("zip") or "").strip()
+    if zip_code:
+        pairs.append(f"zip={zip_code}")
+    # Los pares internos van url-encoded: el header lleva un solo valor.
+    return "contextualLocation=" + urllib.parse.quote(",".join(pairs), safe="")
+
+
 class EbayCredentialsMissing(RuntimeError):
     """El add-on todavía no tiene credenciales de eBay Developers."""
 
@@ -250,17 +277,27 @@ class EbayBrowseSource:
             _TOKEN_CACHE[cache_key] = (token, time.monotonic() + lifetime - TOKEN_EXPIRY_MARGIN_SECONDS)
         return token
 
-    def fetch_item_summaries(self, config: Any, query: str, criteria: dict[str, Any]) -> list[Any]:
+    def fetch_item_summaries(
+        self,
+        config: Any,
+        query: str,
+        criteria: dict[str, Any],
+        destination: dict[str, str] | None = None,
+    ) -> list[Any]:
         token = self.access_token(config)
         limit = int(criteria.get("resultLimit") or 12)
         parameters = {"q": query, "limit": str(max(1, min(limit, MAX_LIMIT)))}
         filters = build_browse_filters(criteria)
         if filters:
             parameters["filter"] = filters
+        headers = {"Authorization": f"Bearer {token}", "X-EBAY-C-MARKETPLACE-ID": MARKETPLACE_ID}
+        context = end_user_context(destination)
+        if context:
+            headers["X-EBAY-C-ENDUSERCTX"] = context
         request = urllib.request.Request(
             f"https://{self.api_host(config)}/buy/browse/v1/item_summary/search?"
             f"{urllib.parse.urlencode(parameters)}",
-            headers={"Authorization": f"Bearer {token}", "X-EBAY-C-MARKETPLACE-ID": MARKETPLACE_ID},
+            headers=headers,
         )
         try:
             with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
@@ -272,11 +309,17 @@ class EbayBrowseSource:
         summaries = payload.get("itemSummaries")
         return summaries if isinstance(summaries, list) else []
 
-    def search(self, config: Any, query: str, criteria: dict[str, Any]) -> SourcePage:
+    def search(
+        self,
+        config: Any,
+        query: str,
+        criteria: dict[str, Any],
+        destination: dict[str, str] | None = None,
+    ) -> SourcePage:
         """Una consulta a eBay. El recibo declara si la cobertura fue completa."""
         started_at = utc_now()
         try:
-            summaries = self.fetch_item_summaries(config, query, criteria)
+            summaries = self.fetch_item_summaries(config, query, criteria, destination)
         except (EbayCredentialsMissing, EbayRequestFailed) as error:
             return SourcePage(
                 source_id=SOURCE_ID,
@@ -350,5 +393,6 @@ __all__ = [
     "EbayRequestFailed",
     "SOURCE_ID",
     "build_browse_filters",
+    "end_user_context",
     "parse_item_summary",
 ]

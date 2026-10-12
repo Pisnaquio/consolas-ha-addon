@@ -285,11 +285,14 @@
     const entity = purchasableEntity(item);
     if (!entity) return "";
     const id = escapeHtml(item.id);
+    // En una búsqueda de varios títulos, el nombre es el del juego que
+    // encontró esta publicación, no el de la búsqueda («Deseados de SNES»).
+    const entityName = entity.entityName || entity.searchName || "";
     const target =
       entity.entityType === "console"
         ? "esta consola"
-        : `${entity.entityId} en la biblioteca de ${entity.entityConsoleId}`;
-    return `<form class="purchase-form" data-purchase-form="${id}" data-entity-type="${escapeHtml(entity.entityType)}" data-entity-id="${escapeHtml(entity.entityId)}" data-entity-console-id="${escapeHtml(entity.entityConsoleId || "")}" data-entity-name="${escapeHtml(entity.searchName || "")}">
+        : `${entity.entityName || entity.entityId} en la biblioteca de ${entity.entityConsoleId}`;
+    return `<form class="purchase-form" data-purchase-form="${id}" data-entity-type="${escapeHtml(entity.entityType)}" data-entity-id="${escapeHtml(entity.entityId)}" data-entity-console-id="${escapeHtml(entity.entityConsoleId || "")}" data-entity-name="${escapeHtml(entityName)}">
       <p class="muted">Se va a marcar «Tengo» en ${escapeHtml(target)} con el precio pagado.</p>
       <label class="visually-hidden" for="price-${id}">Precio pagado</label>
       <input id="price-${id}" name="priceAmount" type="number" min="0" step="0.01"
@@ -312,10 +315,35 @@
     </form>`;
   }
 
+  /**
+   * El radar no tiene benchmark de ventas cerradas: PriceCharting quedó
+   * descartado y Marketplace Insights es de acceso restringido. Cuando la
+   * banda se calculó contra publicaciones activas —precios pedidos, no
+   * pagados— la card lo dice y ofrece el único remedio que no cuesta nada:
+   * abrir el filtro de vendidos del propio eBay.
+   *
+   * El caveat sin salida es una advertencia; el caveat con el link al lado es
+   * una acción.
+   */
+  function benchmarkLine(item) {
+    const caveats = item.valuation?.caveats || [];
+    const asking = caveats.find((c) => /no vendidos|sin benchmark/i.test(c));
+    const sold = item.valuation?.soldComparables;
+    if (!asking && !sold) return "";
+    const link = sold
+      ? ` <a class="feed-sold-link" href="${escapeHtml(sold.url)}" target="_blank" rel="noreferrer noopener" title="${escapeHtml(sold.note || "")}">${escapeHtml(sold.label || "Ver ventas cerradas")}</a>`
+      : "";
+    return `<p class="feed-benchmark">${escapeHtml(asking || "")}${link}</p>`;
+  }
+
   function card(item) {
     const reasons = (item.matches?.[0]?.reasons || []).slice(0, 3).map((r) => `<li>${escapeHtml(r)}</li>`).join("");
     const unverified = (item.matches?.[0]?.unverified || []).slice(0, 2).map((u) => `<li class="u">${escapeHtml(u)}</li>`).join("");
-    const searches = (item.matches || []).map((m) => m.searchName).filter(Boolean);
+    // En una búsqueda de varios títulos, el título que la encontró dice más que
+    // el nombre de la búsqueda: «Deseados SNES (Super Mario World)».
+    const searches = (item.matches || [])
+      .map((m) => (m.searchName && m.entityName ? `${m.searchName} (${m.entityName})` : m.searchName))
+      .filter(Boolean);
     const imported = item.valuation?.cost?.importedTotal;
 
     return `<article class="detail-block chase-card feed-card${item.priceDrop ? " has-drop" : ""}">
@@ -334,6 +362,7 @@
         </div>
       </div>
       ${targetBadge(item)}
+      ${benchmarkLine(item)}
       ${item.priceDrop ? dropBadge(item.priceDrop) : ""}
       ${reasons || unverified ? `<ul class="feed-why">${reasons}${unverified}</ul>` : ""}
       ${decisionLine(item)}

@@ -19,7 +19,8 @@ independiente, en vez de contarlo como una corroboración que no existe.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import urllib.parse
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timezone
 from typing import Any
 
@@ -286,6 +287,47 @@ def pick_benchmark(
     )[0]
 
 
+def bundle_adjusted_benchmark(
+    benchmark: PriceReference | None,
+    *,
+    declared_games: int | None,
+    game_value: float | None,
+    catalog_sample: int = 0,
+    max_games: int = 10,
+) -> PriceReference | None:
+    """La referencia de una consola que viene con juegos: consola más sus juegos.
+
+    Comparar un bundle de SNES con dos controles y cinco juegos contra el
+    precio de la consola sola lo marcaba «caro» siempre, que es exactamente al
+    revés de lo que el dueño quiere ver: si la consola trae juegos, mejor.
+
+    Sólo se suma lo que el título declara con número, a un valor por juego
+    prudente que sale del catálogo, y con un tope: el bundle vale lo que vale
+    la consola más un puñado de juegos comunes, no la suma teórica de un lote.
+    La mediana de publicaciones activas no se ajusta: esos precios ya incluyen
+    los bundles que haya en la corrida, y sumarles juegos los contaría dos veces.
+    """
+
+    if benchmark is None or not declared_games or not game_value or game_value <= 0:
+        return benchmark
+    if benchmark.source == "peer-listings":
+        return benchmark
+    counted = min(int(declared_games), max_games)
+    extra = round(counted * game_value, 2)
+    capped = " (tope del ajuste)" if declared_games > max_games else ""
+    return replace(
+        benchmark,
+        value=round(benchmark.value + extra, 2),
+        # Un número que suma una estimación pesa menos que el dato solo.
+        confidence=round(benchmark.confidence * 0.8, 3),
+        notes=(
+            f"{benchmark.notes} Ajustada por bundle: suma {counted} juego(s){capped} a "
+            f"{game_value:g} {benchmark.currency} cada uno, el cuartil bajo del precio mínimo de "
+            f"{catalog_sample} juegos del catálogo de esta consola. Qué juegos trae no se sabe."
+        ).strip(),
+    )
+
+
 def decision_band(ratio: float) -> tuple[str, str]:
     for key, ceiling, label in DECISION_BANDS:
         if ratio <= ceiling:
@@ -307,6 +349,7 @@ class ScoreCard:
     penalties: list[dict[str, Any]] = field(default_factory=list)
     caveats: list[str] = field(default_factory=list)
     target: dict[str, Any] | None = None
+    sold_comparables: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -320,7 +363,37 @@ class ScoreCard:
             "penalties": list(self.penalties),
             "caveats": list(self.caveats),
             "target": dict(self.target) if self.target else None,
+            "soldComparables": dict(self.sold_comparables) if self.sold_comparables else None,
         }
+
+
+def sold_comparables_link(query: str) -> dict[str, Any] | None:
+    """Link al filtro de ventas cerradas del propio eBay, para esa consulta.
+
+    El radar no tiene benchmark externo: PriceCharting quedó descartado y las
+    ventas cerradas viven en Marketplace Insights, de acceso restringido. Lo que
+    sí se puede hacer sin pagar ni scrapear nada es **mandar al dueño a mirarlas
+    él**: es un link a la interfaz de eBay, no una integración.
+
+    Es la diferencia entre «el radar no tiene con qué comparar» y «el radar te
+    deja el benchmark a un click».
+
+    Requiere sesión iniciada en eBay: deslogueado, ese filtro redirige al login.
+    Por eso se declara como lo que es y no como un dato que la card ya tiene.
+    """
+
+    cleaned = " ".join(str(query or "").split()).strip()
+    if not cleaned:
+        return None
+    parameters = urllib.parse.urlencode(
+        {"_nkw": cleaned, "_sacat": "0", "LH_Sold": "1", "LH_Complete": "1"}
+    )
+    return {
+        "url": f"https://www.ebay.com/sch/i.html?{parameters}",
+        "query": cleaned,
+        "label": "Ver ventas cerradas en eBay",
+        "note": "Se abre en eBay y pide tu sesión iniciada. Es lo que se pagó, no lo que se pide.",
+    }
 
 
 def evaluate_target(item_price: float | None, target: float | None) -> dict[str, Any] | None:
@@ -706,6 +779,7 @@ __all__ = [
     "cost_breakdown",
     "peer_listing_benchmark",
     "reference_from_price_range",
+    "bundle_adjusted_benchmark",
     "decision_band",
     "pick_benchmark",
     "references_from_console_entry",

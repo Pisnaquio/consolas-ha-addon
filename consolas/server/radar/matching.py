@@ -175,17 +175,30 @@ def evaluate_match(
         else:
             verdict.blockers.append("No coincide con ninguno de los sinónimos aceptados")
 
+    # Lo que se prefiere sin exigirlo: «con juegos», «2 controles», «translúcida».
+    # Nunca bloquea ni queda como pendiente de verificar —que falte no es un
+    # problema de la publicación—, pero cuenta como una señal más: una consola
+    # que además trae lo preferido sube por encima de una que no.
+    prefer_terms = list(criteria.get("preferTerms") or [])
+    if prefer_terms:
+        signals_total += 1
+        preferred = [term for term in prefer_terms if contains_term(haystack, term)]
+        if preferred:
+            signals_hit += 1
+            verdict.matched_terms.extend(preferred)
+            verdict.reasons.append(f"Trae lo que preferís: {', '.join(f'«{term}»' for term in preferred)}")
+
     # Cuántas piezas trae. Es el único criterio cuya evidencia hay que contar en
     # vez de reconocer, y contar leyendo un título es frágil: por eso bloquea
     # sólo contra una cantidad que el vendedor declaró, y un título que no la
     # declara pasa como requisito sin verificar. Descartar por lo que el título
     # no dice tiraría la mitad del mercado de lotes, que se publica enumerando
     # los juegos en vez de contarlos.
+    declared = detect_lot_size(listing.title)
     min_lot_size = criteria.get("minLotSize")
     if min_lot_size:
         minimum = int(min_lot_size)
         signals_total += 1
-        declared = detect_lot_size(listing.title)
         if declared is None:
             if item.variable_price:
                 # "Elegí cuál querés" no es un lote: el precio publicado es el
@@ -205,6 +218,34 @@ def evaluate_match(
         else:
             signals_hit += 1
             verdict.reasons.append(f"Declara {declared} piezas, y la búsqueda pide al menos {minimum}")
+
+    # Un lote es barato por lo que cuesta cada pieza, no por su total: 120
+    # dólares por veinte juegos es una ganga y por cuatro no. Se calcula sólo
+    # sobre una cantidad declarada; sin ella no hay división honesta posible.
+    # Si además la búsqueda pide un mínimo de piezas, ese chequeo ya dejó dicho
+    # que la cantidad falta, y repetirlo castigaría dos veces lo mismo.
+    max_per_piece = criteria.get("maxPricePerPiece")
+    if max_per_piece is not None and listing.price_amount is not None:
+        ceiling = float(max_per_piece)
+        piece_currency = listing.price_currency or currency
+        if declared and not item.variable_price:
+            signals_total += 1
+            per_piece = round(listing.price_amount / declared, 2)
+            if per_piece > ceiling:
+                verdict.blockers.append(
+                    f"Sale {money(per_piece, piece_currency)} por pieza ({declared} declaradas) y la "
+                    f"búsqueda acepta hasta {money(ceiling, currency)}"
+                )
+            else:
+                signals_hit += 1
+                verdict.reasons.append(
+                    f"{money(per_piece, piece_currency)} por pieza ({declared} declaradas)"
+                )
+        elif not min_lot_size:
+            verdict.unverified.append(
+                f"No declara cuántas piezas trae: no se puede calcular el precio por pieza "
+                f"(la búsqueda acepta hasta {money(ceiling, currency)})"
+            )
 
     max_item_price = criteria.get("maxItemPrice")
     if max_item_price is not None and listing.price_amount is not None:

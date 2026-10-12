@@ -701,6 +701,80 @@
         ],
         "pendiente": "Faltan PriceCharting, eBay sold y CIB por revisión."
       }
+    },
+    {
+      "id": "nes",
+      "nombre": "Nintendo Entertainment System (NES)",
+      "fabricante": "Nintendo",
+      "generacion": "3ra",
+      "anioLanzamiento": 1985,
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b2/NES-Console-Set.png/500px-NES-Console-Set.png"
+      ],
+      "precioFuente": "manual",
+      "priceChartingUrl": "https://www.pricecharting.com/game/nes/nintendo-nes-console",
+      "precioPriceChart": 88,
+      "precioGameStop": 140,
+      "precioEbaySold": 88,
+      "precioCIB": 208,
+      "precioObjetivoCompra": 62,
+      "precioNotas": {
+        "verificadoEn": "2026-03-23",
+        "fuentes": {
+          "precioPriceChart": "PriceCharting (match validado)",
+          "precioEbaySold": "PriceCharting loose (proxy)",
+          "precioCIB": "PriceCharting (CIB)",
+          "precioGameStop": "Manual por usuario (GameStop)",
+          "precioObjetivoCompra": "Regla interna: 70% de la referencia más baja entre PriceChart/eBaySold/GameStop"
+        },
+        "match": "Nintendo NES Console",
+        "gamestopManual": {
+          "valor": 140
+        },
+        "revisiones": [
+          "NES-001 (front-loader)",
+          "NES-101 (top-loader)"
+        ],
+        "origen": "Estos precios se verificaron el 2026-03-23 contra «Nintendo NES Console» y estaban cargados en nes-clonica. Son de la consola oficial; la clónica DY-636 todavía los conserva y está pendiente de corregir."
+      },
+      "pesoEnvio": {
+        "kg": 2.9,
+        "aparatoKg": 2.27,
+        "variante": "NES-001",
+        "verificadoEn": "2026-10-11",
+        "fuente": "Dimensions.com (Nintendo Entertainment System)",
+        "nota": "Dimensions.com da un peso aproximado de 5 lb (2,27 kg). Peso de envío = aparato + embalaje, caja y relleno; la previsión de embalaje es una estimación declarada, no un dato medido."
+      }
+    },
+    {
+      "id": "nintendo-3ds",
+      "nombre": "Nintendo 3DS",
+      "fabricante": "Nintendo",
+      "generacion": "8va",
+      "anioLanzamiento": 2011,
+      "fotos": [
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0a/Nintendo-3DS-AquaOpen.png/500px-Nintendo-3DS-AquaOpen.png"
+      ],
+      "precioFuente": "manual",
+      "precioNotas": {
+        "verificadoEn": "2026-10-11",
+        "fuentes": {},
+        "revisiones": [
+          "3DS",
+          "3DS XL",
+          "New 3DS",
+          "New 3DS XL"
+        ],
+        "pendiente": "Sin precios de referencia todavía. La familia que se busca deja afuera las 2DS (decisión del dueño, 2026-10-11)."
+      },
+      "pesoEnvio": {
+        "kg": 0.75,
+        "aparatoKg": 0.336,
+        "variante": "3DS XL",
+        "verificadoEn": "2026-10-11",
+        "fuente": "Wikipedia (Nintendo 3DS: 3DS 235 g, 3DS XL 336 g, New 3DS 253 g, New 3DS XL 329 g)",
+        "nota": "Se toma la más pesada de la familia aceptada. Portátil: el embalaje y el cargador pesan más que la consola. La previsión de embalaje es una estimación declarada, no un dato medido."
+      }
     }
   ]
 }

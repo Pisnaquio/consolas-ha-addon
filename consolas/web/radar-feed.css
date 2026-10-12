@@ -35,6 +35,9 @@
 /* El objetivo lo fijaste vos: cuando se cruza manda sobre cualquier otra
    señal de la card, y cuando falta se dice cuánto sin dramatizar. */
 .feed-target { margin:0; font:500 .8rem "IBM Plex Mono",monospace; color:var(--muted); }
+/* El benchmark y su remedio en la misma línea: la advertencia sola no sirve. */
+.feed-benchmark { margin:0; font:400 .78rem/1.45 "IBM Plex Mono",monospace; color:var(--muted); }
+.feed-sold-link { white-space:nowrap; font-weight:600; }
 .feed-target.is-met { padding:6px 11px; border-radius:10px; color:#63d8aa;
                       background:rgba(99,216,170,.13); border:1px solid rgba(99,216,170,.4); }
 .feed-target.is-unknown { color:#8fb8dc; font-style:italic; }

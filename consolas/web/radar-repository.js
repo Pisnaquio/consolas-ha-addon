@@ -211,8 +211,13 @@
     const maxTotal = formatAmount(criteria.maxTotalUsa, currency);
     if (maxTotal) chips.push(`Recibido en USA hasta ${maxTotal}`);
     if (criteria.minLotSize) chips.push(`Lotes desde ${criteria.minLotSize} piezas`);
+    const perPiece = formatAmount(criteria.maxPricePerPiece, currency);
+    if (perPiece) chips.push(`Hasta ${perPiece} por pieza`);
     const queries = (criteria.queries || []).length;
     if (queries) chips.push(`${queries} ${queries === 1 ? "consulta extra" : "consultas extra"}`);
+    const targets = (criteria.titleTargets || []).length;
+    if (targets) chips.push(`${targets} ${targets === 1 ? "título con precio propio" : "títulos con precio propio"}`);
+    if ((criteria.preferTerms || []).length) chips.push(`Prefiere: ${criteria.preferTerms.join(", ")}`);
     if ((criteria.excludeTerms || []).length) chips.push(`Excluye: ${criteria.excludeTerms.join(", ")}`);
     return chips;
   }

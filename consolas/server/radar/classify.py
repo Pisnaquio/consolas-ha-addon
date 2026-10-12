@@ -118,9 +118,18 @@ CONSOLE_MARKERS = (
     r"\bconsoles?\b",
     r"\bconsolas?\b",
     r"\bscph-?\d{4,5}\b",
+    # El modelo del Game Boy original; los cartuchos usan «DMG-XX-USA».
+    r"\bdmg-?01\b",
     r"\bslim\b",
     r"\bfat\b",
 )
+
+# «SNES System with 2 controllers and 3 games» es una consola: es la forma más
+# común de publicar un combo retro, y sin esto los controles del combo lo
+# convertían en accesorio y la búsqueda de consolas lo descartaba. Va aparte
+# porque «for … system» nombra para qué sirve un accesorio, no lo que se vende.
+SYSTEM_MARKER = r"\bsystems?\b"
+FOR_SYSTEM = r"\bfor\s+(?:the\s+|your\s+|a\s+)?(?:\w+\s+){0,2}systems?\b"
 
 # Accesorios que sí pueden venir dentro de un combo de consola: si el título
 # también dice "console", manda la consola.
@@ -262,6 +271,8 @@ def classify_listing_item(title: str) -> ItemKind:
     if _matches(PART_MARKERS, residual):
         return ItemKind("accessory", True)
     if _matches(CONSOLE_MARKERS, residual):
+        return ItemKind("console", True)
+    if re.search(SYSTEM_MARKER, residual) and not re.search(FOR_SYSTEM, residual):
         return ItemKind("console", True)
     if _matches(LOT_MARKERS, residual):
         return ItemKind("lot", True, _matches(VARIABLE_PRICE_MARKERS, residual))

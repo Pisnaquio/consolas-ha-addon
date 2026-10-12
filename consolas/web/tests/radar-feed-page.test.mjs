@@ -346,6 +346,18 @@ test("the purchase form for a game names the console it will write to", async ()
   assert.match(html, /god-of-war en la biblioteca de ps2/);
 });
 
+test("a title found by a multi-title search names that game, not the search", async () => {
+  const match = {
+    searchId: "radar-1", searchName: "Deseados SNES", confidence: 0.9, reasons: [], unverified: [],
+    entityType: "game", entityId: "super-mario-world", entityConsoleId: "snes", entityName: "Super Mario World",
+  };
+  const { html } = await renderFeed({ items: [item({ matches: [match] })], openPurchaseFor: "ebay-us-1" });
+
+  assert.match(html, /Coincide con Deseados SNES \(Super Mario World\)/);
+  assert.match(html, /Super Mario World en la biblioteca de snes/);
+  assert.match(html, /data-entity-name="Super Mario World"/);
+});
+
 test("an accessory match does not offer registrar compra, console or not", async () => {
   const { html } = await renderFeed({
     items: [item({ matches: [{ searchId: "radar-1", searchName: "DualShock", confidence: 0.9, reasons: [], unverified: [], entityType: "accessory", entityId: "dualshock", entityConsoleId: "ps2" }] })],
@@ -583,4 +595,51 @@ test("undoing deletes the purchase and frees the listing, and nothing else", asy
   assert.equal(written[0].options.method, "DELETE");
   assert.match(String(written[1].url), /\/radar\/decisions\/ebay-us-1$/);
   assert.equal(written[1].options.method, "DELETE");
+});
+
+// Sin PriceCharting ni ventas cerradas de eBay, la banda suele calcularse contra
+// publicaciones activas: precios pedidos, no pagados. La card lo dice y ofrece el
+// único remedio gratis que existe — el filtro de vendidos del propio eBay.
+const askingCaveat = "Mediana de 11 publicaciones activas de esta búsqueda; son precios pedidos, no vendidos.";
+const soldLink = {
+  url: "https://www.ebay.com/sch/i.html?_nkw=God+of+War+II+PS2&_sacat=0&LH_Sold=1&LH_Complete=1",
+  query: "God of War II PS2",
+  label: "Ver ventas cerradas en eBay",
+  note: "Se abre en eBay y pide tu sesión iniciada. Es lo que se pagó, no lo que se pide.",
+};
+
+test("a verdict measured against asking prices says so, with the way to check", async () => {
+  const { html } = await renderFeed({
+    items: [item({ valuation: { cost: {}, caveats: [askingCaveat], soldComparables: soldLink } })],
+  });
+
+  assert.match(html, /precios pedidos, no vendidos/);
+  assert.match(html, /Ver ventas cerradas en eBay/);
+  assert.match(html, /LH_Sold=1/);
+  assert.match(html, /rel="noreferrer noopener"/);
+});
+
+test("with a real benchmark there is no warning to show", async () => {
+  const { html } = await renderFeed({
+    items: [item({ valuation: { cost: {}, caveats: ["Referencia de precio desactualizada."] } })],
+  });
+
+  assert.doesNotMatch(html, /feed-benchmark/);
+});
+
+test("the sold link is escaped, never concatenated raw", async () => {
+  const { html } = await renderFeed({
+    items: [
+      item({
+        valuation: {
+          cost: {},
+          caveats: [askingCaveat],
+          soldComparables: { ...soldLink, label: '"><script>alert(1)</script>' },
+        },
+      }),
+    ],
+  });
+
+  assert.doesNotMatch(html, /<script>alert/);
+  assert.match(html, /&lt;script&gt;/);
 });
