@@ -73,7 +73,7 @@ from radar.sources import registry as radar_registry  # noqa: E402
 
 
 SERVICE_NAME = "consolas-server"
-SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.72")
+SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.73")
 DEFAULT_DATA_DIR = "/data"
 DEFAULT_STATIC_DIR = "/app/web"
 DATABASE_NAME = "consolas.sqlite"
@@ -3364,10 +3364,19 @@ _RADAR_EDITION_MARKERS = (
 
 
 def radar_result_variant(result: dict[str, Any]) -> tuple[str, str, str]:
+    """`(suelta o en caja, región, edición)`.
+
+    Si es suelta o en caja lo dice su objetivo canónico, que ya sabe que en un
+    disco «with case» es la caja; sólo sin objetivo se relee el título.
+    """
     text = normalize(str(result.get("title") or ""))
-    shape = detect_completeness(text) or "loose"
+    objective = str((result.get("objective") or {}).get("id") or "")
+    if objective in RADAR_PEERED_OBJECTIVES:
+        boxed = objective.endswith("-cib")
+    else:
+        boxed = detect_completeness(text) in {"boxed", "cib", "sealed"}
     edition = next((marker for marker in _RADAR_EDITION_MARKERS if f" {marker} " in f" {text} "), "")
-    return ("boxed" if shape in {"boxed", "cib", "sealed"} else "loose", detect_region(text), edition)
+    return ("boxed" if boxed else "loose", detect_region(text), edition)
 
 
 def radar_result_title_key(result: dict[str, Any]) -> str:
@@ -3385,6 +3394,12 @@ def diversify_radar_results(results: list[dict[str, Any]], limit: int) -> tuple[
     —caja frente a suelta, otra región u otra edición— y nada más. Lo que no
     entra se cuenta, no se esconde en silencio.
 
+    Si la mejor copia es suelta, la segunda es la mejor en caja que haya,
+    aunque otra suelta de otra región puntúe más: en un juego de disco el CIB es
+    lo que se busca (perfil §2), y dos sueltas lo tapaban. Medido en la
+    búsqueda CIB de PS3 del 2026-10-12. Sin copia en caja, vale la primera
+    distinta.
+
     Los lotes con cantidad sin confirmar van al final, después de los que
     cumplen: la pantalla los muestra aparte.
     """
@@ -3394,24 +3409,31 @@ def diversify_radar_results(results: list[dict[str, Any]], limit: int) -> tuple[
     hidden = 0
     if any(radar_result_title_key(item) for item in primary):
         firsts: list[dict[str, Any]] = []
-        seconds: list[dict[str, Any]] = []
-        variants: dict[str, list[tuple[str, str, str]]] = {}
-        for item in primary:
+        copies: dict[str, list[tuple[int, dict[str, Any], tuple[str, str, str]]]] = {}
+        for position, item in enumerate(primary):
             key = radar_result_title_key(item)
             if not key:
                 firsts.append(item)
-                continue
-            seen = variants.setdefault(key, [])
-            variant = radar_result_variant(item)
-            if not seen:
-                seen.append(variant)
-                firsts.append(item)
-            elif len(seen) < RADAR_MAX_COPIES_PER_TITLE and variant not in seen:
-                seen.append(variant)
-                seconds.append(item)
+            elif key in copies:
+                copies[key].append((position, item, radar_result_variant(item)))
             else:
-                hidden += 1
-        primary = firsts + seconds
+                copies[key] = [(position, item, radar_result_variant(item))]
+                firsts.append(item)
+        chosen: list[tuple[int, dict[str, Any]]] = []
+        for candidates in copies.values():
+            seen = [candidates[0][2]]
+            rest = candidates[1:]
+            while len(seen) < RADAR_MAX_COPIES_PER_TITLE:
+                distinct = [candidate for candidate in rest if candidate[2] not in seen]
+                if not distinct:
+                    break
+                boxed = [candidate for candidate in distinct if candidate[2][0] == "boxed"]
+                pick = boxed[0] if boxed and all(variant[0] != "boxed" for variant in seen) else distinct[0]
+                seen.append(pick[2])
+                chosen.append((pick[0], pick[1]))
+                rest.remove(pick)
+            hidden += len(candidates) - len(seen)
+        primary = firsts + [item for _, item in sorted(chosen, key=lambda entry: entry[0])]
     ordered = primary + secondary
     return ordered[: max(1, limit)], hidden
 

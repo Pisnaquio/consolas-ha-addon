@@ -30,7 +30,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from .classify import CONSOLE_CIB_MARKERS, REPRO_PACKAGING_MARKERS
+from .classify import CONSOLE_CIB_MARKERS, REPRO_PACKAGING_MARKERS, without_negated_completeness
 from .platforms import PROFILES, normalize_platform
 
 
@@ -196,6 +196,7 @@ class ObjectiveAssignment:
 def console_has_retail_box(title: str) -> tuple[bool, bool]:
     """`(caja retail original declarada, caja repro declarada)`."""
     text, repro = _without_repro_packaging(_norm(title))
+    text, _ = without_negated_completeness(text)
     return (not repro and _hit(CONSOLE_CIB_MARKERS, text)), repro
 
 
@@ -239,12 +240,20 @@ def assign_objective(
         )
 
     text, repro = _without_repro_packaging(_norm(title))
+    # «No CIB» dice que no está completo, no que traiga caja y manual.
+    text, negated = without_negated_completeness(text)
     profile = PROFILES.get(platform)
     box_patterns = _BOX_WORDS_ANY_MEDIUM + (() if profile and profile.medium == "cartridge" else _CASE_WORDS)
     box = "absent" if _hit(_BOX_ABSENT, text) else ("present" if _hit(box_patterns, text) else "")
     manual = "absent" if _hit(_MANUAL_ABSENT, text) else ("present" if _hit(_MANUAL_PRESENT, text) else "")
     inserts = _hit(_INSERTS, text)
     repro_note = " La caja que trae es repro: no cuenta." if repro else ""
+    if box or manual:
+        shape_note = ""
+    elif negated:
+        shape_note = "Dice que no es CIB y no aclara qué trae: se compara como loose."
+    else:
+        shape_note = "No dice si trae caja ni manual: se compara como loose."
 
     if box == "present" and manual == "present":
         return ObjectiveAssignment(
@@ -274,7 +283,7 @@ def assign_objective(
         box=box,
         manual=manual,
         repro_packaging=repro,
-        note=("No dice si trae caja ni manual: se compara como loose." if not (box or manual) else "") + repro_note,
+        note=shape_note + repro_note,
     )
 
 

@@ -32,6 +32,7 @@ from .classify import (
     detect_hardware_origin,
     detect_lot_size,
     names_games,
+    without_negated_completeness,
 )
 from .model import MarketplaceListing
 from .platforms import PROFILES, RETRO_CARTRIDGE_KEYS, fuse_platform_numbers, resolve_platform
@@ -116,7 +117,9 @@ REGION_SIGNALS = {
         # «3DS LL» es el nombre japonés de la 3DS XL.
         "ll",
     ),
-    "pal": ("pal", "europe", "european", "uk region", "australia"),
+    # PEGI es la calificación por edad europea: sólo la lleva una caja PAL.
+    # «MotorStorm: Pacific Rift (PS3) PEGI 16+» no avisaba la región.
+    "pal": ("pal", "europe", "european", "uk region", "australia", "pegi"),
     "ntsc-u/c": ("ntsc-u", "ntsc u", "usa", "us region", "american", "north america"),
 }
 
@@ -789,7 +792,11 @@ def best_title_target(title: str, targets: list[dict[str, Any]]) -> dict[str, An
 
 
 def detect_completeness(haystack: str) -> str:
-    """El orden importa: «complete in box» es CIB, no simplemente boxed."""
+    """El orden importa: «complete in box» es CIB, no simplemente boxed.
+
+    «No CIB» o «not sealed» niegan, no declaran: se sacan antes de leer.
+    """
+    haystack, _ = without_negated_completeness(haystack)
     if any_signal(haystack, SEALED_SIGNALS):
         return "sealed"
     if any_signal(haystack, CIB_SIGNALS):

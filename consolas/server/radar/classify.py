@@ -79,7 +79,14 @@ PRINTED_MARKERS = (
     r"\bpromo(?:tional)?\s+(?:ads?|posters?|flyers?|prints?|sheets?)\b",
     r"\bflyers?\b",
     r"\bbrochures?\b",
-    r"\b(?:strategy|official|player'?s?|secrets)\s+guides?\b",
+    # «Prima Official Strategy Game Guide», «Official Game Secrets Guide»,
+    # «Ultimate Reference Guide», «Gamer's Guide»: entre lo que dice qué guía es
+    # y «guide» puede haber una o dos palabras más. Medido el 2026-10-12 en la
+    # búsqueda CIB de PS3: «Strategy Game Guide» se escapaba y, por el «game»,
+    # pasaba por un juego seguro. «Guide» a secas no: «The Hitchhiker's Guide to
+    # the Galaxy» es un juego.
+    r"\b(?:strategy|official|player'?s?|gamer'?s?|secrets|reference|prima|brady\s*games|hint|walkthrough)\s+"
+    r"(?:(?:strategy|official|game|secrets)\s+){0,2}guides?\b",
     r"\bguide\s*books?\b",
     # «Book» a secas no: «The Jungle Book» es un juego de SNES, NES y Genesis.
     r"\bpaperbacks?\b",
@@ -96,6 +103,9 @@ PRINTED_MARKERS = (
     r"\binstruction\s+booklet\b",
     # «Game Boy Color … Box And Inserts Only»: la caja sin la consola.
     r"\b(?:box|boxes|inserts?|tray)\s+only\b",
+    # «PS2 Case Cover Art Only», «Secret of Mana (SNES) Map only»: la carátula
+    # o el mapa sin el juego.
+    r"\b(?:art(?:work)?|maps?)\s+only\b",
     r"\b(?:console|system|game|cartridge|disc)\s+not\s+included\b",
     # Medidas: «17 x 5.5» o «2"x3"» es un mapa, un póster o una lámina. Hace
     # falta un decimal o una unidad: «Hardcore 4x4» es el nombre de un juego.
@@ -137,6 +147,15 @@ MERCH_MARKERS = (
     r"\bhoodies?\b",
     r"\bmugs?\b",
     r"\btrading\s+cards?\b",
+    # Promocionales que nombran el juego que promocionan: «Puppeteer … Promo 3D
+    # Motion Ruler PS3 Gamescom 2014» (la búsqueda CIB de PS3 del 2026-10-12),
+    # una bolsa de Donkey Kong, una moneda de reserva de Uncharted 4, el VHS de
+    # Banjo-Kazooie. «Promo» a secas no: una copia promocional del juego es el
+    # juego.
+    r"\brulers?\b",
+    r"\btote\s*bags?\b",
+    r"\bpre\s*-?\s*order\s+bonus(?:es)?\b",
+    r"\bvhs\b",
 )
 
 REPLACEMENT_PART_MARKERS = (
@@ -174,7 +193,6 @@ REPLACEMENT_PART_MARKERS = (
 ACCESSORY_ITEM_MARKERS = (
     r"\badapters?\b",
     r"\bconverters?\b",
-    r"\bcase\s+protectors?\b",
     r"\bacrylic\b",
     r"\bempty\s+case\b",
     r"\bstorage\s+(?:case|cases|box|boxes)\b",
@@ -190,7 +208,14 @@ ACCESSORY_ITEM_MARKERS = (
     # Cajas protectoras: un lote de diez estuches para cartuchos de Game Boy no
     # es un lote de juegos de Game Boy.
     r"\bprotective\s+(?:cases?|boxes|box|covers?|sleeves?)\b",
-    r"\b(?:cartridge|cart|game|box)\s+protectors?\b",
+    # Un protector es lo que se vende, se llame como se llame: «Box Protector»,
+    # «Clear Plastic Protectors» o, como en la búsqueda CIB de PS3 del
+    # 2026-10-12, «Protector For Demon's Souls Black Phantom Edition PS3». El
+    # juego que lo trae lo dice con «with», «w/» o «+», y eso lo cubre
+    # `_INCLUDED_WITH`; las palabras de adelante van en el marcador para que
+    # «with clear plastic box protector» siga contando como incluido.
+    r"\b(?:(?:clear|plastic|acrylic|cardboard|pet|uv|box|case|game|cartridge|cart|disc|dvd|steelbook)\s+){0,3}"
+    r"protectors?\b",
     r"\b(?:cartridge|cart)\s+cases\b",
     r"\bscreen\s+protectors?\b",
     r"\bdecals?\b",
@@ -239,7 +264,9 @@ WITH_THE_GAME = (
     r"\bcib\b",
     r"\bcomplete\b",
     r"\bbox(?:ed)?\b",
-    r"\bcase\b",
+    # «Manual and Case Back Artwork» es el manual y la carátula, sin disco: la
+    # «case» que se nombra es la de la ilustración, no una que venga.
+    r"\bcase\b(?!\s+(?:(?:back|front|rear|cover)\s+)?art(?:work)?\b)",
     r"\bloose\b",
     r"\bsealed\b",
     r"\btested\b",
@@ -759,6 +786,22 @@ CONSOLE_CIB_MARKERS = (
     r"\bnib\b",
     r"\bsealed\b",
 )
+# «No CIB», «not complete», «non-CIB»: negar la completitud no es declararla.
+# Medido el 2026-10-12 en la búsqueda CIB de PS3: «God of War Ascension … Tested
+# and works No CIB» caía en Juegos CIB por el «cib». Se saca del texto antes de
+# buscar caja y manual; qué le falta lo dice el resto del título, o nadie.
+NEGATED_COMPLETENESS = (
+    r"\b(?:no|not|non|isn\s*t|never)\s+(?:a\s+|an\s+)?"
+    r"(?:cib|complete(?:\s+in\s+(?:the\s+)?(?:original\s+)?box)?|sealed|boxed)\b"
+)
+
+
+def without_negated_completeness(text: str) -> tuple[str, bool]:
+    """El texto, ya normalizado, sin «no CIB» ni «not complete», y si había alguno."""
+    stripped, count = re.subn(NEGATED_COMPLETENESS, " ", text)
+    return stripped, count > 0
+
+
 CONSOLE_ONLY_MARKERS = (r"\b(?:console|system|unit|handheld)\s+only\b",)
 READY_MARKERS = (
     r"\bready\s+to\s+(?:play|go)\b",
@@ -876,7 +919,9 @@ def assess_console_kit(title: str, platform: str = "") -> ConsoleKit:
 
     home = profile is None or profile.family == "home"
     # Una caja repro no hace CIB a una consola: el dueño quiere la caja retail.
-    retail_box = bool(_first(CONSOLE_CIB_MARKERS, re.sub("|".join(REPRO_PACKAGING_MARKERS), " ", text)))
+    # Un «not CIB» tampoco.
+    boxless, _ = without_negated_completeness(re.sub("|".join(REPRO_PACKAGING_MARKERS), " ", text))
+    retail_box = bool(_first(CONSOLE_CIB_MARKERS, boxless))
     if issues:
         status = "damaged"
     elif retail_box and not missing:
@@ -1033,6 +1078,7 @@ def analyze_lot(title: str, platform: str = "", item_kind: ItemKind | None = Non
 __all__ = [
     "ACCESSORY_CATEGORIES",
     "CONSOLE_CIB_MARKERS",
+    "NEGATED_COMPLETENESS",
     "REPRO_PACKAGING_MARKERS",
     "Authenticity",
     "ConsoleKit",
@@ -1050,4 +1096,5 @@ __all__ = [
     "detect_console_variant",
     "detect_lot_size",
     "names_games",
+    "without_negated_completeness",
 ]
