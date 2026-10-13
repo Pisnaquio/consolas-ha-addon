@@ -533,14 +533,18 @@ class BoxedVerdictTests(RadarCatalogTestCase):
         result = self.run_console("Consola X Console tested", "90.00")
         self.assertEqual(result["valuation"]["benchmark"]["value"], 100)
 
-    def test_without_a_boxed_reference_it_says_the_verdict_overstates(self) -> None:
+    def test_without_a_cib_reference_a_cib_is_never_measured_against_a_loose_copy(self) -> None:
+        """CIB contra CIB: sin pares CIB no hay veredicto de precio, y el CIB
+        declarado queda para revisar la caja y el manual."""
         search = self.wishlist()
         self.run_with(
             search, {"Juego A zeta": [ebay_summary("a-cib", "Juego A Zeta CIB complete in box", "28.00")]}
         )
         (result,) = self.results(search["id"])
-        self.assertEqual(result["valuation"]["benchmark"]["completeness"], "loose")
-        self.assertTrue(any("exagera" in caveat for caveat in result["valuation"]["caveats"]))
+        self.assertIsNone(result["valuation"]["benchmark"])
+        self.assertEqual(result["objective"]["id"], "game-cib")
+        self.assertEqual(result["band"], "revisar")
+        self.assertTrue(any("CIB declarado" in note for note in result["valuation"]["verdictNotes"]))
 
 
 class BoxedCeilingTests(RadarCatalogTestCase):

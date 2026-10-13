@@ -117,10 +117,12 @@ class ExtraQueryCriteriaTests(RadarQueryTestCase):
 
 class MultiQueryRunTests(RadarQueryTestCase):
     def build(self, **overrides: object) -> dict:
+        # Un chase y no un lote: lo que se prueba es la mecánica de varias
+        # consultas, y una búsqueda de lotes descarta un juego suelto.
         payload = {
             "name": "Biblioteca inventada",
             "platform": "Consola inventada",
-            "searchType": "lot",
+            "searchType": "chase",
             "searchQuery": "lote de prueba",
             "criteria": {
                 "queries": ["Daxter PSP", "Patapon PSP"],
@@ -192,7 +194,7 @@ class PreviewTests(RadarQueryTestCase):
             {
                 "name": "Biblioteca inventada",
                 "platform": "Consola inventada",
-                "searchType": "lot",
+                "searchType": "chase",
                 "searchQuery": "lote de prueba",
                 "criteria": {"queries": ["Daxter PSP"], "anyTerms": ["psp"], "resultLimit": 10},
             }

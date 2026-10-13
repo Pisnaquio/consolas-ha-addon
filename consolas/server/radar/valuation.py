@@ -34,6 +34,14 @@ DECISION_BANDS = (
 )
 EXPENSIVE_BAND = ("caro", "Caro")
 
+# Lo que el precio solo no puede decidir. Un cartucho retro sin originalidad
+# declarada, una consola con daño declarado o un clon pueden ser baratos, y
+# barato no los vuelve buena compra: el veredicto es «revisar», con el precio
+# al lado para que se vea qué se pierde si resulta mala.
+REVIEW_BAND = ("revisar", "Requiere revisión")
+NO_REFERENCE_BAND = ("sin-referencia", "Sin referencia")
+POSITIVE_BANDS = frozenset({"ganga", "buena", "razonable"})
+
 # Orden de preferencia de evidencia (PRD §10.2). Menor es mejor.
 SOURCE_RANK = {
     "ebay-sold": 0, "pricecharting": 1, "retail": 2, "manual": 3, "peer-listings": 4, "editorial": 5,
@@ -61,6 +69,35 @@ WEIGHTS = {
 }
 
 STALE_AFTER_DAYS = 180
+
+# Cuánto cuesta dejar lista para usar una consola a la que le falta algo, en
+# USD de un repuesto OEM usado típico. Son estimaciones declaradas, igual que
+# los pesos del courier: la card dice cuánto se sumó y por qué. Del lado
+# conservador a propósito, porque subestimar lo que falta es justamente lo que
+# hacía que una consola sola le ganara a un bundle completo.
+COMPLETION_COSTS_USD = {
+    "controller": 20.0,
+    "cables": 15.0,
+    "jumper-pak": 10.0,
+    "battery-cover": 6.0,
+    "charger": 10.0,
+}
+COMPLETION_LABELS = {
+    "controller": "control",
+    "cables": "cables",
+    "jumper-pak": "Jumper Pak",
+    "battery-cover": "tapa de pilas",
+    "charger": "cargador",
+}
+
+# Un lote con mucho relleno —deportivos anuales, shovelware, duplicados— no
+# vale por pieza lo que vale uno de títulos útiles: cada pieza se mide contra
+# esta fracción del techo por pieza del dueño.
+LOT_FILLER_FACTOR = 0.5
+
+# Por debajo de esto la coincidencia es demasiado incierta para afirmar una
+# ganga, aunque el precio lo sea.
+BARGAIN_MIN_CONFIDENCE = 0.6
 
 
 @dataclass(slots=True)
@@ -333,7 +370,12 @@ def bundle_adjusted_benchmark(
 
 
 def lot_ceiling_benchmark(
-    *, declared_pieces: int | None, per_piece_ceiling: float | None, entity_id: str = "", currency: str = "USD"
+    *,
+    declared_pieces: int | None,
+    per_piece_ceiling: float | None,
+    entity_id: str = "",
+    currency: str = "USD",
+    filler: bool = False,
 ) -> PriceReference | None:
     """La vara de un lote con cantidad declarada: tu techo por pieza por las piezas.
 
@@ -348,10 +390,11 @@ def lot_ceiling_benchmark(
 
     if not declared_pieces or not per_piece_ceiling or per_piece_ceiling <= 0:
         return None
+    per_piece = per_piece_ceiling * (LOT_FILLER_FACTOR if filler else 1.0)
     return PriceReference(
         entity_id=entity_id,
         source="lot-ceiling",
-        value=round(declared_pieces * per_piece_ceiling, 2),
+        value=round(declared_pieces * per_piece, 2),
         currency=currency,
         completeness="loose",
         confidence=0.5,
@@ -359,8 +402,51 @@ def lot_ceiling_benchmark(
         notes=(
             f"Tu techo de {per_piece_ceiling:g} {currency} por pieza por las {declared_pieces} piezas que "
             "declara el título. No es un precio de mercado: es el umbral que elegiste para «barato»."
+            + (
+                f" Trae relleno, así que cada pieza se mide contra {per_piece:g} {currency}."
+                if filler
+                else ""
+            )
         ),
     )
+
+
+def lot_peer_benchmark(
+    per_piece_prices: list[float], *, declared_pieces: int | None, entity_id: str = "", observed_at: str = ""
+) -> PriceReference | None:
+    """Sin techo por pieza, la vara de un lote es la mediana por pieza de sus pares.
+
+    Nunca la mediana de los totales: un lote de cuatro y uno de veintidós no se
+    comparan por lo que cuestan enteros. Sólo entran lotes con cantidad
+    confirmada, y la referencia escala a las piezas que declara este.
+    """
+
+    reference = peer_listing_benchmark(per_piece_prices, entity_id=entity_id, observed_at=observed_at)
+    if reference is None or not declared_pieces:
+        return None
+    return replace(
+        reference,
+        value=round(reference.value * declared_pieces, 2),
+        notes=(
+            f"Mediana por pieza ({reference.value:g}) de {len(per_piece_prices)} lotes con cantidad declarada "
+            f"de esta búsqueda, por las {declared_pieces} piezas de este. Son precios pedidos, no vendidos."
+        ),
+    )
+
+
+def completion_cost(assessment: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Lo que habría que comprar aparte para dejar lista una consola incompleta."""
+    kit = (assessment or {}).get("kit") or {}
+    missing = [piece for piece in kit.get("missing") or [] if piece in COMPLETION_COSTS_USD]
+    if not missing:
+        return None
+    detail = {piece: COMPLETION_COSTS_USD[piece] for piece in missing}
+    return {
+        "pieces": missing,
+        "detail": detail,
+        "total": round(sum(detail.values()), 2),
+        "estimated": True,
+    }
 
 
 def decision_band(ratio: float) -> tuple[str, str]:
@@ -385,12 +471,31 @@ class ScoreCard:
     caveats: list[str] = field(default_factory=list)
     target: dict[str, Any] | None = None
     sold_comparables: dict[str, Any] | None = None
+    # La banda que daría el precio solo, antes de las compuertas.
+    price_band: str = ""
+    # Qué le falta para poder llamarse «Ganga real», con clave estable para que
+    # la lectura sepa cuál se resuelve al verificar la publicación.
+    bargain_blockers: list[dict[str, str]] = field(default_factory=list)
+    # Por qué el veredicto es el que es, en frases que la card muestra tal cual.
+    verdict_notes: list[str] = field(default_factory=list)
+    # `primary` o `unconfirmed-quantity`: un lote que no confirma cuántos
+    # juegos trae no se mezcla con los que cumplen.
+    section: str = "primary"
+    completion: dict[str, Any] | None = None
+    assessment: dict[str, Any] = field(default_factory=dict)
+    # La banda después de las compuertas de ganga y antes de mandar a
+    # revisión: la que corresponde si el dueño despeja lo que había que revisar.
+    gated_band: str = ""
+    # Por qué fue a revisión, con claves estables. Sólo `cib-unverified` se
+    # puede despejar desde la app (comprobando caja y manual).
+    review_keys: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "score": self.score,
             "band": self.band,
             "bandLabel": self.band_label,
+            "priceBand": self.price_band,
             "ratio": round(self.ratio, 3) if self.ratio is not None else None,
             "benchmark": self.benchmark,
             "cost": dict(self.cost),
@@ -399,6 +504,14 @@ class ScoreCard:
             "caveats": list(self.caveats),
             "target": dict(self.target) if self.target else None,
             "soldComparables": dict(self.sold_comparables) if self.sold_comparables else None,
+            "bargainBlockers": [dict(item) for item in self.bargain_blockers],
+            "verdictNotes": list(self.verdict_notes),
+            "section": self.section,
+            "completion": dict(self.completion) if self.completion else None,
+            "assessment": dict(self.assessment),
+            "objective": dict((self.assessment or {}).get("objective") or {}) or None,
+            "gatedBand": self.gated_band,
+            "reviewKeys": list(self.review_keys),
         }
 
 
@@ -701,10 +814,23 @@ def score_listing(
     weight_kg: float | None = None,
     target_item_price: float | None = None,
     today: date | None = None,
+    assessment: dict[str, Any] | None = None,
+    availability_verified: bool = False,
 ) -> ScoreCard:
-    """Puntúa una publicación que ya pasó los filtros obligatorios."""
+    """Puntúa una publicación que ya pasó los filtros obligatorios.
+
+    `assessment` es lo que el matcher leyó del título con estructura (qué le
+    falta a una consola, si un cartucho declara ser original, cuántos juegos
+    trae un lote). Sin ella el score es el de siempre; con ella el precio se
+    compara contra lo que costaría dejar la pieza lista, y la banda pasa por
+    las compuertas de `apply_verdict_gates`.
+    """
 
     card = ScoreCard()
+    assessment = dict(assessment or {})
+    card.assessment = assessment
+    card.completion = completion_cost(assessment)
+    extra = card.completion["total"] if card.completion else 0.0
     card.cost = cost_breakdown(
         price_amount, shipping_amount, currency,
         entity_type=entity_type, completeness=completeness,
@@ -731,6 +857,11 @@ def score_listing(
 
     # --- Precio frente al benchmark comparable -------------------------------
     comparison_base = card.cost["subtotalUsa"] if card.cost["shippingKnown"] else price_amount
+    # Una consola a la que le falta algo se compara contra una lista para usar
+    # sumando lo que costaría completarla: la consola sola y el bundle dejan de
+    # medirse con la misma vara.
+    if comparison_base is not None and extra:
+        comparison_base = round(comparison_base + extra, 2)
     if benchmark is not None and comparison_base is not None and benchmark.value > 0:
         card.ratio = comparison_base / benchmark.value
         card.band, card.band_label = decision_band(card.ratio)
@@ -739,7 +870,8 @@ def score_listing(
         price_points = WEIGHTS["price"] * max(0.0, min(1.0, (1.30 - card.ratio) / 0.55))
         add("price", price_points,
             f"{round(card.ratio * 100)}% de {benchmark.value:g} {benchmark.currency} "
-            f"({SOURCE_LABELS.get(benchmark.source, benchmark.source)}, {benchmark.completeness.upper()})")
+            f"({SOURCE_LABELS.get(benchmark.source, benchmark.source)}, {benchmark.completeness.upper()})"
+            + (f", sumando {extra:g} para completarla" if extra else ""))
         if not benchmark.independent:
             penalize(6, "El benchmark no es evidencia independiente: copia otra fuente")
             card.caveats.append("La referencia de precio repite otra fuente; no la trates como corroboración.")
@@ -765,9 +897,14 @@ def score_listing(
         add("condition", WEIGHTS["condition"] * 0.4, "Condición sin declarar")
 
     # --- Completitud ----------------------------------------------------------
-    declared = any("completitud" in reason.lower() for reason in reasons)
-    add("completeness", WEIGHTS["completeness"] * (1.0 if declared else 0.45),
-        f"Completitud {'declarada' if declared else 'sin declarar'} ({completeness.upper()})")
+    kit = assessment.get("kit") or {}
+    if kit:
+        share, label = KIT_COMPLETENESS.get(str(kit.get("status") or ""), (0.4, "completitud sin declarar"))
+        add("completeness", WEIGHTS["completeness"] * share, label[:1].upper() + label[1:])
+    else:
+        declared = any("completitud" in reason.lower() for reason in reasons)
+        add("completeness", WEIGHTS["completeness"] * (1.0 if declared else 0.45),
+            f"Completitud {'declarada' if declared else 'sin declarar'} ({completeness.upper()})")
 
     # --- Vendedor y devolución ------------------------------------------------
     add("seller", WEIGHTS["seller"] * (0.7 if seller_known else 0.3),
@@ -795,14 +932,268 @@ def score_listing(
     for item in unverified:
         penalize(3, item)
 
+    if not card.band:
+        card.band, card.band_label = NO_REFERENCE_BAND
+    apply_verdict_gates(
+        card,
+        match_confidence=match_confidence,
+        untested=risky,
+        availability_verified=availability_verified,
+        penalize=penalize,
+    )
+
     raw = sum(item["points"] for item in card.contributions) + sum(item["points"] for item in card.penalties)
     card.score = max(0, min(100, round(raw)))
-    if not card.band:
-        card.band, card.band_label = "sin-referencia", "Sin referencia"
     return card
 
 
+# Cuánto del peso de completitud se lleva una consola según lo que trae.
+KIT_COMPLETENESS = {
+    "cib": (1.0, "completa en caja"),
+    "ready": (1.0, "lista para usar"),
+    "undeclared": (0.4, "no dice todo lo que trae"),
+    "missing": (0.3, "le faltan piezas"),
+    "console-only": (0.2, "consola sola"),
+    "damaged": (0.1, "daño declarado"),
+}
+
+
+def _join(items: list[str]) -> str:
+    items = [item for item in items if item]
+    if len(items) <= 1:
+        return "".join(items)
+    return ", ".join(items[:-1]) + " y " + items[-1]
+
+
+def apply_verdict_gates(
+    card: ScoreCard,
+    *,
+    match_confidence: float,
+    untested: bool = False,
+    availability_verified: bool = False,
+    penalize: Any = None,
+) -> None:
+    """Decide cuánto puede afirmar la banda, además de lo que dice el precio.
+
+    El 43% de lo que encontraba el radar salía «ganga», y una palabra que
+    aparece en casi la mitad de los resultados deja de decir algo. «Ganga real»
+    exige ahora alta confianza en todo lo que el precio no mide: que sea lo
+    buscado, que sea original, que esté completo, cuántas piezas trae, cuánto
+    cuesta el envío, que la referencia no sea sólo lo que piden otros y que la
+    publicación siga comprable. Lo que falta se dice —«por precio sería ganga;
+    falta…»— y la banda baja a «buena compra», que sigue siendo una buena
+    noticia.
+
+    Tres cosas ni siquiera dejan juzgar por precio, y van a «requiere
+    revisión»: un cartucho retro sin originalidad declarada cuando la búsqueda
+    la pide, un daño declarado y una consola que no es la original. Un lote que
+    no confirma cuántos juegos trae no tiene veredicto: va aparte.
+    """
+
+    penalize = penalize or (lambda points, detail: card.penalties.append({"points": -round(points), "detail": detail}))
+    assessment = card.assessment or {}
+    card.price_band = card.band
+    blockers: list[dict[str, str]] = []
+
+    def block(key: str, label: str) -> None:
+        if all(item["key"] != key for item in blockers):
+            blockers.append({"key": key, "label": label})
+
+    # Lo que manda a «Requiere revisión», y lo que la card dice de eso.
+    needs_review = False
+    review: list[str] = []
+
+    # --- Identidad -----------------------------------------------------------
+    if match_confidence < BARGAIN_MIN_CONFIDENCE or assessment.get("itemConfident") is False:
+        block("identity", "la identidad de la pieza no está clara")
+
+    # --- Originalidad --------------------------------------------------------
+    authenticity = assessment.get("authenticity") or {}
+    status = str(authenticity.get("status") or "")
+    original_required = str(assessment.get("originalParts") or "any") != "any"
+    if status == "suspect":
+        block("authenticity", "originalidad sin confirmar")
+        penalize(25, f"Marcas típicas de copia («{authenticity.get('signal')}»)")
+        needs_review = True
+        card.review_keys.append("authenticity-suspect")
+        review.append(
+            f"Tiene marcas típicas de copia («{authenticity.get('signal')}»): tratala como sospechosa hasta ver etiqueta y placa."
+        )
+    elif status == "unknown":
+        block("authenticity", "originalidad sin confirmar")
+        # Un cartucho suelto se juzga como pieza: sin originalidad declarada, el
+        # precio no alcanza para decir nada. Un lote se decide por lo que cuesta
+        # cada pieza —y casi ningún lote declara la originalidad de cada
+        # cartucho—, así que conserva su banda, pero tampoco puede ser ganga.
+        if original_required and assessment.get("itemKind") != "lot" and not assessment.get("lot"):
+            # La línea «Originalidad sin declarar: mirá etiqueta…» ya la pone
+            # el matcher; acá sólo se decide la banda.
+            penalize(4, "Cartucho sin originalidad declarada")
+            needs_review = True
+            card.review_keys.append("authenticity-unknown")
+    elif status == "copy":
+        # Sólo llega acá si la búsqueda acepta copias.
+        block("authenticity", "se declara copia")
+        penalize(25, "Se declara copia")
+        needs_review = True
+        card.review_keys.append("copy")
+        review.append(f"Se declara copia («{authenticity.get('signal')}»).")
+
+    origin = assessment.get("origin") or {}
+    if origin.get("status"):
+        block("origin", "no es la consola original")
+        penalize(20, "No es la consola original")
+        needs_review = True
+        card.review_keys.append("origin")
+        review.append(f"No es la consola original («{origin.get('signal')}»).")
+
+    # --- Consola: qué trae y en qué estado ------------------------------------
+    kit = assessment.get("kit") or {}
+    kit_status = str(kit.get("status") or "")
+    if kit:
+        if kit_status not in {"cib", "ready"}:
+            block("completeness", "no está confirmada lista para usar")
+        if card.completion:
+            missing = _join([COMPLETION_LABELS.get(piece, piece) for piece in card.completion["pieces"]])
+            penalize(6 if kit_status == "console-only" else 4, f"Le falta {missing}")
+            card.verdict_notes.append(
+                f"Le falta {missing}: se suman ~{card.completion['total']:g} USD estimados para dejarla lista "
+                "y se compara contra una lista para usar."
+            )
+        if kit_status == "damaged":
+            issues = _join(list(kit.get("issues") or []))
+            block("condition", "daño declarado")
+            penalize(10, f"Daño declarado: {issues}")
+            needs_review = True
+            card.review_keys.append("damage")
+            review.append(f"Daño declarado: {issues}.")
+        if kit.get("reader") in {"powers-only", "partial", "unconfirmed"}:
+            block("reader", f"falta confirmar que lea {kit.get('readerLabel') or 'discos'}")
+    if untested:
+        block("condition", "sin probar")
+
+    # --- CIB: lo que declara el vendedor no es lo que se comprobó ---------------
+    # Un CIB vale por la caja y el manual. El radar no mira fotos: hasta que el
+    # dueño los comprueba, un CIB declarado se mira antes de pagar como CIB y
+    # nunca es «Ganga real». Una copia con caja y sin manual no es CIB ni loose:
+    # no se compara con ninguno.
+    objective = assessment.get("objective") or {}
+    if objective.get("status") == "declared":
+        what = "caja y contenido" if objective.get("id") == "console-cib" else "caja y manual"
+        block("contents", f"{what} sin comprobar")
+        needs_review = True
+        card.review_keys.append("cib-unverified")
+        review.append(str(objective.get("note") or f"CIB declarado por el vendedor: confirmá {what} en las fotos."))
+    elif objective.get("status") == "incomplete":
+        card.section = "incomplete"
+        block("contents", "no está completo")
+        card.verdict_notes.append(
+            str(objective.get("note") or "No es CIB ni loose")
+            + " Va aparte de los CIB y no se compara con ninguno de los dos."
+        )
+    if objective.get("reproPackaging") and objective.get("id", "").endswith("loose"):
+        card.verdict_notes.append("Caja repro: no cuenta como CIB, se compara como loose.")
+
+    # --- Lotes ---------------------------------------------------------------
+    lot = assessment.get("lot") or {}
+    if lot:
+        if lot.get("quantity") != "confirmed":
+            card.section = "unconfirmed-quantity"
+            block("lot-quantity", "cantidad sin confirmar")
+            penalize(15, "Cantidad sin confirmar")
+            card.verdict_notes.append(
+                (lot.get("note") or "No declara cuántos juegos trae")
+                + ": sin precio por pieza no hay veredicto, así que va aparte de los lotes que cumplen."
+            )
+        filler = [str(item) for item in lot.get("filler") or []]
+        if filler:
+            block("lot-filler", "trae relleno")
+            penalize(8, "Relleno en el lote")
+            card.verdict_notes.append(
+                f"Trae relleno ({_join([f'«{item}»' for item in filler[:3]])}): cada pieza se mide contra "
+                f"{round(LOT_FILLER_FACTOR * 100)}% de tu techo."
+            )
+
+    # --- Evidencia de precio y de compra --------------------------------------
+    benchmark = card.benchmark or {}
+    if benchmark:
+        if benchmark.get("source") == "peer-listings":
+            block("benchmark", "la referencia es sólo lo que piden otras publicaciones")
+        elif benchmark.get("independent") is False or benchmark.get("stale"):
+            block("benchmark", "la referencia de precio es débil")
+    if not card.cost.get("shippingKnown"):
+        block("shipping", "envío sin confirmar")
+    if not availability_verified:
+        block("availability", "disponibilidad sin verificar")
+
+    card.bargain_blockers = blockers
+
+    # --- Banda final -----------------------------------------------------------
+    # Primero las compuertas de ganga; esa es la banda que se recupera si el
+    # dueño despeja lo que mandó a revisión. Después, la revisión.
+    if card.section in {"unconfirmed-quantity", "incomplete"}:
+        card.band, card.band_label = NO_REFERENCE_BAND
+    elif card.band == "ganga" and blockers:
+        card.band, card.band_label = "buena", BAND_NAMES["buena"]
+        if not needs_review:
+            card.verdict_notes.append(
+                f"Por precio sería ganga ({round((card.ratio or 0) * 100)}% de la referencia). "
+                f"Para «Ganga real» falta: {_join([item['label'] for item in blockers])}."
+            )
+    card.gated_band = card.band
+    # Un CIB declarado va a revisión aunque no haya referencia CIB: lo que hay
+    # que mirar es la caja, no el precio.
+    reviewable = POSITIVE_BANDS | ({"sin-referencia"} if "cib-unverified" in card.review_keys else set())
+    if needs_review and card.section == "primary" and card.band in reviewable:
+        if card.ratio is not None:
+            card.verdict_notes.append(
+                f"Por precio sería {BAND_NAMES.get(card.price_band, card.price_band)} "
+                f"({round(card.ratio * 100)}% de la referencia), pero hay que revisarla antes."
+            )
+        card.band, card.band_label = REVIEW_BAND
+    card.verdict_notes[:0] = review
+
+
+BAND_NAMES = {key: label for key, _, label in DECISION_BANDS} | {EXPENSIVE_BAND[0]: EXPENSIVE_BAND[1]}
+
+
+def effective_band(
+    band: str,
+    valuation: dict[str, Any] | None,
+    availability_confirmed: bool,
+    contents_confirmed: bool = False,
+) -> str:
+    """La banda que corresponde mostrar hoy, sabiendo qué comprobó el dueño.
+
+    Al puntuar, ninguna publicación automática tiene la disponibilidad
+    confirmada (la fuente no lo informa) ni un CIB comprobado (el radar no mira
+    fotos). Si el dueño comprobó caja y manual y eso era lo único que la mandaba
+    a revisión, vuelve a la banda que le daba el precio. Si además confirmó Buy
+    It Now hace poco y no falta nada más, vuelve a ser ganga. Cualquier otra
+    cosa pendiente la deja donde está.
+    """
+
+    valuation = valuation or {}
+    keys = {str(item.get("key")) for item in valuation.get("bargainBlockers") or []}
+    if contents_confirmed:
+        keys.discard("contents")
+        review_keys = set(valuation.get("reviewKeys") or [])
+        if band == "revisar" and review_keys and review_keys <= {"cib-unverified"}:
+            band = str(valuation.get("gatedBand") or band)
+    if band != "buena" or not availability_confirmed or valuation.get("priceBand") != "ganga":
+        return band
+    return "ganga" if keys <= {"availability"} else band
+
+
 __all__ = [
+    "BARGAIN_MIN_CONFIDENCE",
+    "COMPLETION_COSTS_USD",
+    "LOT_FILLER_FACTOR",
+    "REVIEW_BAND",
+    "apply_verdict_gates",
+    "completion_cost",
+    "effective_band",
+    "lot_peer_benchmark",
     "COURIER_RATES",
     "IMPORT_TAX_USD",
     "DECISION_BANDS",

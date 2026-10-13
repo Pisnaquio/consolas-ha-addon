@@ -71,20 +71,49 @@ async function renderPage({
   items = [], environment = "production", failLoad = false, runs = null, search = "",
   coverage = { consoles: [], ownedWithoutSearch: [], wantedGames: 0, uncoveredGames: 0, explicitWanted: 0, explicitUncovered: 0 },
   expanded = null, resultSortBy = null, coverageOpen = false,
+  // Casi todos los tests miran lo que muestra una búsqueda desplegada; los que
+  // prueban cómo arranca la página piden `expandAll: false`.
+  expandAll = true, viewMode = null, collapsedGroups = null, storedPrefs = undefined,
+  // Los objetivos canónicos los manda el servidor; sin ellos (un servidor
+  // anterior) la vista por plataforma muestra las búsquedas como antes.
+  taxonomy = null,
 } = {}) {
   let html = "";
   const requests = [];
+  // Un DOM mínimo: lo justo para que la página enganche sus handlers sobre el
+  // HTML que acaba de pintar y el test pueda dispararlos como un click.
+  let bound = new Map();
+  const camel = (name) => name.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
   const root = {
     set innerHTML(value) {
       html = String(value);
+      bound = new Map();
     },
     get innerHTML() {
       return html;
     },
-    querySelectorAll() {
-      return [];
+    querySelectorAll(selector) {
+      const match = /^\[([a-z-]+)\]$/.exec(selector);
+      if (!match) return [];
+      const elements = [...html.matchAll(new RegExp(`<[a-z]+\\b[^>]*\\s${match[1]}="[^"]*"[^>]*>`, "g"))].map((tag) => {
+        const dataset = {};
+        for (const [, name, value] of tag[0].matchAll(/\sdata-([a-z-]+)="([^"]*)"/g)) dataset[camel(name)] = value;
+        const handlers = {};
+        return { dataset, handlers, addEventListener(type, fn) { (handlers[type] ||= []).push(fn); } };
+      });
+      bound.set(selector, elements);
+      return elements;
     }
   };
+  async function fire(selector, predicate = () => true, { type = "click", value } = {}) {
+    const element = (bound.get(selector) || []).find((candidate) => predicate(candidate.dataset));
+    if (!element) throw new Error(`Nada que disparar en ${selector}`);
+    for (const handler of element.handlers[type] || []) {
+      await handler({ preventDefault() {}, target: { value }, currentTarget: element });
+    }
+    await new Promise((resolve) => setImmediate(resolve));
+    return html;
+  }
   const counts = ["active", "draft", "paused", "archived"].reduce(
     (acc, status) => ({ ...acc, [status]: items.filter((item) => item.status === status).length }),
     {}
@@ -95,6 +124,7 @@ async function renderPage({
     environment,
     sources: SOURCES,
     counts,
+    ...(taxonomy || {}),
     items
   };
   const fetchImpl = async (url, options = {}) => {
@@ -109,19 +139,25 @@ async function renderPage({
   };
   // Las preferencias de la vista viven en el navegador, así que el harness
   // necesita un localStorage para poder probar plegada y desplegada.
-  const guardado = expanded || resultSortBy || coverageOpen
-    ? JSON.stringify({
-        sortBy: "default",
-        expanded: expanded || [],
-        coverageOpen,
-        ...(resultSortBy ? { resultSortBy } : {}),
-      })
-    : null;
+  const abiertas = expanded || (expandAll ? items.map((item) => item.id) : []);
+  let guardado =
+    storedPrefs !== undefined
+      ? storedPrefs
+      : JSON.stringify({
+          sortBy: "default",
+          expanded: abiertas,
+          coverageOpen,
+          ...(resultSortBy ? { resultSortBy } : {}),
+          ...(viewMode ? { viewMode } : {}),
+          ...(collapsedGroups ? { collapsedGroups } : {}),
+        });
   const windowStub = {
     location: { search },
     localStorage: {
       getItem: (key) => (key === "consolas.radar.searchView" ? guardado : null),
-      setItem: () => {},
+      setItem: (key, value) => {
+        if (key === "consolas.radar.searchView") guardado = value;
+      },
     },
   };
   const document = {
@@ -143,7 +179,15 @@ async function renderPage({
   vm.runInContext(pageSource, context, { filename: "chasing-games.js" });
   await new Promise((resolve) => setImmediate(resolve));
   await new Promise((resolve) => setImmediate(resolve));
-  return { html, requests, repository: windowStub.RadarRepository };
+  return {
+    get html() {
+      return html;
+    },
+    requests,
+    repository: windowStub.RadarRepository,
+    fire,
+    savedPrefs: () => JSON.parse(guardado || "{}"),
+  };
 }
 
 test("renders an active search with its status, criteria and run action", async () => {
@@ -214,7 +258,7 @@ test("a paused search offers Reanudar and keeps its stored results visible", asy
   assert.match(html, /data-status="radar-1" data-next="active">Reanudar/);
   assert.doesNotMatch(html, /Buscar ahora/);
   assert.match(html, /PS2 Slim SCPH-79001 tested/);
-  assert.match(html, /1 resultados activos/);
+  assert.match(html, /1 resultado activo/);
 });
 
 test("an archived search can be reactivated and is not offered Archivar again", async () => {
@@ -1007,29 +1051,35 @@ test("the page still works when coverage cannot be loaded", async () => {
   assert.doesNotMatch(html, /radar-coverage/);
 });
 
-test("a search can be folded away, and a draft starts folded", async () => {
-  const borrador = search({ status: "draft" });
-  const { html } = await renderPage({ items: [borrador] });
+test("every search starts as a compact row, draft or active", async () => {
+  const { html } = await renderPage({
+    items: [search({ status: "draft" }), search({ id: "radar-2", name: "PS2 activa" })],
+    expandAll: false,
+  });
 
   assert.match(html, /data-toggle-card="radar-1"/);
-  assert.match(html, /chase-card radar-card is-draft is-collapsed/);
-  // Plegada muestra lo justo: nombre, estado y los números. Nada de criterios.
+  assert.match(html, /radar-row is-draft"/);
+  assert.match(html, /radar-row is-active"/);
+  // Plegada muestra lo justo: tipo, nombre, estado, prioridad y números. Nada de criterios.
   assert.doesNotMatch(html, /radar-chips/);
+  assert.doesNotMatch(html, /radar-row-detail/);
+  assert.match(html, /aria-expanded="false" aria-label="Desplegar PS2 activa"/);
 });
 
-test("an active search starts open, with everything it had", async () => {
-  const { html } = await renderPage({ items: [search()] });
+test("once opened, a search shows its criteria, notes and results", async () => {
+  const { html } = await renderPage({ items: [search({ notes: "Revisar el lector" })] });
 
-  assert.doesNotMatch(html, /is-collapsed/);
+  assert.match(html, /radar-row is-active is-open/);
   assert.match(html, /radar-chips/);
+  assert.match(html, /Revisar el lector/);
   assert.match(html, /aria-expanded="true"/);
 });
 
-test("the order can be chosen, and the default imposes nothing", async () => {
+test("the order can be chosen, and the default is the configured priority", async () => {
   const { html } = await renderPage({ items: [search()] });
 
   assert.match(html, /data-sort="1"/);
-  assert.match(html, /Como las trae el radar/);
+  assert.match(html, /<option value="default" selected>Prioridad configurada/);
   assert.match(html, /Buscadas hace más tiempo/);
 });
 
@@ -1098,13 +1148,15 @@ function searchWithResults(results) {
 }
 
 test("results can be ordered by game and price, so copies sit together and cheapest first", async () => {
-  const { html } = await renderPage({
+  const page = await renderPage({
     items: [searchWithResults(godOfWarResults())],
     expanded: ["gow"],
     resultSortBy: "title-price",
   });
+  // El orden elegido aplica a la lista completa: plegada muestra las tres mejores.
+  const html = await page.fire("[data-show-all]", (data) => data.showAll === "gow");
 
-  const order = [...html.matchAll(/God of War[^<]*/g)].map((match) => match[0]);
+  const order = [...html.matchAll(/<h3>([^<]*God of War[^<]*)/g)].map((match) => match[1]);
   const chains = order.filter((title) => title.includes("Chains"));
   const sparta = order.findIndex((title) => title.includes("Ghost of Sparta"));
 
@@ -1115,11 +1167,12 @@ test("results can be ordered by game and price, so copies sit together and cheap
 });
 
 test("results can be ordered by price alone", async () => {
-  const { html } = await renderPage({
+  const page = await renderPage({
     items: [searchWithResults(godOfWarResults())],
     expanded: ["gow"],
     resultSortBy: "price-asc",
   });
+  const html = await page.fire("[data-show-all]", (data) => data.showAll === "gow");
 
   const first = html.indexOf("God of War Chains of Olympus (Sony PSP, 2008)");
   const last = html.indexOf("Ghost of Sparta");
@@ -1133,4 +1186,498 @@ test("a single result gets no sort control: there is nothing to order", async ()
   });
 
   assert.doesNotMatch(html, /data-result-sort/);
+  assert.doesNotMatch(html, /data-show-all/);
+});
+
+/* ------------------------------------------------------------------------ */
+/* Pantalla agrupada: por plataforma, por objetivo, filas compactas          */
+/* ------------------------------------------------------------------------ */
+//
+// Las búsquedas de acá imitan la forma del portafolio retro —una consola, un
+// lote y unos deseados por plataforma— pero son datos inventados: la página no
+// sabe qué búsquedas existen, agrupa por lo que cada una declara.
+
+function portfolio() {
+  return [
+    search({ id: "n64-lot", name: "Lotes de juegos N64", searchType: "lot", priority: "media", platform: "N64",
+      platformKey: "n64", platformLabel: "Nintendo 64", platformOrder: 2, entityType: "", entityId: "" }),
+    search({ id: "snes-console", name: "Super Nintendo — consola", searchType: "console", priority: "alta",
+      platform: "SNES", platformKey: "snes", platformLabel: "SNES", platformOrder: 0 }),
+    search({ id: "n64-wish", name: "Deseados N64", searchType: "chase", priority: "media-alta", platform: "N64",
+      platformKey: "n64", platformLabel: "Nintendo 64", platformOrder: 2, entityType: "game", entityConsoleId: "n64" }),
+    search({ id: "n64-console", name: "Nintendo 64 — consola", searchType: "console", priority: "alta",
+      platform: "Nintendo 64", platformKey: "n64", platformLabel: "Nintendo 64", platformOrder: 2,
+      lastCheckedAt: "2026-10-12T19:00:00Z" }),
+    search({ id: "otra", name: "Algo sin plataforma", searchType: "discovery", priority: "baja", platform: "" }),
+  ];
+}
+
+function result(id, overrides = {}) {
+  return {
+    id,
+    sourceId: "ebay-us",
+    title: `Publicación ${id}`,
+    priceLabel: "USD 20",
+    priceAmount: 20,
+    priceCurrency: "USD",
+    listingUrl: `https://www.ebay.com/itm/${id}`,
+    reasons: [],
+    unverified: [],
+    lastSeenAt: "2026-10-12T19:00:00Z",
+    ...overrides,
+  };
+}
+
+const sectionOrder = (html) => [...html.matchAll(/<section class="radar-group[^"]*" data-group="([^"]+)"/g)].map((m) => m[1]);
+const rowOrder = (html) => [...html.matchAll(/<article class="radar-row[^"]*" id="search-([^"]+)"/g)].map((m) => m[1]);
+
+test("by default the searches are grouped by platform, one section each, in the platform order", async () => {
+  const { html } = await renderPage({ items: portfolio(), expandAll: false });
+
+  assert.deepEqual(sectionOrder(html), ["platform:snes", "platform:n64", "platform:none"]);
+  // «N64» y «Nintendo 64» son la misma plataforma: una sola sección.
+  assert.equal((html.match(/data-group="platform:n64"/g) || []).length, 1);
+  assert.match(html, /radar-group-name">Nintendo 64</);
+  assert.match(html, /radar-group-name">Sin plataforma</);
+  assert.match(html, /aria-pressed="true">Por plataforma/);
+});
+
+test("inside a platform, searches follow the configured priority: console, wishlist, lots", async () => {
+  const { html } = await renderPage({ items: portfolio(), expandAll: false });
+
+  assert.deepEqual(rowOrder(html), ["snes-console", "n64-console", "n64-wish", "n64-lot", "otra"]);
+});
+
+test("a platform header sums up searches, active results, last check, errors and state", async () => {
+  const items = portfolio();
+  items[0] = { ...items[0], status: "paused", results: [result("a")], resultCount: 1 };
+  items[2] = { ...items[2], results: [result("b"), result("c")], resultCount: 2, lastError: "eBay respondió 500" };
+  const { html } = await renderPage({ items, expandAll: false });
+  const n64 = html.slice(html.indexOf('data-group="platform:n64"'), html.indexOf('data-group="platform:none"'));
+
+  assert.match(n64, /3 búsquedas/);
+  assert.match(n64, /3 resultados activos/);
+  assert.match(n64, /revisada 12 oct/);
+  assert.match(n64, /radar-group-state is-partial">Parcial/);
+  assert.match(n64, /1 con error/);
+});
+
+test("the group state reads active, paused or no results", async () => {
+  const { repository } = await renderPage({ items: [] });
+
+  assert.equal(repository.summarizeGroup([search({ results: [result("a")], resultCount: 1 })]).status, "active");
+  assert.equal(repository.summarizeGroup([search({ resultCount: 0 })]).status, "empty");
+  assert.equal(repository.summarizeGroup([search({ status: "paused" })]).statusLabel, "Pausada");
+});
+
+test("the objective view groups consoles, wishlists, lots and anything else", async () => {
+  const { html } = await renderPage({ items: portfolio(), expandAll: false, viewMode: "objective" });
+
+  assert.deepEqual(sectionOrder(html), [
+    "objective:console",
+    "objective:wishlist",
+    "objective:lot",
+    "objective:other",
+  ]);
+  assert.match(html, /radar-group-name">Consolas completas</);
+  assert.match(html, /radar-group-name">Juegos deseados</);
+  assert.match(html, /radar-group-name">Lotes de juegos</);
+  assert.match(html, /radar-group-name">Otros tipos</);
+  // Por objetivo, cada fila dice de qué plataforma es.
+  assert.match(html, /Consola completa · Nintendo 64/);
+  assert.deepEqual(rowOrder(html).slice(0, 2), ["snes-console", "n64-console"]);
+});
+
+test("the chosen view is a browser preference that survives a reload, never collection state", async () => {
+  const page = await renderPage({ items: portfolio(), expandAll: false });
+  await page.fire("[data-view]", (data) => data.view === "objective");
+
+  assert.equal(page.savedPrefs().viewMode, "objective");
+  assert.ok(page.requests.every((request) => !request.url.includes("/api/state")));
+  assert.ok(page.requests.every((request) => !request.options.method || request.options.method === "GET"));
+
+  const reloaded = await renderPage({ items: portfolio(), storedPrefs: JSON.stringify(page.savedPrefs()) });
+  assert.match(reloaded.html, /aria-pressed="true">Por tipo de búsqueda/);
+  assert.match(reloaded.html, /data-group="objective:console"/);
+});
+
+test("status filters still apply, and empty groups disappear", async () => {
+  const items = portfolio();
+  items[0] = { ...items[0], status: "paused" };
+  const page = await renderPage({ items, expandAll: false });
+  const html = await page.fire("[data-filter]", (data) => data.filter === "paused");
+
+  assert.deepEqual(sectionOrder(html), ["platform:n64"]);
+  assert.deepEqual(rowOrder(html), ["n64-lot"]);
+});
+
+test("a platform can be folded, and the page remembers it", async () => {
+  const page = await renderPage({ items: portfolio(), expandAll: false });
+  const html = await page.fire("[data-toggle-group]", (data) => data.toggleGroup === "platform:n64");
+
+  assert.deepEqual(page.savedPrefs().collapsedGroups, ["platform:n64"]);
+  assert.match(html, /radar-group is-collapsed" data-group="platform:n64"/);
+  assert.doesNotMatch(html, /id="search-n64-console"/);
+  // El encabezado plegado sigue diciendo qué hay adentro.
+  assert.match(html, /data-group="platform:n64"[\s\S]*?3 búsquedas/);
+});
+
+test("a compact row carries type, name, state, priority, last run, count, best result and daily actions", async () => {
+  const item = search({
+    results: [result("best", { band: "buena", title: "PS2 Slim SCPH-79001 controller cables" })],
+    resultCount: 1,
+    lastCheckedAt: "2026-10-12T19:00:00Z",
+  });
+  const { html } = await renderPage({ items: [item], expandAll: false });
+  const row = html.slice(html.indexOf('<article class="radar-row'));
+
+  assert.match(row, /Consola completa/);
+  assert.match(row, /PlayStation 2 lista para usar/);
+  assert.match(row, /chase-status is-active">Activa/);
+  assert.match(row, /Prioridad alta/);
+  assert.match(row, /12 oct/);
+  assert.match(row, /1 resultado</);
+  assert.match(row, /radar-row-best[\s\S]*Buena compra[\s\S]*PS2 Slim SCPH-79001 controller cables/);
+  assert.match(row, /data-run="radar-1"/);
+  assert.match(row, /data-status="radar-1" data-next="paused">Pausar/);
+  assert.match(row, /data-edit="radar-1">Editar/);
+  // Lo menos frecuente vive en el detalle.
+  assert.doesNotMatch(row, /data-delete=/);
+  assert.doesNotMatch(row, /<article class="chase-result"/);
+});
+
+test("Editar opens the form inside the row, without unfolding anything else", async () => {
+  const page = await renderPage({ items: portfolio(), expandAll: false });
+  const html = await page.fire("[data-edit]", (data) => data.edit === "n64-wish");
+
+  assert.match(html, /id="radarEdit-n64-wish"/);
+  assert.match(html, /radar-row is-active is-open" id="search-n64-wish"/);
+  assert.doesNotMatch(html, /radar-row is-active is-open" id="search-n64-console"/);
+});
+
+test("only the three best results show until all of them are asked for", async () => {
+  const item = search({ results: ["a", "b", "c", "d", "e"].map((id) => result(id)), resultCount: 5 });
+  const page = await renderPage({ items: [item] });
+
+  assert.equal((page.html.match(/<article class="chase-result"/g) || []).length, 3);
+  assert.match(page.html, /data-show-all="radar-1" aria-expanded="false">Ver todos los 5 resultados/);
+  assert.doesNotMatch(page.html, /data-result-sort/);
+
+  const html = await page.fire("[data-show-all]");
+  assert.equal((html.match(/<article class="chase-result"/g) || []).length, 5);
+  assert.match(html, /Mostrar sólo las 3 mejores/);
+  assert.match(html, /data-result-sort/);
+  // Ver todo sigue dejando descartar, valorar como lote y abrir la publicación.
+  assert.equal((html.match(/data-dismiss="/g) || []).length, 5);
+  assert.equal((html.match(/data-lot-calc="/g) || []).length, 5);
+});
+
+test("a wishlist shows one listing per title before repeating copies", async () => {
+  const target = (name) => ({ query: `${name} n64`, gameId: name.toLowerCase(), name });
+  const item = search({
+    searchType: "chase",
+    results: [
+      result("t1", { title: "Tetris copia 1", titleTarget: target("Tetris") }),
+      result("t2", { title: "Tetris copia 2", titleTarget: target("Tetris") }),
+      result("m1", { title: "Mario copia 1", titleTarget: target("Mario") }),
+      result("z1", { title: "Zelda copia 1", titleTarget: target("Zelda") }),
+    ],
+    resultCount: 4,
+  });
+  const { html } = await renderPage({ items: [item] });
+  const titles = [...html.matchAll(/<h3>([^<]+copia[^<]*)<\/h3>/g)].map((m) => m[1]);
+
+  assert.deepEqual(titles, ["Tetris copia 1", "Mario copia 1", "Zelda copia 1"]);
+});
+
+test("a wishlist says how many titles it covers and which it does not", async () => {
+  const item = search({
+    searchType: "chase",
+    targetCoverage: { total: 12, covered: 4, uncovered: ["Paper Mario", "Banjo-Kazooie"] },
+    hiddenCopies: 9,
+  });
+  const { html } = await renderPage({ items: [item] });
+
+  assert.match(html, /4 de 12 títulos con resultado · sin cubrir: Paper Mario, Banjo-Kazooie · 9 copias repetidas no se muestran/);
+});
+
+test("lots with an unconfirmed quantity are kept apart from the ones that qualify", async () => {
+  const item = search({
+    searchType: "lot",
+    results: [
+      result("ok", { title: "Lot of 20 PS2 Games", band: "buena" }),
+      result("dudoso", { title: "PS2 Game Bundle Kingdom Hearts", section: "unconfirmed-quantity", band: "sin-referencia" }),
+    ],
+    resultCount: 2,
+  });
+  const page = await renderPage({ items: [item], expandAll: false });
+
+  assert.match(page.html, /radar-row-best[\s\S]*Lot of 20 PS2 Games/);
+  let html = await page.fire("[data-toggle-card]");
+  assert.match(html, /Cantidad sin confirmar · 1/);
+  assert.doesNotMatch(html, /<h3>PS2 Game Bundle Kingdom Hearts/);
+  html = await page.fire("[data-toggle-unconfirmed]");
+  assert.match(html, /<h3>PS2 Game Bundle Kingdom Hearts/);
+});
+
+test("an unknown availability is shown as pending, never as available", async () => {
+  const pending = result("p", {
+    availability: "unknown",
+    verification: { state: "pending", lastSeenAt: new Date(Date.now() - 3 * 3600000).toISOString(), ttlHours: 24 },
+    requiresVerification: true,
+  });
+  const { html } = await renderPage({ items: [search({ results: [pending], resultCount: 1 })] });
+
+  assert.match(html, /radar-verification is-pending">Verificación pendiente: encontrada hace 3 h, sin confirmar que se pueda comprar/);
+  assert.match(html, /Buy It Now o Add to Cart/);
+  assert.match(html, /data-verify="p">Marcar verificada/);
+});
+
+test("a fresh verification says when it expires, and an expired one asks again", async () => {
+  const now = Date.now();
+  const verified = result("v", {
+    verification: {
+      state: "verified",
+      verifiedAt: new Date(now - 2 * 3600000).toISOString(),
+      expiresAt: new Date(now + 22 * 3600000).toISOString(),
+      ttlHours: 24,
+    },
+    requiresVerification: false,
+  });
+  const expired = result("x", {
+    verification: { state: "expired", reason: "price-changed", verifiedAt: new Date(now - 5 * 3600000).toISOString() },
+    requiresVerification: true,
+  });
+  const { html } = await renderPage({ items: [search({ results: [verified, expired], resultCount: 2 })] });
+
+  assert.match(html, /is-verified">Verificada hace 2 h · vence en 22 h\./);
+  assert.doesNotMatch(html, /data-verify="v"/);
+  assert.match(html, /Verificación vencida \(cambió de precio después\)/);
+  assert.match(html, /data-verify="x">Marcar verificada/);
+});
+
+test("a result that needs review says so, and says why", async () => {
+  const review = result("r", {
+    band: "revisar",
+    valuation: {
+      priceBand: "ganga",
+      verdictNotes: ["Cartucho sin originalidad declarada: mirá etiqueta, placa y tornillos en las fotos."],
+    },
+  });
+  const { html } = await renderPage({ items: [search({ results: [review], resultCount: 1 })] });
+
+  assert.match(html, /chase-result-band is-revisar">Requiere revisión/);
+  assert.match(html, /radar-verdict-notes"><li>Cartucho sin originalidad declarada/);
+});
+
+/* ------------------------------------------------------------------------ */
+/* Objetivos canónicos dentro de cada plataforma                             */
+/* ------------------------------------------------------------------------ */
+//
+// La taxonomía la manda el servidor con las búsquedas. Los tests usan la misma
+// forma que `server/radar/taxonomy.py` produce, y uno usa otra a propósito para
+// probar que la página no conoce ninguna lista de objetivos por su cuenta.
+
+const TAXONOMY = {
+  objectives: [
+    { id: "game-lot", label: "Lotes de juegos", kind: "lot", completeness: "lot", canonical: true, order: 0 },
+    { id: "game-loose", label: "Juegos loose", kind: "game", completeness: "loose", canonical: true, order: 1 },
+    { id: "game-cib", label: "Juegos CIB", kind: "game", completeness: "cib", canonical: true, order: 2 },
+    { id: "console-loose", label: "Consolas loose", kind: "console", completeness: "loose", canonical: true, order: 3 },
+    { id: "console-cib", label: "Consolas CIB", kind: "console", completeness: "cib", canonical: true, order: 4 },
+    { id: "other", label: "Otras piezas", kind: "other", completeness: "", canonical: false, order: 5 },
+  ],
+  sections: {
+    "unconfirmed-quantity": { label: "Cantidad sin confirmar", detail: "No dicen cuántos juegos traen." },
+    incomplete: { label: "No llega a CIB", detail: "Traen caja o manual, no los dos." },
+  },
+};
+
+const objectiveResult = (id, objective, overrides = {}) =>
+  result(id, { objective: { id: objective, status: overrides.status || "loose" }, score: 50, ...overrides });
+
+function platformWithResults() {
+  const console64 = search({
+    id: "n64-console", name: "Nintendo 64 — consola", searchType: "console", platform: "N64",
+    platformKey: "n64", platformLabel: "Nintendo 64", platformOrder: 2,
+    results: [
+      objectiveResult("bundle", "console-loose", { title: "N64 Console Controller Jumper Pak Cords", band: "buena", score: 80, priceLabel: "USD 85" }),
+      objectiveResult("alone", "console-loose", { title: "N64 Console Only", band: "razonable", score: 55 }),
+      objectiveResult("cib", "console-cib", { title: "N64 Console Complete in Box", band: "revisar", score: 60, status: "declared" }),
+    ],
+  });
+  const wish64 = search({
+    id: "n64-wish", name: "Deseados N64", searchType: "chase", priority: "media-alta", platform: "N64",
+    platformKey: "n64", platformLabel: "Nintendo 64", platformOrder: 2,
+    results: [
+      objectiveResult("mario", "game-loose", { title: "Super Mario 64 Cartridge", band: "revisar", score: 40 }),
+      objectiveResult("zelda", "game-loose", { title: "Zelda Ocarina Cartridge", band: "revisar", score: 45 }),
+      objectiveResult("sm64-box", "game-cib", { title: "Super Mario 64 with box no manual", section: "incomplete", status: "incomplete", score: 10 }),
+      // La misma publicación que encontró la búsqueda de consola: cuenta una vez.
+      objectiveResult("bundle", "console-loose", { title: "N64 Console Controller Jumper Pak Cords", band: "buena", score: 70 }),
+    ],
+  });
+  const lots64 = search({
+    id: "n64-lot", name: "Lotes de juegos N64", searchType: "lot", priority: "media", platform: "N64",
+    platformKey: "n64", platformLabel: "Nintendo 64", platformOrder: 2, results: [],
+  });
+  const ps2 = search({
+    id: "ps2-lot", name: "Lotes de juegos PS2", searchType: "lot", priority: "media", platform: "PS2",
+    platformKey: "ps2", platformLabel: "PlayStation 2", platformOrder: 4,
+    results: [objectiveResult("lot22", "game-lot", { title: "Lot of 22 PS2 Games", band: "buena", score: 70, status: "lot" })],
+  });
+  return [console64, wish64, lots64, ps2];
+}
+
+const objectiveRows = (html, group) => {
+  const start = html.indexOf(`data-group="${group}"`);
+  const next = html.indexOf('<section class="radar-group', start + 1);
+  const section = html.slice(start, next === -1 ? undefined : next);
+  return [...section.matchAll(/data-objective="[^"/]+\/([^"]+)"/g)].map((m) => m[1]);
+};
+
+test("with the server's taxonomy, each platform shows its objectives in order, for any platform", async () => {
+  const { html } = await renderPage({ items: platformWithResults(), taxonomy: TAXONOMY, expandAll: false });
+
+  assert.deepEqual(objectiveRows(html, "platform:n64"), ["game-loose", "game-cib", "console-loose", "console-cib"]);
+  assert.deepEqual(objectiveRows(html, "platform:ps2"), ["game-lot"]);
+  // Los vacíos no ocupan una fila cada uno: se nombran juntos, atenuados.
+  const n64 = html.slice(html.indexOf('data-group="platform:n64"'), html.indexOf('data-group="platform:ps2"'));
+  assert.match(n64, /radar-objectives-empty"><span>Sin resultados<\/span><span class="radar-objective-chip">Lotes de juegos/);
+  const ps2 = html.slice(html.indexOf('data-group="platform:ps2"'));
+  assert.match(ps2, /Juegos loose<\/span><span class="radar-objective-chip">Juegos CIB/);
+  // «Otras piezas» no es canónico: si no trae nada, ni se nombra.
+  assert.doesNotMatch(html, /Otras piezas/);
+});
+
+test("the page draws whatever objectives the server sends, not a list of its own", async () => {
+  const custom = {
+    objectives: [
+      { id: "console-cib", label: "Consolas en caja", canonical: true, order: 0 },
+      { id: "game-loose", label: "Cartuchos sueltos", canonical: true, order: 1 },
+    ],
+    sections: {},
+  };
+  const { html } = await renderPage({ items: platformWithResults(), taxonomy: custom, expandAll: false });
+
+  assert.deepEqual(objectiveRows(html, "platform:n64"), ["console-cib", "game-loose"]);
+  assert.match(html, /radar-objective-label">Consolas en caja</);
+  assert.doesNotMatch(html, /Juegos CIB/);
+});
+
+test("an objective row carries its count and its best result; a listing two searches found counts once", async () => {
+  const { html } = await renderPage({ items: platformWithResults(), taxonomy: TAXONOMY, expandAll: false });
+  const row = (id) => {
+    const start = html.indexOf(`data-objective="platform:n64/${id}"`);
+    return html.slice(start, html.indexOf("</article>", start));
+  };
+
+  assert.match(row("console-loose"), /radar-objective-count">2 resultados</);
+  assert.match(row("console-loose"), /Buena compra[\s\S]*USD 85[\s\S]*N64 Console Controller Jumper Pak Cords/);
+  assert.match(row("game-loose"), /Zelda Ocarina Cartridge/, "el mejor por score");
+  assert.match(row("game-cib"), /0 resultados · 1 no llega a cib/);
+  assert.match(row("game-cib"), /Nada cumple todavía/);
+  // Encabezado de la plataforma: publicaciones únicas.
+  assert.match(html, /data-group="platform:n64"[\s\S]*?6 resultados activos/);
+});
+
+test("an objective unfolds to its best three, the rest on demand, and the page remembers it", async () => {
+  const items = platformWithResults();
+  items[0].results.push(
+    objectiveResult("c3", "console-loose", { title: "N64 Console Bundle Three", score: 30 }),
+    objectiveResult("c4", "console-loose", { title: "N64 Console Bundle Four", score: 20 })
+  );
+  const page = await renderPage({ items, taxonomy: TAXONOMY, expandAll: false });
+  let html = await page.fire("[data-toggle-objective]", (data) => data.toggleObjective === "platform:n64/console-loose");
+
+  assert.deepEqual(page.savedPrefs().openObjectives, ["platform:n64/console-loose"]);
+  const start = html.indexOf('data-objective="platform:n64/console-loose"');
+  const body = html.slice(start, html.indexOf('data-objective="platform:n64/console-cib"'));
+  assert.equal((body.match(/<article class="chase-result"/g) || []).length, 3);
+  assert.match(html, /data-show-all="platform:n64\/console-loose" aria-expanded="false">Ver todos los 4 resultados/);
+  // Cada publicación dice qué búsqueda la trajo; la repetida, las dos.
+  assert.match(html, /De Nintendo 64 — consola · Deseados N64/);
+
+  html = await page.fire("[data-show-all]", (data) => data.showAll === "platform:n64/console-loose");
+  assert.match(html, /N64 Console Bundle Four/);
+});
+
+test("what does not meet its objective stays apart inside it", async () => {
+  const page = await renderPage({
+    items: platformWithResults(),
+    taxonomy: TAXONOMY,
+    expandAll: false,
+    storedPrefs: JSON.stringify({ openObjectives: ["platform:n64/game-cib"] }),
+  });
+
+  assert.match(page.html, /No llega a CIB · 1/);
+  assert.doesNotMatch(page.html, /<h3>Super Mario 64 with box no manual/);
+  const html = await page.fire("[data-toggle-unconfirmed]");
+  assert.match(html, /<h3>Super Mario 64 with box no manual/);
+});
+
+test("the searches of a platform fold under the objectives, with their actions one click away", async () => {
+  const page = await renderPage({ items: platformWithResults(), taxonomy: TAXONOMY, expandAll: false });
+
+  assert.match(page.html, /data-toggle-searches="platform:n64" aria-expanded="false">[\s\S]*?3 búsquedas[\s\S]*?todas activas/);
+  assert.doesNotMatch(page.html, /id="search-n64-console"/);
+
+  const html = await page.fire("[data-toggle-searches]", (data) => data.toggleSearches === "platform:n64");
+  assert.deepEqual(page.savedPrefs().openSearchLists, ["platform:n64"]);
+  assert.match(html, /id="search-n64-console"/);
+  assert.match(html, /data-run="n64-console"/);
+  assert.match(html, /data-edit="n64-wish">Editar/);
+});
+
+test("the search-type view and an older server keep showing searches as rows", async () => {
+  const byType = await renderPage({ items: platformWithResults(), taxonomy: TAXONOMY, expandAll: false, viewMode: "objective" });
+  assert.match(byType.html, /aria-pressed="true">Por tipo de búsqueda/);
+  assert.match(byType.html, /radar-group-name">Consolas completas</);
+  assert.match(byType.html, /id="search-n64-console"/);
+  assert.doesNotMatch(byType.html, /data-toggle-objective/);
+
+  const older = await renderPage({ items: platformWithResults(), expandAll: false });
+  assert.match(older.html, /id="search-n64-console"/);
+  assert.doesNotMatch(older.html, /data-toggle-objective/);
+});
+
+test("a declared CIB asks to check box and manual; a checked one says so", async () => {
+  const declared = objectiveResult("cib", "game-cib", { status: "declared", band: "revisar" });
+  const checked = objectiveResult("cib2", "console-cib", {
+    status: "declared",
+    verification: { state: "pending", contentsVerifiedAt: new Date(Date.now() - 3600000).toISOString() },
+  });
+  const { html } = await renderPage({ items: [search({ results: [declared, checked] })] });
+
+  assert.match(html, /radar-contents is-declared">CIB declarado por el vendedor, sin comprobar: mirá caja y manual en las fotos/);
+  assert.match(html, /data-verify-contents="cib">Comprobé caja y manual/);
+  assert.match(html, /radar-contents is-verified">Caja y contenido comprobados hace 1 h/);
+  assert.doesNotMatch(html, /data-verify-contents="cib2"/);
+});
+
+test("checking box and manual goes through its own radar endpoint, never collection state", async () => {
+  const { repository, requests } = await renderPage({ items: [search()] });
+  requests.length = 0;
+
+  await repository.verifyListingContents("ebay-us-1");
+
+  assert.equal(requests[0].options.method, "POST");
+  assert.equal(requests[0].options.headers["X-Consolas-Radar"], "1");
+  assert.match(requests[0].url, /\/radar\/listings\/ebay-us-1\/verify-contents$/);
+});
+
+test("once box and manual are checked, the card stops asking to check them", async () => {
+  const note = "CIB declarado por el vendedor: confirmá caja original y manual en las fotos.";
+  const checked = objectiveResult("cib", "game-cib", {
+    status: "declared",
+    band: "revisar",
+    objective: { id: "game-cib", status: "declared", note },
+    verification: { state: "pending", contentsVerifiedAt: new Date().toISOString() },
+    valuation: { verdictNotes: [note, "Cartucho sin originalidad declarada"] },
+  });
+  const { html } = await renderPage({ items: [search({ results: [checked] })] });
+
+  assert.match(html, /radar-contents is-verified/);
+  assert.doesNotMatch(html, /<li>CIB declarado por el vendedor/);
+  assert.match(html, /<li>Cartucho sin originalidad declarada/);
 });

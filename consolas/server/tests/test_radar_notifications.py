@@ -191,7 +191,7 @@ class DeliveryTests(NotificationTestCase):
             notify_radar_opportunities(self.config)
         self.assertLessEqual(len(self.outbox()[0]["listingIds"]), 10)
 
-    def test_the_email_says_when_it_was_verified_and_links_out(self) -> None:
+    def test_the_email_says_when_it_was_checked_and_links_out(self) -> None:
         self.seed([ebay_summary()])
         captured = {}
 
@@ -203,7 +203,10 @@ class DeliveryTests(NotificationTestCase):
         with patch("server.app.send_radar_email", side_effect=capture):
             notify_radar_opportunities(self.config)
 
-        self.assertIn("Verificado", captured["text"])
+        # Revisado, no verificado: nadie confirmó todavía que se pueda comprar.
+        self.assertIn("Revisado", captured["text"])
+        self.assertNotIn("Verificado", captured["text"])
+        self.assertIn("sin verificar: abrila y confirmá Buy It Now o Add to Cart", captured["text"])
         self.assertIn("https://www.ebay.com/itm/", captured["text"])
         self.assertIn("Para mí", captured["text"])
 

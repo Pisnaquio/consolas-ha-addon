@@ -182,3 +182,171 @@
 .radar-coverage-title { font-family:"Fraunces","Space Grotesk",serif; font-size:1.22rem; }
 .radar-coverage-caret { font-size:.9rem; color:var(--muted); flex-shrink:0; line-height:1.8; }
 .radar-coverage.is-collapsed { padding-bottom:16px; }
+
+/* ------------------------------------------------------------------ */
+/* Búsquedas agrupadas por plataforma u objetivo                       */
+/* ------------------------------------------------------------------ */
+/* Veintisiete cards abiertas eran un muro. Ahora cada plataforma es una
+   sección plegable con su cobertura en el encabezado, y cada búsqueda una
+   fila compacta: lo pesado aparece sólo al desplegarla. Mismo lenguaje que
+   el resto de la página: bordes `--line`, píldoras mono, verde y ámbar. */
+
+.radar-list-controls { margin-top:18px; align-items:center; }
+.radar-list-controls-main { display:flex; flex-wrap:wrap; align-items:center; gap:10px 16px; }
+.radar-list-controls-main .radar-filters { margin:0; }
+.radar-list-controls-side { display:flex; align-items:end; gap:12px; }
+.radar-view { display:inline-flex; gap:4px; padding:3px; border:1px solid var(--line); border-radius:999px; }
+.radar-view .radar-filter { border-color:transparent; padding:6px 13px; }
+.radar-view .radar-filter.is-active { border-color:var(--ink); background:rgba(255,255,255,.06); }
+.radar-fold-all { min-height:34px; padding:6px 12px; font-size:.76rem; }
+
+.radar-groups { gap:12px; }
+.radar-group { border:1px solid var(--line); border-radius:18px; background:linear-gradient(180deg, rgba(13,39,66,.62), rgba(5,19,36,.5)); overflow:hidden; }
+.radar-group-head { display:grid; grid-template-columns:auto minmax(150px,auto) minmax(0,1fr) auto; align-items:center; gap:12px 16px;
+                    width:100%; padding:14px 18px; border:0; background:transparent; color:inherit; font:inherit; text-align:left; cursor:pointer; }
+.radar-group-head:hover { background:rgba(255,255,255,.03); }
+.radar-group-head:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
+.radar-group-caret { font-size:.9rem; color:var(--muted); }
+.radar-group-title { display:grid; gap:2px; min-width:0; }
+.radar-group-name { font-family:"Fraunces","Space Grotesk",serif; font-size:1.22rem; line-height:1.15; }
+.radar-group-stats { display:flex; flex-wrap:wrap; gap:4px 14px; font:500 .76rem "IBM Plex Mono",monospace; color:var(--muted); }
+.radar-group-badges { display:flex; flex-wrap:wrap; justify-content:end; gap:6px; }
+.radar-group-state,.radar-group-error { border:1px solid var(--line); border-radius:999px; padding:4px 9px; font:700 .7rem "IBM Plex Mono",monospace; color:var(--muted); white-space:nowrap; }
+.radar-group-state.is-active { border-color:rgba(120,220,170,.5); color:#8fe6bd; }
+.radar-group-state.is-partial,.radar-group-state.is-draft { border-color:rgba(255,214,140,.5); color:#ffd68c; }
+.radar-group-state.is-empty { border-color:rgba(143,184,220,.5); color:#b9d6f0; }
+.radar-group-error { border-color:rgba(255,123,123,.5); color:var(--danger); }
+.radar-group-body { display:grid; gap:0; border-top:1px solid var(--line); }
+
+/* Fila compacta de una búsqueda */
+.radar-row { border-top:1px solid rgba(153,191,230,.14); }
+.radar-row:first-child { border-top:0; }
+.radar-row.is-paused,.radar-row.is-archived { opacity:.74; }
+.radar-row.is-open { background:rgba(255,255,255,.025); }
+.radar-row-main { display:grid; grid-template-columns:auto minmax(0,1.15fr) minmax(0,1fr) auto; align-items:center; gap:10px 16px; padding:12px 18px; }
+.radar-row-toggle { margin:0; }
+.radar-row-id { min-width:0; }
+.radar-row-id h3 { margin:2px 0 4px; font-size:1rem; overflow-wrap:anywhere; }
+.radar-row-meta { display:flex; flex-wrap:wrap; align-items:center; gap:4px 12px; margin:0; color:var(--muted); font-size:.78rem; }
+.radar-row-meta .chase-status { padding:3px 8px; font-size:.68rem; }
+.radar-row-best { display:grid; grid-template-columns:auto auto minmax(0,1fr); align-items:baseline; gap:2px 8px; min-width:0; font-size:.8rem; }
+.radar-row-best-label { font:500 .68rem "IBM Plex Mono",monospace; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); }
+.radar-row-best .chase-result-band { margin:0; }
+.radar-row-best strong { font:600 .86rem "IBM Plex Mono",monospace; justify-self:end; }
+.radar-row-best-title { grid-column:1 / -1; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.radar-row-best.is-empty { color:var(--muted); font-size:.8rem; }
+.radar-row-actions { margin:0; flex-wrap:wrap; justify-content:end; }
+.radar-row-actions .btn-link { min-height:34px; padding:6px 12px; font-size:.76rem; }
+.radar-row-actions .btn-link[aria-pressed="true"] { border-color:var(--ink); }
+.radar-row-detail { padding:0 18px 16px 58px; display:grid; gap:10px; }
+.radar-row-detail .chase-card-meta { margin:4px 0 0; }
+.radar-row-detail .radar-chips { margin:0; }
+.radar-row-notes { margin:0; font-size:.84rem; color:var(--muted); }
+.radar-detail-actions { margin:2px 0 0; }
+.radar-detail-actions .btn-link { min-height:32px; padding:5px 11px; font-size:.74rem; }
+.radar-target-coverage { margin:0; padding:7px 11px; border-left:3px solid #8fb8dc; border-radius:0 8px 8px 0;
+                          background:rgba(143,184,220,.08); font-size:.8rem; color:var(--muted); }
+.radar-show-all { justify-self:start; min-height:34px; padding:6px 13px; font-size:.76rem; }
+.radar-row-detail .chase-results-sort { margin:4px 0 0; }
+.radar-row-detail .chase-results-sort select { width:auto; min-width:220px; }
+
+/* Lotes con cantidad sin confirmar: aparte, plegados, nunca mezclados. */
+.radar-unconfirmed { border:1px dashed var(--line); border-radius:12px; padding:2px 0; }
+.radar-unconfirmed-head { display:grid; gap:2px; width:100%; padding:10px 12px; border:0; background:transparent; color:var(--ink);
+                          font:600 .82rem inherit; text-align:left; cursor:pointer; }
+.radar-unconfirmed-head .muted { font-weight:400; font-size:.76rem; }
+.radar-unconfirmed .chase-results { padding:0 10px 10px; }
+
+/* Verificación: encontrada no es comprable. */
+.radar-verification { margin:.3rem 0 0; padding:5px 10px; border-radius:8px; display:inline-block; font-size:.76rem; line-height:1.35; }
+.radar-verification.is-pending { background:rgba(255,199,92,.08); border:1px solid rgba(255,214,140,.3); color:#ffd68c; }
+.radar-verification.is-verified { background:rgba(120,220,170,.08); border:1px solid rgba(120,220,170,.35); color:#8fe6bd; }
+.radar-verification.is-ended { border:1px solid var(--line); color:var(--muted); }
+
+/* Por qué el veredicto es el que es. */
+.radar-verdict-notes { margin:6px 0 0; padding:0 0 0 16px; display:grid; gap:2px; font-size:.78rem; color:#c9d9ea; }
+.radar-verdict-notes li::marker { color:rgba(255,214,140,.7); }
+.chase-result-band.is-revisar { color:#ffd68c; }
+.chase-result-band.is-sin-referencia { color:var(--muted); }
+
+@media (max-width:1020px) {
+  .radar-row-main { grid-template-columns:auto minmax(0,1fr) auto; }
+  .radar-row-best { grid-column:2 / -1; grid-row:2; }
+  .radar-group-head { grid-template-columns:auto minmax(0,1fr) auto; }
+  .radar-group-stats { grid-column:2 / -1; grid-row:2; }
+}
+
+@media (max-width:720px) {
+  .radar-list-controls,.radar-list-controls-side { align-items:stretch; }
+  .radar-list-controls-main { width:100%; }
+  .radar-view { width:100%; }
+  .radar-view .radar-filter { flex:1 1 0; justify-content:center; }
+  .radar-group-head { grid-template-columns:auto minmax(0,1fr); padding:12px 14px; }
+  .radar-group-badges { grid-column:2; justify-content:start; }
+  .radar-group-stats { grid-column:2; grid-row:auto; }
+  .radar-row-main { grid-template-columns:auto minmax(0,1fr); padding:12px 14px; }
+  .radar-row-best { grid-column:2; grid-row:auto; }
+  .radar-row-actions { grid-column:1 / -1; justify-content:start; }
+  body.studio-variant .radar-row-actions { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); }
+  body.studio-variant .radar-row-actions .btn-link { width:100%; padding:6px 6px; font-size:.72rem; white-space:nowrap; }
+  .radar-row-detail { padding:0 14px 14px; }
+  body.studio-variant .radar-list-controls-side .btn-link,
+  body.studio-variant .radar-show-all { width:auto; }
+}
+
+/* ------------------------------------------------------------------ */
+/* Objetivos canónicos dentro de cada plataforma                       */
+/* ------------------------------------------------------------------ */
+/* Lotes, juegos loose, juegos CIB, consolas loose y consolas CIB: una fila
+   por objetivo con su conteo y su mejor resultado. Los vacíos se nombran
+   juntos, atenuados. Las búsquedas que los alimentan quedan abajo, plegadas. */
+
+.radar-objectives { display:grid; }
+.radar-objective { border-top:1px solid rgba(153,191,230,.14); }
+.radar-objective:first-child { border-top:0; }
+.radar-objective.is-open { background:rgba(255,255,255,.025); }
+.radar-objective-head { display:grid; grid-template-columns:auto 150px 230px minmax(0,1fr);
+                        align-items:center; gap:6px 14px; width:100%; padding:11px 18px; border:0; background:transparent;
+                        color:inherit; font:inherit; text-align:left; cursor:pointer; }
+.radar-objective-head:hover { background:rgba(255,255,255,.03); }
+.radar-objective-head:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
+.radar-objective-label { font-weight:600; font-size:.95rem; }
+.radar-objective-count { font:500 .74rem "IBM Plex Mono",monospace; color:var(--muted); }
+.radar-objective-best { display:grid; grid-template-columns:auto auto minmax(0,1fr); align-items:baseline; gap:8px; min-width:0; font-size:.8rem; }
+.radar-objective-best .chase-result-band { margin:0; }
+.radar-objective-best strong { font:600 .84rem "IBM Plex Mono",monospace; }
+.radar-objective-best .radar-row-best-title { grid-column:auto; }
+.radar-objective-best.is-empty { display:block; color:var(--muted); }
+.radar-objective-body { padding:0 18px 14px 44px; display:grid; gap:10px; }
+.radar-objectives-empty { display:flex; flex-wrap:wrap; align-items:center; gap:6px 8px; margin:0; padding:10px 18px;
+                          border-top:1px solid rgba(153,191,230,.14); font-size:.76rem; color:var(--muted); opacity:.8; }
+.radar-objectives-empty > span:first-child { font:500 .68rem "IBM Plex Mono",monospace; text-transform:uppercase; letter-spacing:.08em; }
+.radar-objective-chip { border:1px dashed var(--line); border-radius:999px; padding:2px 9px; }
+
+/* Las búsquedas de la plataforma, para administrarlas. */
+.radar-group-searches { border-top:1px solid var(--line); }
+.radar-searches-head { display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 12px; width:100%; padding:10px 18px; border:0;
+                       background:transparent; color:var(--ink); font:600 .84rem inherit; text-align:left; cursor:pointer; }
+.radar-searches-head .muted { font:500 .74rem "IBM Plex Mono",monospace; }
+.radar-searches-head:hover { background:rgba(255,255,255,.03); }
+.radar-searches-body { border-top:1px solid rgba(153,191,230,.14); }
+
+/* Un CIB es lo que declara el vendedor hasta que el dueño mira las fotos. */
+.radar-contents { margin:.3rem 0 0; padding:5px 10px; border-radius:8px; display:inline-block; font-size:.76rem; line-height:1.35; }
+.radar-contents.is-declared { background:rgba(255,199,92,.08); border:1px solid rgba(255,214,140,.3); color:#ffd68c; }
+.radar-contents.is-verified { background:rgba(120,220,170,.08); border:1px solid rgba(120,220,170,.35); color:#8fe6bd; }
+
+@media (max-width:1020px) {
+  .radar-objective-head { grid-template-columns:auto 150px minmax(0,1fr); }
+  .radar-objective-best { grid-column:2 / -1; }
+}
+
+@media (max-width:720px) {
+  /* Dos líneas por objetivo: nombre y conteo; veredicto, precio y título. */
+  .radar-objective-head { grid-template-columns:auto minmax(0,1fr) auto; gap:4px 10px; padding:9px 14px; }
+  .radar-objective-count { grid-column:3; grid-row:1; text-align:right; max-width:52vw; }
+  .radar-objective-best { grid-column:2 / -1; grid-row:2; grid-template-columns:auto auto minmax(0,1fr); gap:6px; font-size:.76rem; }
+  .radar-objective-best .radar-row-best-title { grid-column:auto; }
+  .radar-objective-body { padding:0 14px 12px; }
+  .radar-objectives-empty,.radar-searches-head { padding:10px 14px; }
+}

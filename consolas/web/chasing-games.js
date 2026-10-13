@@ -34,17 +34,19 @@
   const PRIORITY_OPTIONS = ["alta", "media-alta", "media", "baja"];
 
   /**
-   * Cómo se ordenan las búsquedas. "Como las trae el radar" es el orden del
-   * servidor —estado y fecha—, y es el default porque es el único que no impone
-   * un criterio propio.
+   * Cómo se ordenan las búsquedas dentro de cada grupo. El default es la
+   * prioridad que configuraste —con la consola, los deseados y los lotes en
+   * ese orden cuando empatan—, porque es la única que no inventa un criterio.
    */
   const SORT_OPTIONS = [
-    { id: "default", label: "Como las trae el radar" },
+    { id: "default", label: "Prioridad configurada" },
     { id: "name", label: "Nombre (A-Z)" },
-    { id: "priority", label: "Prioridad" },
     { id: "results", label: "Más resultados primero" },
     { id: "checked", label: "Buscadas hace más tiempo" },
   ];
+
+  /** Cuántas publicaciones muestra una búsqueda antes de pedir "ver todos". */
+  const TOP_RESULTS = 3;
 
   /**
    * Cómo se ordenan las publicaciones DENTRO de una búsqueda. Es distinto de
@@ -103,9 +105,20 @@
   const PREFS_KEY = "consolas.radar.searchView";
 
   function loadPrefs() {
+    const defaults = {
+      viewMode: "platform",
+      sortBy: "default",
+      resultSortBy: "title-price",
+      coverageOpen: false,
+      expanded: new Set(),
+      collapsedGroups: new Set(),
+      openObjectives: new Set(),
+      openSearchLists: new Set(),
+    };
     try {
       const raw = JSON.parse(window.localStorage?.getItem(PREFS_KEY) || "{}");
       return {
+        viewMode: repository.VIEW_MODES.some((o) => o.id === raw.viewMode) ? raw.viewMode : "platform",
         sortBy: SORT_OPTIONS.some((o) => o.id === raw.sortBy) ? raw.sortBy : "default",
         resultSortBy: RESULT_SORT_OPTIONS.some((o) => o.id === raw.resultSortBy)
           ? raw.resultSortBy
@@ -113,10 +126,17 @@
         // Plegado por defecto: el resumen se lee igual y el detalle deja de
         // empujar las búsquedas fuera de la primera pantalla.
         coverageOpen: raw.coverageOpen === true,
-        expanded: Array.isArray(raw.expanded) ? new Set(raw.expanded) : new Set(),
+        // Una búsqueda arranca como fila compacta; se recuerdan las que abriste.
+        // Las marcas "!id" de la versión anterior —que recordaban las que
+        // plegaste— ya son el default y se descartan.
+        expanded: new Set((Array.isArray(raw.expanded) ? raw.expanded : []).filter((id) => !String(id).startsWith("!"))),
+        collapsedGroups: new Set(Array.isArray(raw.collapsedGroups) ? raw.collapsedGroups : []),
+        // Qué objetivos y qué listas de búsquedas desplegaste en cada plataforma.
+        openObjectives: new Set(Array.isArray(raw.openObjectives) ? raw.openObjectives : []),
+        openSearchLists: new Set(Array.isArray(raw.openSearchLists) ? raw.openSearchLists : []),
       };
     } catch {
-      return { sortBy: "default", resultSortBy: "title-price", coverageOpen: false, expanded: new Set() };
+      return defaults;
     }
   }
 
@@ -124,7 +144,16 @@
     try {
       window.localStorage?.setItem(
         PREFS_KEY,
-        JSON.stringify({ sortBy, resultSortBy, coverageOpen, expanded: [...expanded] })
+        JSON.stringify({
+          viewMode,
+          sortBy,
+          resultSortBy,
+          coverageOpen,
+          expanded: [...expanded],
+          collapsedGroups: [...collapsedGroups],
+          openObjectives: [...openObjectives],
+          openSearchLists: [...openSearchLists],
+        })
       );
     } catch {
       // Sin localStorage la vista funciona igual; sólo no recuerda la elección.
@@ -146,10 +175,19 @@
   let previewData = null;
   let creating = false;
   const prefs = loadPrefs();
+  let viewMode = prefs.viewMode;
   let sortBy = prefs.sortBy;
   let resultSortBy = prefs.resultSortBy;
   let coverageOpen = prefs.coverageOpen;
   const expanded = prefs.expanded;
+  const collapsedGroups = prefs.collapsedGroups;
+  const openObjectives = prefs.openObjectives;
+  const openSearchLists = prefs.openSearchLists;
+  // De esta sesión: ver todas las publicaciones de una búsqueda, o sus lotes
+  // con cantidad sin confirmar. Al volver, cada búsqueda muestra sus tres
+  // mejores otra vez.
+  const showAllResults = new Set();
+  const unconfirmedOpen = new Set();
   let feedback = "";
   let feedbackTone = "info";
   let busy = false;
@@ -491,8 +529,47 @@
     return `Como ${target.name || target.query}${ceiling ? ` · techo ${ceiling}` : ""}`;
   }
 
-  function resultCard(result) {
-    const meta = [titleTargetLabel(result), result.conditionLabel, result.shippingLabel, result.locationLabel, result.sellerLabel]
+  /**
+   * Si se puede decidir sobre esta publicación. Ninguna fuente confirma hoy
+   * que siga comprable: lo dice cada card, no una nota al pie.
+   */
+  function verificationLine(result) {
+    const verification = repository.describeVerification(result);
+    return `<p class="radar-verification is-${escapeHtml(verification.tone)}">${escapeHtml(verification.text)}</p>`;
+  }
+
+  /** Por qué el veredicto es el que es: lo que falta, lo que se sumó, lo que se penalizó. */
+  function verdictNotes(result) {
+    // Comprobado el CIB, el pedido de comprobarlo ya no corresponde.
+    const checked = repository.describeContents(result)?.state === "verified";
+    const declaredNote = result.objective?.note || result.valuation?.objective?.note;
+    const notes = repository.getVerdictNotes(result).filter((note) => !(checked && note === declaredNote));
+    return notes.length
+      ? `<ul class="radar-verdict-notes">${notes.map((note) => `<li>${escapeHtml(note)}</li>`).join("")}</ul>`
+      : "";
+  }
+
+  /**
+   * Un CIB es lo que declara el vendedor hasta que el dueño mira las fotos.
+   * Comprobarlo despeja la revisión de ese CIB; no lo verifica como comprable.
+   */
+  function contentsLine(result) {
+    const contents = repository.describeContents(result);
+    if (!contents) return "";
+    return `<p class="radar-contents is-${escapeHtml(contents.state)}">${escapeHtml(contents.text)}</p>`;
+  }
+
+  function contentsAction(result) {
+    const contents = repository.describeContents(result);
+    if (!contents || contents.state !== "declared") return "";
+    return `<button class="btn-link" type="button" data-verify-contents="${escapeHtml(result.id)}">Comprobé ${escapeHtml(
+      contents.what
+    )}</button>`;
+  }
+
+  function resultCard(result, { showSource = false } = {}) {
+    const source = showSource && (result.foundBy || []).length ? `De ${result.foundBy.join(" · ")}` : "";
+    const meta = [source, titleTargetLabel(result), result.conditionLabel, result.shippingLabel, result.locationLabel, result.sellerLabel]
       .filter(Boolean)
       .map((item) => `<span>${escapeHtml(item)}</span>`)
       .join("");
@@ -527,12 +604,10 @@
             : ""
         }
         <h3>${escapeHtml(result.title)}</h3>
-        ${
-          result.requiresVerification
-            ? `<p class="radar-verification-pending">Verificación pendiente: confirmá Add to Cart en el sitio antes de decidir.</p>`
-            : ""
-        }
+        ${verificationLine(result)}
+        ${contentsLine(result)}
         <div class="chase-result-meta">${meta || "<span>Detalles a confirmar</span>"}</div>
+        ${verdictNotes(result)}
         ${reasons || unverified ? `<ul class="chase-result-why">${reasons}${unverified}</ul>` : ""}
       </div>
       <div class="chase-result-price">
@@ -541,10 +616,11 @@
         ${imported ? `<span class="chase-result-total is-imported">${escapeHtml(imported)}</span>` : ""}
         <a class="btn-link" href="${escapeHtml(result.listingUrl)}" target="_blank" rel="noreferrer noopener">Ver publicación</a>
         ${
-          result.requiresVerification
+          repository.getVerification(result).requiresVerification
             ? `<button class="btn-link" type="button" data-verify="${escapeHtml(result.id)}">Marcar verificada</button>`
             : ""
         }
+        ${contentsAction(result)}
         <button class="btn-link" type="button" data-lot-calc="${escapeHtml(result.id)}">Valorar como lote</button>
         <button class="btn-link chase-delete" type="button" data-dismiss="${escapeHtml(result.id)}">Descartar</button>
       </div>
@@ -636,7 +712,12 @@
     </div>`;
   }
 
-  function searchActions(item) {
+  /**
+   * Lo que se hace a diario con una búsqueda, siempre a un click desde la fila
+   * compacta: buscar ahora, pausar o reanudar, y editar. El resto vive en el
+   * detalle, que es donde se mira con calma.
+   */
+  function primaryActions(item) {
     const id = escapeHtml(item.id);
     const actions = [];
     if (item.status === "active") {
@@ -660,6 +741,15 @@
     if (item.status === "archived") {
       actions.push(`<button class="btn-link" type="button" data-status="${id}" data-next="active">Reactivar</button>`);
     }
+    actions.push(
+      `<button class="btn-link" type="button" data-edit="${id}"${editingId === item.id ? ' aria-pressed="true"' : ""}>Editar</button>`
+    );
+    return `<div class="card-actions radar-row-actions">${actions.join("")}</div>`;
+  }
+
+  function secondaryActions(item) {
+    const id = escapeHtml(item.id);
+    const actions = [];
     // Previsualizar corre la búsqueda y no guarda nada. Es la única forma de ver
     // qué traería una búsqueda que todavía no está activa sin activarla.
     actions.push(
@@ -667,18 +757,15 @@
         repository.canPreview(item) ? "" : " disabled"
       }>Previsualizar</button>`
     );
-    actions.push(`<button class="btn-link" type="button" data-edit="${id}">Editar</button>`);
     actions.push(`<button class="btn-link" type="button" data-duplicate="${id}">Duplicar</button>`);
     if (item.status !== "archived") {
       // ShopGoodwill llega por Personal Shopper/alerta guardada, nunca por scan
       // propio — el owner ya vio la publicación y trae los datos a mano (PRD §12.3).
       actions.push(`<button class="btn-link" type="button" data-manual-entry="${id}">Agregar de ShopGoodwill</button>`);
-    }
-    if (item.status !== "archived") {
       actions.push(`<button class="btn-link" type="button" data-status="${id}" data-next="archived">Archivar</button>`);
     }
     actions.push(`<button class="btn-link chase-delete" type="button" data-delete="${id}">Eliminar</button>`);
-    return `<div class="card-actions chase-actions">${actions.join("")}</div>`;
+    return `<div class="card-actions chase-actions radar-detail-actions">${actions.join("")}</div>`;
   }
 
   /** Qué pasó en la corrida, en una línea: encontradas, descartadas y cobertura. */
@@ -819,16 +906,14 @@
   }
 
   /**
-   * Una propuesta arranca plegada y una búsqueda real abierta. El Master dejó
-   * setenta borradores de una sentada: mostrarlos todos desplegados convierte
-   * la página en un muro y esconde justo lo que sí está corriendo.
-   *
-   * Plegar esconde lo pesado —criterios, resultados, avisos— pero nunca las
-   * acciones: con setenta propuestas para revisar, activar una tiene que seguir
-   * siendo un click y no dos.
+   * Toda búsqueda arranca como fila compacta. Con veintisiete búsquedas, las
+   * cards abiertas con sus resultados hacían de la página un muro y escondían
+   * justo la cobertura de cada plataforma. Plegar esconde lo pesado
+   * —criterios, notas, publicaciones— pero nunca las acciones de todos los
+   * días: buscar, pausar, reanudar, activar y editar siguen a un click.
    */
   function isExpanded(item) {
-    return expanded.has(item.id) ? true : !expanded.has(`!${item.id}`) && item.status !== "draft";
+    return expanded.has(item.id);
   }
 
   /**
@@ -902,101 +987,327 @@
     </div>`;
   }
 
-  function searchCard(item) {
-    const results = item.results || [];
+  const shortDate = (value) =>
+    value
+      ? new Intl.DateTimeFormat("es-UY", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(
+          new Date(value)
+        )
+      : "";
+
+  /**
+   * Lo mejor que tiene una búsqueda, en una línea: veredicto, precio y qué es.
+   * Sin publicaciones, dice por qué no hay —pausada, propuesta, sin resultados—
+   * en vez de dejar el hueco.
+   */
+  function bestResultSummary(item) {
+    const [best] = repository.pickTopResults(item.results || [], 1);
+    if (!best) {
+      const why =
+        item.status === "paused"
+          ? "Pausada: conserva lo que encontró"
+          : item.status === "draft"
+            ? "Propuesta: todavía no buscó"
+            : item.lastCheckedAt
+              ? "Sin resultados que cumplan"
+              : "Todavía no buscó";
+      return `<div class="radar-row-best is-empty"><span>${escapeHtml(why)}</span></div>`;
+    }
+    const band = best.band ? repository.getBandLabel(best.band) : "";
+    return `<div class="radar-row-best">
+      <span class="radar-row-best-label">Mejor</span>
+      ${band ? `<span class="chase-result-band is-${escapeHtml(best.band)}">${escapeHtml(band)}</span>` : ""}
+      <strong>${escapeHtml(best.priceLabel || repository.formatAmount(best.priceAmount, best.priceCurrency))}</strong>
+      <span class="radar-row-best-title" title="${escapeHtml(best.title)}">${escapeHtml(best.title)}</span>
+    </div>`;
+  }
+
+  function resultCountLabel(item) {
+    const total = Number.isFinite(Number(item.resultCount)) ? Number(item.resultCount) : (item.results || []).length;
+    return total === 1 ? "1 resultado" : `${total} resultados`;
+  }
+
+  /**
+   * La fila compacta: qué es, en qué estado está, cuándo buscó, cuánto trajo y
+   * lo mejor que encontró, con las acciones de todos los días. Todo lo demás
+   * se ve al desplegarla.
+   */
+  function searchRow(item, { showPlatform = false } = {}) {
     const open = isExpanded(item) || editingId === item.id;
+    const id = escapeHtml(item.id);
+    const platform = repository.platformOf(item);
+    const typeLine = [repository.getSearchKindLabel(item), showPlatform ? platform.label : ""]
+      .filter(Boolean)
+      .join(" · ");
+    return `<article class="radar-row is-${escapeHtml(item.status)}${open ? " is-open" : ""}" id="search-${id}">
+      <div class="radar-row-main">
+        <button class="radar-card-toggle radar-row-toggle" type="button" data-toggle-card="${id}"
+                aria-expanded="${open}" aria-label="${open ? "Plegar" : "Desplegar"} ${escapeHtml(item.name)}">${open ? "▾" : "▸"}</button>
+        <div class="radar-row-id">
+          <p class="eyebrow">${escapeHtml(typeLine)}</p>
+          <h3>${escapeHtml(item.name)}</h3>
+          <p class="radar-row-meta">
+            <span class="chase-status is-${escapeHtml(item.status)}">${escapeHtml(repository.getStatusLabel(item.status))}</span>
+            <span class="radar-priority">${escapeHtml(repository.getPriorityLabel(item.priority))}</span>
+            <span>${escapeHtml(item.lastCheckedAt ? shortDate(item.lastCheckedAt) : dateLabel(null))}</span>
+            <span>${escapeHtml(resultCountLabel(item))}</span>
+            ${item.lastError ? `<span class="chase-error">Con error</span>` : ""}
+          </p>
+        </div>
+        ${bestResultSummary(item)}
+        ${primaryActions(item)}
+      </div>
+      ${open ? searchDetail(item) : ""}
+    </article>`;
+  }
+
+  /** Cuántos de los títulos perseguidos tienen algo, y cuáles no. */
+  function targetCoverageNote(item) {
+    const coverage = item.targetCoverage;
+    const hidden = Number(item.hiddenCopies) || 0;
+    if (!coverage && !hidden) return "";
+    const parts = [];
+    if (coverage) {
+      parts.push(`${coverage.covered} de ${coverage.total} títulos con resultado`);
+      if ((coverage.uncovered || []).length) {
+        const names = coverage.uncovered.slice(0, 6).join(", ");
+        parts.push(`sin cubrir: ${names}${coverage.uncovered.length > 6 ? "…" : ""}`);
+      }
+    }
+    if (hidden) parts.push(`${hidden} ${hidden === 1 ? "copia repetida no se muestra" : "copias repetidas no se muestran"}`);
+    return `<p class="radar-target-coverage">${escapeHtml(parts.join(" · "))}</p>`;
+  }
+
+  /**
+   * Las publicaciones de una búsqueda. Plegadas, las tres mejores —un título
+   * por vez antes de repetir—; "ver todos" las muestra todas, con el orden que
+   * elijas. Los lotes que no confirman cuántos juegos traen van aparte, nunca
+   * mezclados con los que cumplen.
+   */
+  function resultsBlock(item) {
+    return resultList(item.id, item.results || [], { emptyMessage: emptyResultsMessage(item) });
+  }
+
+  /**
+   * Una lista de publicaciones, de una búsqueda o de un objetivo: las tres
+   * mejores —un título por vez antes de repetir—, "ver todos" con el orden que
+   * elijas, y aparte, plegado, lo que no cumple su definición (lotes sin
+   * cantidad confirmada, copias que no llegan a CIB). `key` identifica la lista
+   * para recordar qué se abrió en esta sesión.
+   */
+  function resultList(key, results, { emptyMessage = "", showSource = false } = {}) {
+    const id = escapeHtml(key);
+    const { primary, sections } = repository.splitResults(results);
+    if (!primary.length && !sections.length) {
+      return `<div class="chase-results"><p class="chase-empty-results">${escapeHtml(emptyMessage)}</p></div>`;
+    }
+    const card = (result) => resultCard(result, { showSource });
+    const all = showAllResults.has(key);
+    const shown = all ? sortResults(primary, resultSortBy) : repository.pickTopResults(primary, TOP_RESULTS);
+    const sortControl =
+      all && primary.length > 1
+        ? `<div class="chase-results-sort">
+             <label for="resultSort-${id}">Ordenar</label>
+             <select id="resultSort-${id}" data-result-sort="1">${optionList(
+               RESULT_SORT_OPTIONS.map((option) => option.id),
+               resultSortBy,
+               (value) => RESULT_SORT_OPTIONS.find((option) => option.id === value).label
+             )}</select>
+           </div>`
+        : "";
+    const toggleAll =
+      primary.length > TOP_RESULTS
+        ? `<button class="btn-link radar-show-all" type="button" data-show-all="${id}" aria-expanded="${all}">${
+            all ? `Mostrar sólo las ${TOP_RESULTS} mejores` : `Ver todos los ${primary.length} resultados`
+          }</button>`
+        : "";
+    const secondary = sections
+      .map((section) => {
+        const sectionKey = `${key}::${section.section}`;
+        const open = unconfirmedOpen.has(sectionKey);
+        return `<section class="radar-unconfirmed${open ? " is-open" : ""}">
+          <button class="radar-unconfirmed-head" type="button" data-toggle-unconfirmed="${escapeHtml(sectionKey)}"
+                  aria-expanded="${open}">
+            <span>${escapeHtml(section.label)} · ${section.items.length}</span>
+            ${section.detail ? `<span class="muted">${escapeHtml(section.detail)}</span>` : ""}
+          </button>
+          ${open ? `<div class="chase-results">${section.items.map(card).join("")}</div>` : ""}
+        </section>`;
+      })
+      .join("");
+    return `${sortControl}<div class="chase-results">${
+      shown.length
+        ? shown.map(card).join("")
+        : `<p class="chase-empty-results">Ninguna publicación cumple todavía; abajo, las que quedaron aparte.</p>`
+    }</div>${toggleAll}${secondary}`;
+  }
+
+  /** Lo que se ve al desplegar una búsqueda: criterios, notas, acciones y publicaciones. */
+  function searchDetail(item) {
     const chips = repository.describeCriteria(item.criteria || {});
     const blocked = repository.getBlockedSources(item);
     const sourceLabels = (item.sources || []).map((sourceId) => repository.getSourceLabel(sourceId)).join(" · ");
     const isEditing = editingId === item.id;
-    return `<article class="detail-block chase-card radar-card is-${escapeHtml(item.status)}${open ? "" : " is-collapsed"}">
-      <div class="chase-card-head">
-        <button class="radar-card-toggle" type="button" data-toggle-card="${escapeHtml(item.id)}"
-                aria-expanded="${open}" aria-label="${open ? "Plegar" : "Desplegar"} ${escapeHtml(item.name)}">${open ? "▾" : "▸"}</button>
-        <div>
-          <p class="eyebrow">${escapeHtml(repository.getTypeLabel(item.searchType))} · ${escapeHtml(
-            item.platform || "Sin plataforma"
-          )} · ${escapeHtml(sourceLabels || "Sin fuentes")}</p>
-          <h2>${escapeHtml(item.name)}</h2>
-          <p class="muted">Consulta: ${escapeHtml(item.searchQuery)}</p>
-        </div>
-        <div class="radar-card-badges">
-          <span class="chase-status is-${escapeHtml(item.status)}">${escapeHtml(
-            repository.getStatusLabel(item.status)
-          )}</span>
-          <span class="radar-priority">${escapeHtml(repository.getPriorityLabel(item.priority))}</span>
-        </div>
-      </div>
+    return `<div class="radar-row-detail">
       ${
-        open && item.status === "draft"
+        item.status === "draft"
           ? `<p class="radar-draft-note">Propuesta guardada${
               item.origin === "master" ? " por el Master de colección" : ""
             }. No va a ejecutarse hasta que la actives.</p>`
           : ""
       }
-      ${open ? unlinkedNote(item) : ""}
-      ${open && chips.length ? `<div class="radar-chips">${chips.map((chip) => `<span>${escapeHtml(chip)}</span>`).join("")}</div>` : ""}
+      ${unlinkedNote(item)}
+      ${chips.length ? `<div class="radar-chips">${chips.map((chip) => `<span>${escapeHtml(chip)}</span>`).join("")}</div>` : ""}
       <div class="chase-card-meta">
+        <span>Consulta: ${escapeHtml(item.searchQuery)}</span>
+        <span>Fuentes: ${escapeHtml(sourceLabels || "Sin fuentes")}</span>
         <span>Última búsqueda: ${escapeHtml(dateLabel(item.lastCheckedAt))}</span>
-        <span>${results.length} resultados activos</span>
         ${(item.slotLabels || []).length ? `<span>Corre ${escapeHtml(item.slotLabels.join(" · "))}</span>` : ""}
-        ${item.notes ? `<span>${escapeHtml(item.notes)}</span>` : ""}
         ${blocked.length ? `<span class="radar-blocked">Sin ejecutar: ${escapeHtml(blocked.map((sourceId) => repository.getSourceLabel(sourceId)).join(", "))}</span>` : ""}
         ${item.lastError ? `<span class="chase-error">${escapeHtml(item.lastError)}</span>` : ""}
       </div>
-      ${searchActions(item)}
+      ${item.notes ? `<p class="radar-row-notes">${escapeHtml(item.notes)}</p>` : ""}
+      ${targetCoverageNote(item)}
+      ${secondaryActions(item)}
       ${previewPanel(item)}
       ${isEditing ? searchForm(item, { formId: `radarEdit-${item.id}`, submitLabel: "Guardar cambios", cancelAction: "edit" }) : ""}
       ${manualListingForm(item)}
-      ${
-        open
-          ? `${
-              results.length > 1
-                ? `<div class="chase-results-sort">
-                     <label for="resultSort-${escapeHtml(item.id)}">Ordenar</label>
-                     <select id="resultSort-${escapeHtml(item.id)}" data-result-sort="1">${optionList(
-                       RESULT_SORT_OPTIONS.map((option) => option.id),
-                       resultSortBy,
-                       (value) => RESULT_SORT_OPTIONS.find((option) => option.id === value).label
-                     )}</select>
-                   </div>`
-                : ""
-            }<div class="chase-results">${
-              results.length
-                ? sortResults(results, resultSortBy).map(resultCard).join("")
-                : `<p class="chase-empty-results">${escapeHtml(emptyResultsMessage(item))}</p>`
-            }</div>`
-          : ""
-      }
-    </article>`;
+      ${resultsBlock(item)}
+    </div>`;
   }
 
   /**
-   * El orden elegido se aplica sobre lo ya filtrado. "Como las trae el radar"
-   * no reordena nada: es el orden del servidor, y es el default porque es el
-   * único que no impone un criterio nuestro.
+   * El orden elegido se aplica dentro de cada grupo. El default es la
+   * prioridad configurada: consola, deseados y lotes cuando empatan.
    */
-  function sortSearches(items) {
-    const copia = [...items];
-    if (sortBy === "name") {
-      return copia.sort((a, b) => a.name.localeCompare(b.name, "es"));
-    }
-    if (sortBy === "priority") {
-      const rank = (item) => {
-        const index = PRIORITY_OPTIONS.indexOf(item.priority);
-        return index === -1 ? PRIORITY_OPTIONS.length : index;
-      };
-      return copia.sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name, "es"));
-    }
+  function compareWithin(a, b) {
+    if (sortBy === "name") return a.name.localeCompare(b.name, "es");
     if (sortBy === "results") {
-      return copia.sort((a, b) => (b.results || []).length - (a.results || []).length);
+      const count = (item) => Number(item.resultCount ?? (item.results || []).length) || 0;
+      return count(b) - count(a) || repository.compareSearches(a, b);
     }
     if (sortBy === "checked") {
       // Sin buscar nunca es lo más atrasado que hay: va primero.
       const cuando = (item) => (item.lastCheckedAt ? Date.parse(item.lastCheckedAt) : 0);
-      return copia.sort((a, b) => cuando(a) - cuando(b));
+      return cuando(a) - cuando(b) || repository.compareSearches(a, b);
     }
-    return copia;
+    return repository.compareSearches(a, b);
+  }
+
+  /** Encabezado de un grupo: cobertura de un vistazo, sin abrir nada. */
+  function groupHeader(group, open) {
+    const summary = group.summary;
+    const stats = [
+      summary.searchCount === 1 ? "1 búsqueda" : `${summary.searchCount} búsquedas`,
+      summary.resultCount === 1 ? "1 resultado activo" : `${summary.resultCount} resultados activos`,
+      summary.lastCheckedAt ? `revisada ${shortDate(summary.lastCheckedAt)}` : "sin revisar todavía",
+    ];
+    return `<button class="radar-group-head" type="button" data-toggle-group="${escapeHtml(group.id)}" aria-expanded="${open}">
+      <span class="radar-group-caret" aria-hidden="true">${open ? "▾" : "▸"}</span>
+      <span class="radar-group-title">
+        <span class="eyebrow">${group.mode === "objective" ? "Tipo de búsqueda" : "Plataforma"}</span>
+        <span class="radar-group-name">${escapeHtml(group.label)}</span>
+      </span>
+      <span class="radar-group-stats">${stats.map((stat) => `<span>${escapeHtml(stat)}</span>`).join("")}</span>
+      <span class="radar-group-badges">
+        <span class="radar-group-state is-${escapeHtml(summary.status)}">${escapeHtml(summary.statusLabel)}</span>
+        ${
+          summary.errorCount
+            ? `<span class="radar-group-error">${summary.errorCount === 1 ? "1 con error" : `${summary.errorCount} con error`}</span>`
+            : ""
+        }
+      </span>
+    </button>`;
+  }
+
+  function groupSection(group) {
+    const open = !collapsedGroups.has(group.id);
+    const byObjective = group.mode === "platform" && repository.hasObjectiveTaxonomy();
+    return `<section class="radar-group${open ? "" : " is-collapsed"}" data-group="${escapeHtml(group.id)}">
+      ${groupHeader(group, open)}
+      ${
+        !open
+          ? ""
+          : byObjective
+            ? `<div class="radar-group-body">${objectivesBlock(group)}${searchesBlock(group)}</div>`
+            : `<div class="radar-group-body">${group.items
+                .map((item) => searchRow(item, { showPlatform: group.mode === "objective" }))
+                .join("")}</div>`
+      }
+    </section>`;
+  }
+
+  /**
+   * Lo que encontró la plataforma, repartido en los objetivos canónicos que
+   * manda el servidor —hoy: lotes, juegos loose, juegos CIB, consolas loose y
+   * consolas CIB—. Cada uno es una fila con su conteo y su mejor resultado; se
+   * despliega para ver las publicaciones. Los vacíos no ocupan una fila cada
+   * uno: se nombran juntos, atenuados, para que se vea qué falta.
+   */
+  function objectivesBlock(group) {
+    const objectives = repository.groupResultsByObjective(group.items);
+    const filled = objectives.filter((objective) => objective.count);
+    const empty = objectives.filter((objective) => !objective.count);
+    return `<div class="radar-objectives">
+      ${filled.map((objective) => objectiveRow(group, objective)).join("")}
+      ${
+        empty.length
+          ? `<p class="radar-objectives-empty"><span>Sin resultados</span>${empty
+              .map((objective) => `<span class="radar-objective-chip">${escapeHtml(objective.label)}</span>`)
+              .join("")}</p>`
+          : ""
+      }
+    </div>`;
+  }
+
+  function objectiveRow(group, objective) {
+    const key = `${group.id}/${objective.id}`;
+    const open = openObjectives.has(key);
+    const best = objective.best;
+    const count = [
+      objective.primary.length === 1 ? "1 resultado" : `${objective.primary.length} resultados`,
+      ...objective.sections.map((section) => `${section.items.length} ${section.label.toLowerCase()}`),
+    ].join(" · ");
+    const band = best?.band ? repository.getBandLabel(best.band) : "";
+    return `<article class="radar-objective${open ? " is-open" : ""}" data-objective="${escapeHtml(key)}">
+      <button class="radar-objective-head" type="button" data-toggle-objective="${escapeHtml(key)}" aria-expanded="${open}">
+        <span class="radar-group-caret" aria-hidden="true">${open ? "▾" : "▸"}</span>
+        <span class="radar-objective-label">${escapeHtml(objective.label)}</span>
+        <span class="radar-objective-count">${escapeHtml(count)}</span>
+        ${
+          best
+            ? `<span class="radar-objective-best">
+                 ${band ? `<span class="chase-result-band is-${escapeHtml(best.band)}">${escapeHtml(band)}</span>` : ""}
+                 <strong>${escapeHtml(best.priceLabel || repository.formatAmount(best.priceAmount, best.priceCurrency))}</strong>
+                 <span class="radar-row-best-title">${escapeHtml(best.title)}</span>
+               </span>`
+            : `<span class="radar-objective-best is-empty">Nada cumple todavía</span>`
+        }
+      </button>
+      ${open ? `<div class="radar-objective-body">${resultList(key, objective.items, { showSource: true })}</div>` : ""}
+    </article>`;
+  }
+
+  /**
+   * Las búsquedas que alimentan la plataforma, para administrarlas: buscar
+   * ahora, pausar, editar. Plegadas por defecto —lo que se viene a mirar son
+   * los objetivos—, con lo justo en el encabezado para saber si hay algo que
+   * atender.
+   */
+  function searchesBlock(group) {
+    const open = openSearchLists.has(group.id);
+    const summary = group.summary;
+    const facts = [
+      summary.activeCount === summary.searchCount ? "todas activas" : `${summary.activeCount} activas`,
+      summary.errorCount ? `${summary.errorCount} con error` : "",
+    ].filter(Boolean);
+    return `<section class="radar-group-searches${open ? " is-open" : ""}">
+      <button class="radar-searches-head" type="button" data-toggle-searches="${escapeHtml(group.id)}" aria-expanded="${open}">
+        <span class="radar-group-caret" aria-hidden="true">${open ? "▾" : "▸"}</span>
+        <span>${summary.searchCount === 1 ? "1 búsqueda" : `${summary.searchCount} búsquedas`}</span>
+        <span class="muted">${escapeHtml(facts.join(" · "))}</span>
+      </button>
+      ${open ? `<div class="radar-searches-body">${group.items.map((item) => searchRow(item)).join("")}</div>` : ""}
+    </section>`;
   }
 
   function sortBar() {
@@ -1019,9 +1330,18 @@
     }).join("")}</nav>`;
   }
 
+  function viewSelector() {
+    return `<div class="radar-view" role="group" aria-label="Agrupar búsquedas">${repository.VIEW_MODES.map(
+      (mode) => `<button class="radar-filter${mode.id === viewMode ? " is-active" : ""}" type="button"
+        data-view="${escapeHtml(mode.id)}" aria-pressed="${mode.id === viewMode}">${escapeHtml(mode.label)}</button>`
+    ).join("")}</div>`;
+  }
+
   function render() {
     const counts = repository.getCounts();
     const items = repository.getSearchesByStatus(statusFilter);
+    const groups = repository.groupSearches(items, viewMode, compareWithin);
+    const allFolded = groups.length > 0 && groups.every((group) => collapsedGroups.has(group.id));
     const sandboxNotice = repository.isSandbox()
       ? `<p class="chasing-sandbox-notice">Modo Sandbox: la conexión se prueba contra eBay, pero las publicaciones no son compras reales. Las búsquedas y sus criterios se guardan igual.</p>`
       : "";
@@ -1066,10 +1386,19 @@
       ${feedback ? `<p class="chasing-feedback is-${escapeHtml(feedbackTone)}" role="status">${escapeHtml(feedback)}</p>` : ""}
       ${coveragePanel()}
       ${schedulePanel()}
-      <div class="radar-list-controls">${filterTabs(counts)}${sortBar()}</div>
-      <section class="chasing-list">${
-        items.length
-          ? sortSearches(items).map(searchCard).join("")
+      <div class="radar-list-controls">
+        <div class="radar-list-controls-main">${viewSelector()}${filterTabs(counts)}</div>
+        <div class="radar-list-controls-side">${
+          groups.length > 1
+            ? `<button class="btn-link radar-fold-all" type="button" data-fold-all="${allFolded ? "open" : "close"}">${
+                allFolded ? "Desplegar todo" : "Plegar todo"
+              }</button>`
+            : ""
+        }${sortBar()}</div>
+      </div>
+      <section class="chasing-list radar-groups">${
+        groups.length
+          ? groups.map(groupSection).join("")
           : `<article class="detail-block chasing-empty"><h2>Sin búsquedas</h2><p class="muted">${escapeHtml(
               emptyMessage
             )}</p></article>`
@@ -1094,14 +1423,91 @@
     each("[data-toggle-card]", (button) =>
       button.addEventListener("click", () => {
         const id = button.dataset.toggleCard;
-        const item = repository.getSearch(id);
-        // Se guarda la decisión, no el estado: "!id" recuerda que la plegaste a
-        // mano aunque su default fuera abierta.
-        const abierta = item ? isExpanded(item) : false;
-        expanded.delete(id);
-        expanded.delete(`!${id}`);
-        expanded.add(abierta ? `!${id}` : id);
+        if (expanded.has(id)) {
+          expanded.delete(id);
+          if (editingId === id) editingId = "";
+        } else {
+          expanded.add(id);
+        }
         savePrefs();
+        render();
+      })
+    );
+
+    each("[data-view]", (button) =>
+      button.addEventListener("click", () => {
+        viewMode = button.dataset.view;
+        savePrefs();
+        render();
+      })
+    );
+
+    each("[data-toggle-group]", (button) =>
+      button.addEventListener("click", () => {
+        const id = button.dataset.toggleGroup;
+        if (collapsedGroups.has(id)) collapsedGroups.delete(id);
+        else collapsedGroups.add(id);
+        savePrefs();
+        render();
+      })
+    );
+
+    each("[data-fold-all]", (button) =>
+      button.addEventListener("click", () => {
+        const ids = repository
+          .groupSearches(repository.getSearchesByStatus(statusFilter), viewMode)
+          .map((group) => group.id);
+        for (const id of ids) {
+          if (button.dataset.foldAll === "close") collapsedGroups.add(id);
+          else collapsedGroups.delete(id);
+        }
+        savePrefs();
+        render();
+      })
+    );
+
+    const toggleIn = (set, id) => (set.has(id) ? set.delete(id) : set.add(id));
+
+    each("[data-toggle-objective]", (button) =>
+      button.addEventListener("click", () => {
+        toggleIn(openObjectives, button.dataset.toggleObjective);
+        savePrefs();
+        render();
+      })
+    );
+
+    each("[data-toggle-searches]", (button) =>
+      button.addEventListener("click", () => {
+        toggleIn(openSearchLists, button.dataset.toggleSearches);
+        savePrefs();
+        render();
+      })
+    );
+
+    each("[data-verify-contents]", (button) =>
+      button.addEventListener("click", () =>
+        perform(
+          "Guardando la comprobación…",
+          () => repository.verifyListingContents(button.dataset.verifyContents),
+          "Comprobado: el CIB deja de estar en revisión por la caja. La disponibilidad se verifica aparte."
+        )
+      )
+    );
+
+    each("[data-show-all]", (button) =>
+      button.addEventListener("click", () => {
+        const id = button.dataset.showAll;
+        if (showAllResults.has(id)) showAllResults.delete(id);
+        else showAllResults.add(id);
+        render();
+      })
+    );
+
+    each("[data-toggle-unconfirmed]", (button) =>
+      button.addEventListener("click", () => {
+        const id = button.dataset.toggleUnconfirmed;
+        if (unconfirmedOpen.has(id)) unconfirmedOpen.delete(id);
+        else unconfirmedOpen.add(id);
         render();
       })
     );
@@ -1185,6 +1591,9 @@
           "Búsqueda actualizada.",
           () => {
             editingId = "";
+            // Recién editada, queda abierta: lo próximo es mirar qué cambió.
+            expanded.add(targetId);
+            savePrefs();
           }
         );
       });
@@ -1234,7 +1643,7 @@
         perform(
           "Marcando verificada…",
           () => repository.verifyListing(button.dataset.verify),
-          "Verificada. Ya cuenta como una oportunidad confirmada."
+          "Verificada. Vale por 24 horas o hasta que cambie de precio: después hay que volver a confirmarla."
         )
       )
     );

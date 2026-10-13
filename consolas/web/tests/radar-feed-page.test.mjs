@@ -643,3 +643,47 @@ test("the sold link is escaped, never concatenated raw", async () => {
   assert.doesNotMatch(html, /<script>alert/);
   assert.match(html, /&lt;script&gt;/);
 });
+
+test("no opportunity reads as a final decision: unverified ones say to open and confirm first", async () => {
+  const { html } = await renderFeed({
+    items: [
+      item({
+        availability: "unknown",
+        requiresVerification: true,
+        verification: { state: "pending", ttlHours: 24 },
+      }),
+    ],
+  });
+
+  assert.match(html, /radar-verification is-pending">Verificación pendiente/);
+  assert.match(html, /confirmá Buy It Now o Add to Cart antes de decidir/);
+  assert.match(html, /data-verify="ebay-us-1">Marcar verificada/);
+});
+
+test("a freshly verified opportunity does not ask again", async () => {
+  const now = Date.now();
+  const { html } = await renderFeed({
+    items: [
+      item({
+        requiresVerification: false,
+        verification: {
+          state: "verified",
+          verifiedAt: new Date(now - 3600000).toISOString(),
+          expiresAt: new Date(now + 23 * 3600000).toISOString(),
+        },
+      }),
+    ],
+  });
+
+  assert.match(html, /is-verified">Verificada hace 1 h/);
+  assert.doesNotMatch(html, /data-verify=/);
+});
+
+test("a declared CIB in the feed asks to check box and manual before paying for it as CIB", async () => {
+  const { html } = await renderFeed({
+    items: [item({ band: "revisar", objective: { id: "game-cib", status: "declared" } })],
+  });
+
+  assert.match(html, /radar-contents is-declared">CIB declarado por el vendedor, sin comprobar/);
+  assert.match(html, /data-verify-contents="ebay-us-1">Comprobé caja y manual/);
+});

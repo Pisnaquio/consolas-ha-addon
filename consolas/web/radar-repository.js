@@ -165,6 +165,15 @@
     return TYPE_LABELS[type] || String(type || "");
   }
 
+  /**
+   * El tipo dicho como lo lee el dueño: una búsqueda de varios títulos es su
+   * lista de deseados de esa consola, no un chase de un juego.
+   */
+  function getSearchKindLabel(item = {}) {
+    if (item.searchType === "chase" && (item.criteria?.titleTargets || []).length > 1) return "Juegos deseados";
+    return getTypeLabel(item.searchType);
+  }
+
   function getPriorityLabel(priority) {
     return PRIORITY_LABELS[priority] || String(priority || "");
   }
@@ -246,11 +255,399 @@
     razonable: "Precio razonable",
     premium: "Premium justificable",
     caro: "Caro",
+    revisar: "Requiere revisión",
     "sin-referencia": "Sin referencia"
   };
 
   function getBandLabel(band) {
     return BAND_LABELS[band] || "";
+  }
+
+  /**
+   * Si la publicación está confirmada como comprable, en palabras.
+   *
+   * Ninguna fuente automática confirma disponibilidad: lo que trae una corrida
+   * es "encontrada", no "comprable". El servidor manda `verification`; una
+   * respuesta vieja sin ese campo se lee igual desde `availability` y
+   * `requiresVerification`, y lo desconocido nunca se presenta como verificado.
+   */
+  function getVerification(result = {}) {
+    const raw = result.verification || {};
+    let state = raw.state;
+    if (!state) {
+      if (result.verifiedAt && result.requiresVerification === false) state = "verified";
+      else if (result.availability === "ended") state = "ended";
+      else state = "pending";
+    }
+    return {
+      state,
+      reason: raw.reason || "",
+      verifiedAt: raw.verifiedAt || result.verifiedAt || null,
+      expiresAt: raw.expiresAt || null,
+      lastSeenAt: raw.lastSeenAt || result.lastSeenAt || null,
+      ttlHours: Number(raw.ttlHours) || 24,
+      requiresVerification: !["verified", "available"].includes(state)
+    };
+  }
+
+  /** "hace 3 h", "hace 2 días": cuándo pasó algo, sin fingir precisión. */
+  function formatAgo(value, now = Date.now()) {
+    const time = Date.parse(value || "");
+    if (!Number.isFinite(time)) return "";
+    const minutes = Math.max(0, Math.round((now - time) / 60000));
+    if (minutes < 1) return "recién";
+    if (minutes < 60) return `hace ${minutes} min`;
+    const hours = Math.round(minutes / 60);
+    if (hours < 48) return `hace ${hours} h`;
+    return `hace ${Math.round(hours / 24)} días`;
+  }
+
+  /** "en 5 h": cuánto le queda a algo que vence. */
+  function formatIn(value, now = Date.now()) {
+    const time = Date.parse(value || "");
+    if (!Number.isFinite(time)) return "";
+    const hours = Math.max(0, Math.round((time - now) / 3600000));
+    return hours < 1 ? "en menos de una hora" : `en ${hours} h`;
+  }
+
+  /** Una línea que dice si se puede decidir sobre esta publicación, y qué falta. */
+  function describeVerification(result = {}, now = Date.now()) {
+    const verification = getVerification(result);
+    const seen = formatAgo(verification.lastSeenAt, now);
+    if (verification.state === "verified") {
+      const expires = verification.expiresAt ? ` · vence ${formatIn(verification.expiresAt, now)}` : "";
+      return {
+        ...verification,
+        tone: "verified",
+        text: `Verificada ${formatAgo(verification.verifiedAt, now) || ""}${expires}.`.replace(" .", ".")
+      };
+    }
+    if (verification.state === "available") {
+      return { ...verification, tone: "verified", text: "La fuente confirma que sigue disponible." };
+    }
+    if (verification.state === "ended") {
+      return { ...verification, tone: "ended", text: "La fuente dice que terminó." };
+    }
+    if (verification.state === "expired") {
+      const why =
+        verification.reason === "price-changed" ? "cambió de precio después" : `pasaron más de ${verification.ttlHours} h`;
+      return {
+        ...verification,
+        tone: "pending",
+        text: `Verificación vencida (${why}): abrila de nuevo y confirmá Buy It Now o Add to Cart.`
+      };
+    }
+    return {
+      ...verification,
+      tone: "pending",
+      text: `Verificación pendiente: encontrada ${seen || "en la última revisión"}, sin confirmar que se pueda comprar. Abrila y confirmá Buy It Now o Add to Cart antes de decidir.`
+    };
+  }
+
+  /** Por qué el veredicto es el que es: compuertas, faltantes y penalizaciones. */
+  function getVerdictNotes(result = {}) {
+    return Array.isArray(result.valuation?.verdictNotes) ? result.valuation.verdictNotes : [];
+  }
+
+  /**
+   * Lo que no cumple la definición de su objetivo va aparte: un lote que no
+   * confirma cuántos juegos trae, una copia con caja y sin manual. Qué
+   * secciones existen y cómo se llaman lo dice el servidor.
+   */
+  function sectionOf(result = {}) {
+    return result.section || result.valuation?.section || "primary";
+  }
+
+  function isSecondaryResult(result = {}) {
+    return sectionOf(result) !== "primary";
+  }
+
+  // Nombre anterior, de cuando la única sección aparte era la de lotes.
+  const isUnconfirmedLot = isSecondaryResult;
+
+  const SECTION_FALLBACK = {
+    "unconfirmed-quantity": {
+      label: "Cantidad sin confirmar",
+      detail: "No dicen cuántos juegos traen, o lo dicen junto con otra cosa: no cumplen la búsqueda hasta confirmarlo."
+    }
+  };
+
+  function getSectionInfo(section) {
+    return model?.sections?.[section] || SECTION_FALLBACK[section] || { label: "Aparte", detail: "" };
+  }
+
+  function splitResults(results = []) {
+    const primary = [];
+    const unconfirmed = [];
+    const bySection = new Map();
+    for (const result of results || []) {
+      if (!isSecondaryResult(result)) {
+        primary.push(result);
+        continue;
+      }
+      unconfirmed.push(result);
+      const section = sectionOf(result);
+      if (!bySection.has(section)) bySection.set(section, { section, ...getSectionInfo(section), items: [] });
+      bySection.get(section).items.push(result);
+    }
+    return { primary, unconfirmed, sections: [...bySection.values()] };
+  }
+
+  // --- Objetivos canónicos ----------------------------------------------------
+  //
+  // Lotes, juegos loose, juegos CIB, consolas loose y consolas CIB. La
+  // taxonomía —cuáles son, en qué orden, cómo se llaman— llega del servidor
+  // con las búsquedas; esta capa sólo agrupa. Una respuesta sin taxonomía
+  // (un servidor anterior) no se agrupa por objetivo y la pantalla vuelve a
+  // mostrar las búsquedas como antes.
+
+  function getObjectiveTaxonomy() {
+    return Array.isArray(model?.objectives) ? [...model.objectives].sort((a, b) => a.order - b.order) : [];
+  }
+
+  function hasObjectiveTaxonomy() {
+    return getObjectiveTaxonomy().length > 0;
+  }
+
+  function objectiveOfResult(result = {}) {
+    return result.objective?.id || result.valuation?.objective?.id || "other";
+  }
+
+  const resultKey = (result, search) =>
+    String(result.id || result.listingId || `${search?.id || ""}:${result.externalId || result.title}`);
+
+  /**
+   * Las publicaciones de un grupo de búsquedas, repartidas por objetivo.
+   *
+   * Una misma publicación puede llegar por dos búsquedas de la misma
+   * plataforma: aparece una vez, con la mejor puntuación y los nombres de las
+   * dos. Dentro de cada objetivo, primero lo que cumple y por score; aparte, lo
+   * que no. Los cinco canónicos existen siempre —vacíos o no—; el resto, sólo
+   * si trae algo.
+   */
+  function groupResultsByObjective(searches = []) {
+    const listings = new Map();
+    for (const search of searches) {
+      for (const result of search.results || []) {
+        const key = resultKey(result, search);
+        const current = listings.get(key);
+        const score = Number.isFinite(Number(result.score)) ? Number(result.score) : -1;
+        if (!current) {
+          listings.set(key, { result: { ...result, foundBy: [search.name] }, score });
+          continue;
+        }
+        const foundBy = current.result.foundBy.includes(search.name)
+          ? current.result.foundBy
+          : [...current.result.foundBy, search.name];
+        if (score > current.score) listings.set(key, { result: { ...result, foundBy }, score });
+        else current.result.foundBy = foundBy;
+      }
+    }
+    const buckets = new Map();
+    for (const { result, score } of listings.values()) {
+      const id = objectiveOfResult(result);
+      if (!buckets.has(id)) buckets.set(id, []);
+      buckets.get(id).push({ result, score });
+    }
+    return getObjectiveTaxonomy()
+      .map((objective) => {
+        const items = (buckets.get(objective.id) || [])
+          .sort((a, b) => b.score - a.score)
+          .map((entry) => entry.result);
+        const { primary, unconfirmed, sections } = splitResults(items);
+        return {
+          ...objective,
+          items,
+          primary,
+          secondary: unconfirmed,
+          sections,
+          count: items.length,
+          best: primary[0] || null
+        };
+      })
+      .filter((objective) => objective.canonical || objective.count);
+  }
+
+  /** Si un CIB está declarado por el vendedor o comprobado por el dueño. */
+  function describeContents(result = {}, now = Date.now()) {
+    const objective = result.objective || result.valuation?.objective || {};
+    if (objective.status !== "declared") return null;
+    const what = objective.id === "console-cib" ? "caja y contenido" : "caja y manual";
+    const checkedAt = result.verification?.contentsVerifiedAt;
+    if (checkedAt) {
+      return { state: "verified", text: `${what[0].toUpperCase()}${what.slice(1)} comprobados ${formatAgo(checkedAt, now)}.`, what };
+    }
+    return {
+      state: "declared",
+      text: `CIB declarado por el vendedor, sin comprobar: mirá ${what} en las fotos antes de pagarlo como CIB.`,
+      what
+    };
+  }
+
+  function titleTargetKey(result = {}) {
+    const target = result.titleTarget || {};
+    return String(target.gameId || target.query || "").trim().toLowerCase();
+  }
+
+  /**
+   * Los mejores N para mostrar plegados: en el orden del radar, pero un título
+   * por vez antes de repetir copias. El servidor ya diversifica; esto lo
+   * garantiza también contra una respuesta que no lo haga.
+   */
+  function pickTopResults(results = [], count = 3) {
+    const { primary } = splitResults(results);
+    const picked = [];
+    const titles = new Set();
+    for (const result of primary) {
+      const key = titleTargetKey(result);
+      if (key && titles.has(key)) continue;
+      if (key) titles.add(key);
+      picked.push(result);
+      if (picked.length === count) return picked;
+    }
+    for (const result of primary) {
+      if (!picked.includes(result)) picked.push(result);
+      if (picked.length === count) break;
+    }
+    return picked;
+  }
+
+  // --- Agrupar búsquedas ------------------------------------------------------
+  //
+  // Nada de esto sabe qué búsquedas existen: agrupa por lo que cada una
+  // declara (`platform`, `searchType`, `priority`, `status`). La clave y el
+  // nombre de plataforma los resuelve el servidor, que es quien sabe que «N64»
+  // y «Nintendo 64» son la misma; sin ellos se agrupa por el texto tal cual.
+
+  // `objective` es la clave guardada de la vista que agrupa por tipo de
+  // búsqueda (consolas, deseados, lotes). Se conserva para no perder la
+  // preferencia de nadie; el nombre visible cambió para no confundirla con los
+  // cinco objetivos canónicos de cada plataforma.
+  const VIEW_MODES = [
+    { id: "platform", label: "Por plataforma" },
+    { id: "objective", label: "Por tipo de búsqueda" }
+  ];
+
+  const OBJECTIVE_GROUPS = [
+    { id: "console", label: "Consolas completas", types: ["console"] },
+    { id: "wishlist", label: "Juegos deseados", types: ["chase"] },
+    { id: "lot", label: "Lotes de juegos", types: ["lot"] },
+    { id: "other", label: "Otros tipos", types: [] }
+  ];
+
+  // Dentro de un grupo, a igual prioridad: consola, deseados, lotes, el resto.
+  const TYPE_ORDER = ["console", "chase", "lot", "upgrade", "discovery", "master"];
+  const PRIORITY_ORDER = ["alta", "media-alta", "media", "baja"];
+
+  const GROUP_STATUS_LABELS = {
+    active: "Activa",
+    partial: "Parcial",
+    paused: "Pausada",
+    draft: "Propuesta",
+    archived: "Archivada",
+    empty: "Sin resultados"
+  };
+
+  const rankOf = (list, value) => {
+    const index = list.indexOf(value);
+    return index === -1 ? list.length : index;
+  };
+
+  function platformOf(item = {}) {
+    const text = String(item.platform || "").trim();
+    return {
+      key: item.platformKey || text.toLowerCase(),
+      label: item.platformLabel || text || "Sin plataforma",
+      order: Number.isFinite(Number(item.platformOrder)) ? Number(item.platformOrder) : 999
+    };
+  }
+
+  function objectiveOf(item = {}) {
+    return OBJECTIVE_GROUPS.find((group) => group.types.includes(item.searchType)) || OBJECTIVE_GROUPS.at(-1);
+  }
+
+  /** El orden configurado: prioridad, después tipo, después nombre. */
+  function compareSearches(a = {}, b = {}) {
+    return (
+      rankOf(PRIORITY_ORDER, a.priority) - rankOf(PRIORITY_ORDER, b.priority) ||
+      rankOf(TYPE_ORDER, a.searchType) - rankOf(TYPE_ORDER, b.searchType) ||
+      String(a.name || "").localeCompare(String(b.name || ""), "es")
+    );
+  }
+
+  function resultCountOf(item = {}) {
+    return Number.isFinite(Number(item.resultCount)) ? Number(item.resultCount) : (item.results || []).length;
+  }
+
+  /** Lo que el encabezado de un grupo tiene que poder decir de un vistazo. */
+  function summarizeGroup(items = []) {
+    const active = items.filter((item) => item.status === "active").length;
+    // Una publicación que encontraron dos búsquedas del grupo cuenta una vez.
+    const unique = new Set(items.flatMap((item) => (item.results || []).map((result) => resultKey(result, item))));
+    const resultCount = unique.size || items.reduce((total, item) => total + resultCountOf(item), 0);
+    const lastCheckedAt = items
+      .map((item) => item.lastCheckedAt)
+      .filter(Boolean)
+      .sort()
+      .at(-1) || null;
+    let status;
+    if (!active) {
+      if (items.some((item) => item.status === "paused")) status = "paused";
+      else if (items.some((item) => item.status === "draft")) status = "draft";
+      else status = "archived";
+    } else if (active < items.length) {
+      status = "partial";
+    } else {
+      status = resultCount ? "active" : "empty";
+    }
+    return {
+      searchCount: items.length,
+      activeCount: active,
+      resultCount,
+      lastCheckedAt,
+      errorCount: items.filter((item) => item.lastError).length,
+      status,
+      statusLabel: GROUP_STATUS_LABELS[status]
+    };
+  }
+
+  /**
+   * Las búsquedas agrupadas por plataforma o por objetivo, ordenadas.
+   *
+   * `compare` ordena dentro de cada grupo; por defecto, la prioridad
+   * configurada. Un grupo vacío no existe: con un filtro de estado, sólo
+   * aparecen los grupos que tienen algo en ese estado.
+   */
+  function groupSearches(items = [], mode = "platform", compare = compareSearches) {
+    const groups = new Map();
+    for (const item of items) {
+      let id;
+      let label;
+      let order;
+      if (mode === "objective") {
+        const objective = objectiveOf(item);
+        id = `objective:${objective.id}`;
+        label = objective.label;
+        order = OBJECTIVE_GROUPS.indexOf(objective);
+      } else {
+        const platform = platformOf(item);
+        id = `platform:${platform.key || "none"}`;
+        label = platform.label;
+        order = platform.key ? platform.order : 1000;
+      }
+      if (!groups.has(id)) groups.set(id, { id, label, order, mode, items: [] });
+      groups.get(id).items.push(item);
+    }
+    const byPlatform = (a, b) =>
+      platformOf(a).order - platformOf(b).order || platformOf(a).label.localeCompare(platformOf(b).label, "es");
+    return [...groups.values()]
+      .map((group) => ({
+        ...group,
+        // Por objetivo, dentro del grupo se recorren las plataformas en orden.
+        items: [...group.items].sort((a, b) => (mode === "objective" ? byPlatform(a, b) : 0) || compare(a, b)),
+        summary: summarizeGroup(group.items)
+      }))
+      .sort((a, b) => a.order - b.order || a.label.localeCompare(b.label, "es"));
   }
 
   /** Qué referencia se usó y de dónde salió: nunca un número sin origen. */
@@ -480,6 +877,11 @@
     return write(`/radar/listings/${encodeURIComponent(listingId)}/verify`, {});
   }
 
+  /** El dueño miró las fotos: la caja y el manual (o el contenido) del CIB están. */
+  async function verifyListingContents(listingId) {
+    return write(`/radar/listings/${encodeURIComponent(listingId)}/verify-contents`, {});
+  }
+
   window.RadarRepository = {
     STATUS_ORDER,
     STATUS_LABELS,
@@ -504,6 +906,7 @@
     getCounts,
     getStatusLabel,
     getTypeLabel,
+    getSearchKindLabel,
     getPriorityLabel,
     canRun,
     canPreview,
@@ -514,6 +917,28 @@
     formatImported,
     formatConfidence,
     getBandLabel,
+    getVerification,
+    describeVerification,
+    getVerdictNotes,
+    formatAgo,
+    isUnconfirmedLot,
+    isSecondaryResult,
+    getSectionInfo,
+    splitResults,
+    getObjectiveTaxonomy,
+    hasObjectiveTaxonomy,
+    objectiveOfResult,
+    groupResultsByObjective,
+    describeContents,
+    pickTopResults,
+    VIEW_MODES,
+    OBJECTIVE_GROUPS,
+    GROUP_STATUS_LABELS,
+    platformOf,
+    objectiveOf,
+    compareSearches,
+    summarizeGroup,
+    groupSearches,
     describeBenchmark,
     describeCriteria,
     loadFeed,
@@ -553,6 +978,7 @@
     getShipment,
     closeShipment,
     createManualListing,
-    verifyListing
+    verifyListing,
+    verifyListingContents
   };
 })();

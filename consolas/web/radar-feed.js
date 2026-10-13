@@ -260,6 +260,18 @@
     ).join("");
     return `<div class="card-actions feed-actions">
       <a class="btn-link btn-primary" href="${escapeHtml(item.listingUrl)}" target="_blank" rel="noreferrer noopener">Ver publicación</a>
+      ${
+        repository.getVerification(item).requiresVerification
+          ? `<button class="btn-link" type="button" data-verify="${id}">Marcar verificada</button>`
+          : ""
+      }
+      ${
+        repository.describeContents(item)?.state === "declared"
+          ? `<button class="btn-link" type="button" data-verify-contents="${id}">Comprobé ${escapeHtml(
+              repository.describeContents(item).what
+            )}</button>`
+          : ""
+      }
       <button class="btn-link${following ? " is-on" : ""}" type="button" data-follow="${id}">
         ${following ? "Dejar de seguir" : "Seguir"}
       </button>
@@ -336,6 +348,24 @@
     return `<p class="feed-benchmark">${escapeHtml(asking || "")}${link}</p>`;
   }
 
+  /**
+   * Una oportunidad del feed nunca es una decisión final: ninguna fuente
+   * confirma que siga comprable. La card lo dice antes que el precio, y deja
+   * confirmarlo después de abrir la publicación.
+   */
+  function verificationNote(item) {
+    const verification = repository.describeVerification(item);
+    return `<p class="radar-verification is-${escapeHtml(verification.tone)}">${escapeHtml(verification.text)}</p>`;
+  }
+
+  /** Un CIB declarado se revisa antes de pagarlo como CIB: la card lo dice. */
+  function contentsNote(item) {
+    const contents = repository.describeContents(item);
+    return contents
+      ? `<p class="radar-contents is-${escapeHtml(contents.state)}">${escapeHtml(contents.text)}</p>`
+      : "";
+  }
+
   function card(item) {
     const reasons = (item.matches?.[0]?.reasons || []).slice(0, 3).map((r) => `<li>${escapeHtml(r)}</li>`).join("");
     const unverified = (item.matches?.[0]?.unverified || []).slice(0, 2).map((u) => `<li class="u">${escapeHtml(u)}</li>`).join("");
@@ -361,6 +391,8 @@
           ${imported != null ? `<span>≈ ${escapeHtml(money(imported, item.priceCurrency))} puesto acá</span>` : ""}
         </div>
       </div>
+      ${verificationNote(item)}
+      ${contentsNote(item)}
       ${targetBadge(item)}
       ${benchmarkLine(item)}
       ${item.priceDrop ? dropBadge(item.priceDrop) : ""}
@@ -428,6 +460,26 @@
   const each = (selector, handler) => (root.querySelectorAll?.(selector) || []).forEach(handler);
 
   function bindEvents() {
+    each("[data-verify-contents]", (button) =>
+      button.addEventListener("click", () =>
+        perform(
+          "Guardando la comprobación…",
+          () => repository.verifyListingContents(button.dataset.verifyContents),
+          "Comprobado. La disponibilidad se verifica aparte."
+        )
+      )
+    );
+
+    each("[data-verify]", (button) =>
+      button.addEventListener("click", () =>
+        perform(
+          "Marcando verificada…",
+          () => repository.verifyListing(button.dataset.verify),
+          "Verificada. Vale por 24 horas o hasta que cambie de precio."
+        )
+      )
+    );
+
     each("[data-follow]", (button) =>
       button.addEventListener("click", () => {
         const id = button.dataset.follow;

@@ -151,8 +151,18 @@ class ScoreTests(unittest.TestCase):
         bargain = score_listing(price_amount=60.0, shipping_amount=0.0, benchmark=self.benchmark(), today=TODAY)
         premium = score_listing(price_amount=125.0, shipping_amount=0.0, benchmark=self.benchmark(), today=TODAY)
         self.assertGreater(bargain.score, premium.score)
-        self.assertEqual(bargain.band, "ganga")
+        # Por precio es ganga; sin la publicación verificada, la banda no lo afirma.
+        self.assertEqual(bargain.price_band, "ganga")
+        self.assertEqual(bargain.band, "buena")
         self.assertEqual(premium.band, "premium")
+
+    def test_a_bargain_with_everything_confirmed_is_a_real_bargain(self) -> None:
+        bargain = score_listing(
+            price_amount=60.0, shipping_amount=0.0, benchmark=self.benchmark(), today=TODAY,
+            availability_verified=True,
+        )
+        self.assertEqual(bargain.band, "ganga")
+        self.assertEqual(bargain.bargain_blockers, [])
 
     def test_every_score_explains_where_its_points_come_from(self) -> None:
         card = score_listing(price_amount=80.0, shipping_amount=10.0, benchmark=self.benchmark(), today=TODAY)
@@ -292,7 +302,11 @@ class RunIntegrationTests(unittest.TestCase):
         bargain = self.run_with("35.00")
         expensive = self.run_with("95.00")
 
-        self.assertEqual(bargain["band"], "ganga")
+        # Por precio es ganga, pero una consola que no dice qué trae ni si lee
+        # discos, en una publicación sin verificar, no es «Ganga real».
+        self.assertEqual(bargain["valuation"]["priceBand"], "ganga")
+        self.assertEqual(bargain["band"], "buena")
+        self.assertTrue(any("Por precio sería ganga" in note for note in bargain["valuation"]["verdictNotes"]))
         self.assertEqual(expensive["band"], "caro")
         self.assertGreater(bargain["score"], expensive["score"])
 

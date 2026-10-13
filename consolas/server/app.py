@@ -46,7 +46,10 @@ from radar.master import propose_master_searches, rank_game, wanted_games  # noq
 from radar.valuation import (  # noqa: E402
     LotPiece,
     bundle_adjusted_benchmark,
+    completion_cost,
+    effective_band,
     lot_ceiling_benchmark,
+    lot_peer_benchmark,
     lot_valuation,
     peer_listing_benchmark,
     pick_benchmark,
@@ -56,13 +59,21 @@ from radar.valuation import (  # noqa: E402
     sold_comparables_link,
 )
 from radar.classify import classify_listing_item, detect_console_variant, detect_lot_size  # noqa: E402
-from radar.matching import best_title_target, detect_completeness, evaluate_match, normalize  # noqa: E402
+from radar.matching import (  # noqa: E402
+    best_title_target,
+    detect_completeness,
+    detect_region,
+    evaluate_match,
+    normalize,
+)
 from radar.model import MarketplaceListing  # noqa: E402
+from radar.platforms import platform_key, platform_payload  # noqa: E402
+from radar.taxonomy import assign_objective, taxonomy_payload  # noqa: E402
 from radar.sources import registry as radar_registry  # noqa: E402
 
 
 SERVICE_NAME = "consolas-server"
-SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.69")
+SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.70")
 DEFAULT_DATA_DIR = "/data"
 DEFAULT_STATIC_DIR = "/app/web"
 DATABASE_NAME = "consolas.sqlite"
@@ -146,6 +157,20 @@ RADAR_DISMISS_REASONS = (
 RADAR_FEED_LIMIT = 10
 # PRD §16: una baja del 8% en el total es un cambio material y merece avisar.
 RADAR_MATERIAL_DROP = 0.08
+# Cuánto vale «la abrí y tenía Buy It Now». Una publicación de eBay puede
+# venderse en horas: pasado un día, la verificación es historia y hay que
+# volver a mirarla. Un cambio de precio posterior también la vence.
+RADAR_VERIFICATION_TTL_HOURS = 24
+# Cuántas copias de un mismo título muestra una búsqueda de varios títulos, y
+# sólo si la segunda aporta algo distinto (suelta frente a caja, otra región u
+# otra edición). Catorce Tetris no son cobertura de una lista de deseados.
+RADAR_MAX_COPIES_PER_TITLE = 2
+# Cuántas coincidencias activas se leen para armar la lista de una búsqueda
+# antes de diversificar. El límite de resultados se aplica después.
+RADAR_INVENTORY_SCAN_LIMIT = 1000
+# Lo que no cumple la definición de su objetivo (un lote sin cantidad, una copia
+# con caja y sin manual) se ve en su búsqueda, aparte, pero no es una decisión.
+RADAR_SECONDARY_SECTIONS = frozenset({"unconfirmed-quantity", "incomplete"})
 # Entregas propias del radar (PRD §16). Asunto y destinatarios separados de
 # Auction Watch; la infraestructura SMTP puede ser la misma.
 RADAR_EMAIL_MODES = ("disabled", "digest", "digest_and_alerts")
@@ -728,6 +753,10 @@ def init_db(config: AppConfig) -> None:
             # marca que todavía nadie confirmó Add to Cart en la publicación real.
             "requires_verification": "INTEGER NOT NULL DEFAULT 0",
             "verified_at": "TEXT",
+            # Un CIB vale por la caja y el manual, y eso sólo se comprueba
+            # mirando las fotos. Lo hace el dueño, una vez: el contenido no
+            # vence como la disponibilidad.
+            "contents_verified_at": "TEXT",
         }.items():
             if column_name not in listing_columns:
                 conn.execute(f"ALTER TABLE radar_listings ADD COLUMN {column_name} {column_definition}")
@@ -3082,8 +3111,12 @@ def radar_json_field(raw: Any, fallback: Any) -> Any:
     return parsed if isinstance(parsed, expected) else fallback
 
 
-def radar_search_row(row: sqlite3.Row, results: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+def radar_search_row(
+    row: sqlite3.Row, results: list[dict[str, Any]] | None = None, meta: dict[str, Any] | None = None
+) -> dict[str, Any]:
     criteria = normalize_radar_criteria(radar_json_field(row["criteria_json"], None))
+    platform = platform_payload(str(row["platform"] or ""))
+    meta = meta or {}
     raw_sources = radar_json_field(row["sources_json"], [RADAR_DEFAULT_SOURCE])
     sources = [
         str(item) for item in raw_sources if radar_registry.get_source(str(item)) is not None
@@ -3100,6 +3133,10 @@ def radar_search_row(row: sqlite3.Row, results: list[dict[str, Any]] | None = No
         "origin": row["origin"],
         "priority": row["priority"],
         "platform": row["platform"],
+        # Para agrupar en pantalla: «N64» y «Nintendo 64» son la misma.
+        "platformKey": platform["key"],
+        "platformLabel": platform["label"],
+        "platformOrder": platform["order"],
         "entityType": row["entity_type"],
         "entityId": row["entity_id"],
         "entityConsoleId": (row["entity_console_id"] if "entity_console_id" in row.keys() else ""),
@@ -3122,7 +3159,88 @@ def radar_search_row(row: sqlite3.Row, results: list[dict[str, Any]] | None = No
         "archivedAt": row["archived_at"],
         "results": results or [],
         "resultCount": len(results or []),
+        "activeMatches": meta.get("activeMatches", len(results or [])),
+        "hiddenCopies": meta.get("hiddenCopies", 0),
+        "unconfirmedCount": meta.get("unconfirmedCount", 0),
+        "targetCoverage": meta.get("targetCoverage"),
     }
+
+
+def radar_verification_state(row: sqlite3.Row, now: datetime | None = None) -> dict[str, Any]:
+    """Si la publicación está confirmada como comprable hoy, y desde cuándo.
+
+    Ninguna fuente automática confirma disponibilidad: eBay Browse devuelve lo
+    que encontró, no si sigue teniendo Buy It Now (`availabilityCheck` está en
+    `false`). Hasta ahora eso quedaba en `availability: unknown` y la card no lo
+    decía. Ahora el contrato es explícito:
+
+    - `pending`: se encontró en la última corrida, pero nadie confirmó que se
+      pueda comprar;
+    - `verified`: el dueño la abrió y confirmó Buy It Now o Add to Cart hace
+      menos de `RADAR_VERIFICATION_TTL_HOURS`, y el precio no cambió después;
+    - `expired`: se verificó, pero pasó el plazo o cambió el precio;
+    - `available`: la propia fuente lo confirma (ninguna hoy);
+    - `ended`: la fuente dice que terminó.
+    """
+
+    keys = row.keys()
+    now = now or datetime.now(timezone.utc)
+    source_id = str(row["source_id"] or "")
+    capabilities = radar_source_capabilities(source_id) if source_id else {}
+    availability = str((row["availability"] if "availability" in keys else "") or "unknown")
+    flagged = bool(row["requires_verification"]) if "requires_verification" in keys else False
+    verified_at = parse_iso_datetime(row["verified_at"] if "verified_at" in keys else None)
+    price_changed = parse_iso_datetime(row["price_changed_at"] if "price_changed_at" in keys else None)
+    expires_at = verified_at + timedelta(hours=RADAR_VERIFICATION_TTL_HOURS) if verified_at else None
+    contents_verified_at = parse_iso_datetime(row["contents_verified_at"] if "contents_verified_at" in keys else None)
+    reason = ""
+    if availability == "ended":
+        state = "ended"
+    elif verified_at and expires_at and expires_at > now and not (price_changed and price_changed > verified_at):
+        state = "verified"
+    elif verified_at:
+        state = "expired"
+        reason = "price-changed" if price_changed and price_changed > verified_at else "stale"
+    elif capabilities.get("availabilityCheck") and availability == "available" and not flagged:
+        state = "available"
+    else:
+        state = "pending"
+    stamp = lambda value: value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z") if value else None  # noqa: E731
+    return {
+        "state": state,
+        "reason": reason,
+        "verifiedAt": stamp(verified_at),
+        "expiresAt": stamp(expires_at),
+        "ttlHours": RADAR_VERIFICATION_TTL_HOURS,
+        "availability": availability,
+        "sourceChecksAvailability": bool(capabilities.get("availabilityCheck")),
+        "lastSeenAt": row["last_seen_at"] if "last_seen_at" in keys else None,
+        "requiresVerification": state not in {"verified", "available"},
+        # Caja y manual comprobados por el dueño: no vence, el contenido no cambia.
+        "contentsVerifiedAt": stamp(contents_verified_at),
+    }
+
+
+def radar_result_objective(row: sqlite3.Row, valuation: dict[str, Any]) -> dict[str, Any]:
+    """El objetivo canónico de una coincidencia.
+
+    Lo guarda la corrida; una coincidencia puntuada antes de que existiera la
+    taxonomía lo recibe acá, leído del título con la misma regla, para que la
+    pantalla la ubique igual. Su banda se actualiza en la próxima corrida.
+    """
+
+    stored = (valuation.get("assessment") or {}).get("objective") or valuation.get("objective")
+    if stored:
+        return dict(stored)
+    keys = row.keys()
+    item = classify_listing_item(str(row["title"] or ""))
+    return assign_objective(
+        str(row["title"] or ""),
+        search_type=str(row["match_search_type"] or "") if "match_search_type" in keys else "",
+        item_kind=item.kind,
+        item_confident=item.confident,
+        platform=platform_key(str(row["match_platform"] or "")) if "match_platform" in keys else "",
+    ).to_dict()
 
 
 def radar_result_row(row: sqlite3.Row) -> dict[str, Any]:
@@ -3130,6 +3248,8 @@ def radar_result_row(row: sqlite3.Row) -> dict[str, Any]:
     reasons = radar_json_field(row["reasons_json"], [])
     unverified = radar_json_field(row["unverified_json"], [])
     matched_terms = radar_json_field(row["matched_terms_json"], [])
+    valuation = radar_json_field(row["valuation_json"], {})
+    verification = radar_verification_state(row)
     return {
         "id": row["listing_id"],
         "listingId": row["listing_id"],
@@ -3154,13 +3274,23 @@ def radar_result_row(row: sqlite3.Row) -> dict[str, Any]:
         "closesAt": row["closes_at"],
         "confidence": row["confidence"],
         "score": row["score"],
-        "band": row["band"],
-        "valuation": radar_json_field(row["valuation_json"], {}),
+        "band": effective_band(
+            str(row["band"] or ""),
+            valuation,
+            verification["state"] in {"verified", "available"},
+            bool(verification["contentsVerifiedAt"]),
+        ),
+        "valuation": valuation,
+        "section": str(valuation.get("section") or "primary"),
+        "objective": radar_result_objective(row, valuation),
+        "searchId": row["search_id"] if "search_id" in row.keys() else None,
+        "searchName": row["match_search_name"] if "match_search_name" in row.keys() else "",
         "titleTarget": radar_json_field(row["target_json"], None) if "target_json" in row.keys() else None,
         "reasons": reasons,
         "unverified": unverified,
         "matchedTerms": matched_terms,
-        "requiresVerification": bool(row["requires_verification"]) if "requires_verification" in row.keys() else False,
+        "verification": verification,
+        "requiresVerification": verification["requiresVerification"],
         "verifiedAt": row["verified_at"] if "verified_at" in row.keys() else None,
         "firstSeenAt": row["first_seen_at"],
         "lastSeenAt": row["last_seen_at"],
@@ -3179,27 +3309,121 @@ def load_radar_search(conn: sqlite3.Connection, search_id: str) -> sqlite3.Row:
 RADAR_MATCH_SELECT = """
     SELECT l.*, m.search_id, m.listing_id, m.confidence, m.reasons_json, m.blockers_json,
            m.unverified_json, m.matched_terms_json, m.score, m.band, m.valuation_json, m.target_json,
-           m.first_seen_at AS match_first_seen_at, m.last_seen_at AS match_last_seen_at
+           m.first_seen_at AS match_first_seen_at, m.last_seen_at AS match_last_seen_at,
+           s.search_type AS match_search_type, s.platform AS match_platform, s.name AS match_search_name
       FROM radar_search_matches m
       JOIN radar_listings l ON l.id = m.listing_id
+      JOIN radar_searches s ON s.id = m.search_id
 """
 
 
 def radar_search_results(conn: sqlite3.Connection, search_id: str, limit: int) -> list[dict[str, Any]]:
-    # Descartar es definitivo para esta publicación: una caja suelta o algo que
-    # no era lo buscado no tiene que volver a aparecer en cada corrida. El feed
-    # "Para mí" ya se comportaba así; los resultados por búsqueda no, y ahí es
-    # donde aparecen primero. La decisión vive en `radar_decisions`, no en el
-    # match, así que sobrevive a que la búsqueda se vuelva a ejecutar.
+    return radar_search_inventory(conn, search_id, limit)[0]
+
+
+# Lo que distingue dos copias del mismo título lo suficiente como para mostrar
+# las dos: suelta frente a caja, otra región, otra edición.
+_RADAR_EDITION_MARKERS = (
+    "greatest hits", "players choice", "player s choice", "platinum", "black label",
+    "collector", "limited edition", "special edition", "nintendo selects",
+)
+
+
+def radar_result_variant(result: dict[str, Any]) -> tuple[str, str, str]:
+    text = normalize(str(result.get("title") or ""))
+    shape = detect_completeness(text) or "loose"
+    edition = next((marker for marker in _RADAR_EDITION_MARKERS if f" {marker} " in f" {text} "), "")
+    return ("boxed" if shape in {"boxed", "cib", "sealed"} else "loose", detect_region(text), edition)
+
+
+def radar_result_title_key(result: dict[str, Any]) -> str:
+    target = result.get("titleTarget") or {}
+    return radar_query_key(target.get("gameId") or target.get("query") or "")
+
+
+def diversify_radar_results(results: list[dict[str, Any]], limit: int) -> tuple[list[dict[str, Any]], int]:
+    """Primero la mejor copia de cada título; después, segundas copias distintas.
+
+    Una búsqueda de deseados con catorce Tetris entre veinticinco resultados no
+    está cubriendo la lista: está repitiendo el título más común. Antes de
+    cortar en el límite se toma la mejor copia de cada título perseguido (en el
+    orden del score), después una segunda sólo si aporta algo que la primera no
+    —caja frente a suelta, otra región u otra edición— y nada más. Lo que no
+    entra se cuenta, no se esconde en silencio.
+
+    Los lotes con cantidad sin confirmar van al final, después de los que
+    cumplen: la pantalla los muestra aparte.
+    """
+
+    primary = [item for item in results if item.get("section", "primary") == "primary"]
+    secondary = [item for item in results if item.get("section", "primary") != "primary"]
+    hidden = 0
+    if any(radar_result_title_key(item) for item in primary):
+        firsts: list[dict[str, Any]] = []
+        seconds: list[dict[str, Any]] = []
+        variants: dict[str, list[tuple[str, str, str]]] = {}
+        for item in primary:
+            key = radar_result_title_key(item)
+            if not key:
+                firsts.append(item)
+                continue
+            seen = variants.setdefault(key, [])
+            variant = radar_result_variant(item)
+            if not seen:
+                seen.append(variant)
+                firsts.append(item)
+            elif len(seen) < RADAR_MAX_COPIES_PER_TITLE and variant not in seen:
+                seen.append(variant)
+                seconds.append(item)
+            else:
+                hidden += 1
+        primary = firsts + seconds
+    ordered = primary + secondary
+    return ordered[: max(1, limit)], hidden
+
+
+def radar_target_coverage(criteria: dict[str, Any], results: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Cuántos de los títulos perseguidos tienen algo, y cuáles no."""
+    targets = [target for target in criteria.get("titleTargets") or [] if target.get("query")]
+    if not targets:
+        return None
+    covered = {radar_result_title_key(item) for item in results if item.get("section", "primary") == "primary"}
+    missing = [
+        str(target.get("name") or target.get("query"))
+        for target in targets
+        if radar_query_key(target.get("gameId") or target.get("query")) not in covered
+    ]
+    return {"total": len(targets), "covered": len(targets) - len(missing), "uncovered": missing}
+
+
+def radar_search_inventory(
+    conn: sqlite3.Connection, search_id: str, limit: int, criteria: dict[str, Any] | None = None
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Lo que la búsqueda muestra, y lo que se sabe de lo que no muestra.
+
+    Descartar es definitivo para esta publicación: una caja suelta o algo que
+    no era lo buscado no tiene que volver a aparecer en cada corrida. La
+    decisión vive en `radar_decisions`, no en el match, así que sobrevive a que
+    la búsqueda se vuelva a ejecutar.
+    """
+
     rows = conn.execute(
         f"""{RADAR_MATCH_SELECT}
             LEFT JOIN radar_decisions d ON d.listing_id = l.id
             WHERE m.search_id = ? AND m.is_active = 1
               AND COALESCE(d.decision, '') != 'dismissed'
             ORDER BY COALESCE(m.score, -1) DESC, m.confidence DESC, m.last_seen_at DESC LIMIT ?""",
-        (search_id, max(1, min(limit, RADAR_MAX_RESULT_LIMIT))),
+        (search_id, RADAR_INVENTORY_SCAN_LIMIT),
     ).fetchall()
-    return [radar_result_row(row) for row in rows]
+    every = [radar_result_row(row) for row in rows]
+    shown, hidden = diversify_radar_results(every, max(1, min(limit, RADAR_MAX_RESULT_LIMIT)))
+    meta = {
+        "activeMatches": len(every),
+        "hiddenCopies": hidden,
+        "unconfirmedCount": sum(1 for item in shown if item.get("section", "primary") != "primary"),
+        "targetCoverage": radar_target_coverage(criteria or {}, every),
+    }
+    return shown, meta
 
 
 def radar_full_matches(conn: sqlite3.Connection, listing_id: str) -> list[dict[str, Any]]:
@@ -3261,6 +3485,7 @@ def list_radar_listings(config: AppConfig, limit: int = 100) -> dict[str, Any]:
         for cluster in group_radar_rows_by_content(listing_rows):
             row = radar_cluster_representative(cluster)
             matches = radar_cluster_matches_using(conn, cluster, radar_full_matches)
+            verification = radar_verification_state(row)
             items.append(
                 {
                     "id": row["id"],
@@ -3287,9 +3512,15 @@ def list_radar_listings(config: AppConfig, limit: int = 100) -> dict[str, Any]:
                     # La banda y el score salen de la coincidencia mejor puntuada:
                     # una misma publicación puede valer distinto según la búsqueda.
                     "score": row["best_score"] if row["best_score"] is not None and row["best_score"] >= 0 else None,
-                    "band": row["best_band"],
+                    "band": effective_band(
+                        str(row["best_band"] or ""),
+                        radar_json_field(row["best_valuation_json"], {}),
+                        verification["state"] in {"verified", "available"},
+                        bool(verification["contentsVerifiedAt"]),
+                    ),
                     "valuation": radar_json_field(row["best_valuation_json"], {}),
-                    "requiresVerification": bool(row["requires_verification"]),
+                    "verification": verification,
+                    "requiresVerification": verification["requiresVerification"],
                     "verifiedAt": row["verified_at"],
                     "firstSeenAt": row["first_seen_at"],
                     "lastSeenAt": row["last_seen_at"],
@@ -3318,17 +3549,11 @@ def list_radar_searches(config: AppConfig) -> dict[str, Any]:
                ORDER BY CASE status WHEN 'active' THEN 0 WHEN 'draft' THEN 1 WHEN 'paused' THEN 2 ELSE 3 END,
                         updated_at DESC, name"""
         ).fetchall()
-        items = [
-            radar_search_row(
-                row,
-                radar_search_results(
-                    conn,
-                    str(row["id"]),
-                    int(normalize_radar_criteria(radar_json_field(row["criteria_json"], None))["resultLimit"]),
-                ),
-            )
-            for row in rows
-        ]
+        items = []
+        for row in rows:
+            criteria = normalize_radar_criteria(radar_json_field(row["criteria_json"], None))
+            results, meta = radar_search_inventory(conn, str(row["id"]), int(criteria["resultLimit"]), criteria)
+            items.append(radar_search_row(row, results, meta))
     counts = {status: sum(1 for item in items if item["status"] == status) for status in RADAR_SEARCH_STATUSES}
     return {
         "version": RADAR_SEARCHES_VERSION,
@@ -3336,6 +3561,9 @@ def list_radar_searches(config: AppConfig) -> dict[str, Any]:
         "environment": config.ebay_environment,
         "sources": radar_sources_payload(),
         "counts": counts,
+        # Los cinco objetivos canónicos y las secciones aparte: la pantalla los
+        # dibuja desde acá, sin saber cuáles son.
+        **taxonomy_payload(),
         "items": items,
     }
 
@@ -3343,12 +3571,9 @@ def list_radar_searches(config: AppConfig) -> dict[str, Any]:
 def radar_search_payload(config: AppConfig, search_id: str) -> dict[str, Any]:
     with _RADAR_LOCK, connect_db(config) as conn:
         row = load_radar_search(conn, search_id)
-        results = radar_search_results(
-            conn,
-            search_id,
-            int(normalize_radar_criteria(radar_json_field(row["criteria_json"], None))["resultLimit"]),
-        )
-        return {"ok": True, "search": radar_search_row(row, results)}
+        criteria = normalize_radar_criteria(radar_json_field(row["criteria_json"], None))
+        results, meta = radar_search_inventory(conn, search_id, int(criteria["resultLimit"]), criteria)
+        return {"ok": True, "search": radar_search_row(row, results, meta)}
 
 
 def assert_radar_name_is_free(conn: sqlite3.Connection, name: str, platform: str, exclude_id: str = "") -> None:
@@ -3946,12 +4171,27 @@ def target_applies_to(item_kind: Any, entity_type: str) -> bool:
     return item_kind.kind == entity_type
 
 
+# Los objetivos que se comparan contra pares de su misma completitud. Los lotes
+# van por pieza y lo que no es ninguno de los cinco no tiene pares.
+RADAR_PEERED_OBJECTIVES = frozenset({"game-loose", "game-cib", "console-loose", "console-cib"})
+
+
+def radar_objective_completeness(objective: dict[str, Any] | None) -> str:
+    """Contra qué completitud se mide una publicación, o vacío si contra ninguna."""
+    objective = objective or {}
+    if objective.get("id") not in RADAR_PEERED_OBJECTIVES or objective.get("status") == "incomplete":
+        return ""
+    return "cib" if str(objective["id"]).endswith("-cib") else "loose"
+
+
 def valuate_radar_match(
     listing: MarketplaceListing, verdict: Any, criteria: dict[str, Any], references: list[Any],
     entity_type: str = "", console_weight: Any = None, sold_query: str = "",
     bundle_game_value: dict[str, Any] | None = None,
+    search_type: str = "", lot_peer_per_piece: list[float] | None = None,
 ) -> Any:
     """Puntúa una coincidencia que ya pasó los filtros obligatorios."""
+    assessment = dict(getattr(verdict, "assessment", None) or {})
     completeness = str(criteria.get("completeness") or "any")
     # Qué es la pieza lo dice su propio título, no la entidad de la búsqueda que
     # la encontró: un juego capturado por una búsqueda de consola se costeaba
@@ -3964,16 +4204,27 @@ def valuate_radar_match(
     # Una caja sin manual se mide como CIB antes que como suelta: está mucho
     # más cerca de una que de la otra. Sin referencia para eso, se cae a la de
     # copia suelta y la card lo avisa.
-    if completeness == "any":
-        declared = detect_completeness(normalize(listing.searchable_text()))
-        completeness = declared if declared in {"cib", "boxed", "sealed"} else "loose"
-    benchmark = pick_benchmark(scoped, completeness=completeness)
+    objective = assessment.get("objective") or {}
     loose_fallback = False
-    if benchmark is None and completeness == "boxed":
-        benchmark = pick_benchmark(scoped, completeness="cib")
-    if benchmark is None and completeness != "loose":
-        benchmark = pick_benchmark(scoped, completeness="loose")
-        loose_fallback = benchmark is not None
+    if objective.get("id") in RADAR_PEERED_OBJECTIVES:
+        # Cada objetivo canónico se compara con sus pares: CIB contra CIB y
+        # loose contra loose. Sin una referencia del mismo objetivo no hay
+        # veredicto de precio: medir un CIB contra una copia suelta exageraba
+        # la ganga, y una suelta contra un CIB la hacía parecer regalada. Lo
+        # que no llega a CIB (caja sin manual) no se compara con ninguno.
+        completeness = radar_objective_completeness(objective)
+        benchmark = pick_benchmark(scoped, completeness=completeness) if completeness else None
+        completeness = completeness or "boxed"
+    else:
+        if completeness == "any":
+            declared = detect_completeness(normalize(listing.searchable_text()))
+            completeness = declared if declared in {"cib", "boxed", "sealed"} else "loose"
+        benchmark = pick_benchmark(scoped, completeness=completeness)
+        if benchmark is None and completeness == "boxed":
+            benchmark = pick_benchmark(scoped, completeness="cib")
+        if benchmark is None and completeness != "loose":
+            benchmark = pick_benchmark(scoped, completeness="loose")
+            loose_fallback = benchmark is not None
     # Un lote con cantidad declarada se mide por pieza contra el techo propio.
     per_piece_reference = (
         lot_ceiling_benchmark(
@@ -3985,7 +4236,28 @@ def valuate_radar_match(
         if criteria.get("maxPricePerPiece") is not None and not item_kind.variable_price
         else None
     )
-    if per_piece_reference is not None:
+    lot = assessment.get("lot") or {}
+    if search_type == "lot" or lot:
+        # Un lote se juzga por pieza o no se juzga. Nunca contra la mediana de
+        # los totales de otros lotes —un lote de 4 y uno de 22 no se comparan
+        # enteros— y nunca sin una cantidad confiable: sin ella no hay división
+        # honesta, y el lote queda sin referencia y aparte.
+        pieces = lot.get("pieces") if lot.get("quantity") == "confirmed" else None
+        benchmark = None
+        if pieces and not item_kind.variable_price:
+            if criteria.get("maxPricePerPiece") is not None:
+                benchmark = lot_ceiling_benchmark(
+                    declared_pieces=pieces,
+                    per_piece_ceiling=criteria.get("maxPricePerPiece"),
+                    entity_id=listing.external_id,
+                    currency=str(criteria.get("currency") or "USD"),
+                    filler=bool(lot.get("filler")),
+                )
+            elif lot_peer_per_piece:
+                benchmark = lot_peer_benchmark(
+                    lot_peer_per_piece, declared_pieces=pieces, entity_id=listing.external_id
+                )
+    elif per_piece_reference is not None:
         benchmark = per_piece_reference
     # Una consola que trae juegos se compara contra la consola más sus juegos.
     elif item_kind.kind == "console" and bundle_game_value:
@@ -4020,6 +4292,11 @@ def valuate_radar_match(
         target_item_price=(
             criteria.get("targetItemPrice") if target_applies_to(item_kind, entity_type) else None
         ),
+        assessment=assessment,
+        # Ninguna fuente confirma hoy que la publicación siga comprable
+        # (`availabilityCheck`). Lo confirma el dueño al verificarla, y eso se
+        # lee al mostrarla, no al puntuarla.
+        availability_verified=False,
     )
     if loose_fallback:
         card.caveats.append(
@@ -4099,26 +4376,42 @@ def score_radar_pages(
             verdict = evaluate_match(
                 listing, listing_criteria, capabilities_by_source.get(listing.source_id, {}), expected_kind,
                 rejects_accessories=lot_search,
+                platform=str(row["platform"] or ""),
+                search_type=str(row["search_type"] or ""),
             )
             if verdict.matched:
                 matched.append((listing, verdict, target, listing_criteria, query))
             else:
                 rejected += 1
 
-    def group_key(target: dict[str, Any] | None) -> str:
-        return radar_query_key(target.get("query")) if target else ""
+    def group_key(target: dict[str, Any] | None, verdict: Any = None) -> tuple[str, str]:
+        # Los pares son del mismo título y del mismo objetivo: un CIB contra
+        # CIB, una copia suelta contra sueltas.
+        objective = (getattr(verdict, "assessment", None) or {}).get("objective") if verdict else None
+        return (radar_query_key(target.get("query")) if target else "", radar_objective_completeness(objective))
 
-    peer_prices: dict[str, list[float]] = {}
-    for listing, _, target, _, _ in matched:
-        if listing.price_amount and (
-            not expected_kind or classify_listing_item(listing.title).kind == expected_kind
-        ):
-            peer_prices.setdefault(group_key(target), []).append(listing.price_amount)
+    # Los pares se comparan en la misma moneda que la publicación juzgada: una
+    # consola a la que le falta el control entra con lo que costaría
+    # completarla, y un lote entra por pieza —sólo si declara cuántas trae—.
+    peer_prices: dict[tuple[str, str], list[float]] = {}
+    lot_peer_per_piece: list[float] = []
+    for listing, verdict, target, _, _ in matched:
+        if not listing.price_amount:
+            continue
+        if lot_search:
+            lot = verdict.assessment.get("lot") or {}
+            if lot.get("quantity") == "confirmed" and lot.get("pieces"):
+                lot_peer_per_piece.append(round(listing.price_amount / int(lot["pieces"]), 2))
+            continue
+        key = group_key(target, verdict)
+        if key[1] and (not expected_kind or classify_listing_item(listing.title).kind == expected_kind):
+            extra = (completion_cost(verdict.assessment) or {}).get("total") or 0.0
+            peer_prices.setdefault(key, []).append(round(listing.price_amount + extra, 2))
 
-    references_by_group: dict[str, list[Any]] = {}
+    references_by_group: dict[tuple[str, str], list[Any]] = {}
 
-    def group_references(target: dict[str, Any] | None) -> list[Any]:
-        key = group_key(target)
+    def group_references(target: dict[str, Any] | None, verdict: Any = None) -> list[Any]:
+        key = group_key(target, verdict)
         if key in references_by_group:
             return references_by_group[key]
         base = references
@@ -4131,7 +4424,7 @@ def score_radar_pages(
         peers = peer_listing_benchmark(
             peer_prices.get(key, []),
             entity_id=peer_entity,
-            completeness=str(criteria.get("completeness") or "loose"),
+            completeness=key[1] or str(criteria.get("completeness") or "loose"),
             observed_at=now,
         )
         references_by_group[key] = [*base, peers] if peers is not None else list(base)
@@ -4142,11 +4435,13 @@ def score_radar_pages(
             listing,
             verdict,
             valuate_radar_match(
-                listing, verdict, page_criteria, group_references(target), expected_kind, console_weight,
+                listing, verdict, page_criteria, group_references(target, verdict), expected_kind, console_weight,
                 # Ventas cerradas de lo que encontró esta publicación: en una
                 # búsqueda de varios títulos, ese título y no la consulta principal.
                 sold_query=query or str(row["search_query"] or ""),
                 bundle_game_value=bundle_value,
+                search_type=str(row["search_type"] or ""),
+                lot_peer_per_piece=lot_peer_per_piece,
             ),
             radar_target_payload(target, entity_console_id),
         )
@@ -4447,7 +4742,8 @@ def create_manual_radar_listing(config: AppConfig, payload: Any) -> dict[str, An
 
     capabilities = radar_source_capabilities(source_id)
     verdict = evaluate_match(
-        listing, criteria, capabilities, rejects_accessories=str(row["search_type"]) == "lot"
+        listing, criteria, capabilities, rejects_accessories=str(row["search_type"]) == "lot",
+        platform=str(row["platform"] or ""), search_type=str(row["search_type"] or ""),
     )
     if not verdict.matched:
         raise ApiError(
@@ -4465,6 +4761,7 @@ def create_manual_radar_listing(config: AppConfig, payload: Any) -> dict[str, An
         radar_expected_item_kind(str(row["search_type"]), str(row["entity_type"])),
         radar_console_weight_declaration(config, str(row["entity_id"])),
         sold_query=str(row["search_query"] or ""),
+        search_type=str(row["search_type"] or ""),
     )
     now = utc_now()
 
@@ -4495,6 +4792,25 @@ def create_manual_radar_listing(config: AppConfig, payload: Any) -> dict[str, An
         )
 
     return {"ok": True, "listingId": listing_id, "searchId": search_id, "requiresVerification": True}
+
+
+def verify_radar_listing_contents(config: AppConfig, listing_id: Any) -> dict[str, Any]:
+    """El dueño miró las fotos y la caja y el manual (o el contenido) están.
+
+    Sin esto, un CIB es lo que declara el vendedor y queda en «Requiere
+    revisión». No escribe nada de la colección: es evidencia del radar sobre
+    esa publicación, como la verificación de disponibilidad.
+    """
+
+    target_id = normalize_radar_id(listing_id)
+    now = utc_now()
+    with _RADAR_LOCK, connect_db(config) as conn:
+        cursor = conn.execute(
+            "UPDATE radar_listings SET contents_verified_at = ? WHERE id = ?", (now, target_id)
+        )
+        if cursor.rowcount != 1:
+            raise ApiError(HTTPStatus.NOT_FOUND, "Listing not found")
+    return {"ok": True, "listingId": target_id, "contentsVerifiedAt": now}
 
 
 def verify_radar_listing(config: AppConfig, listing_id: Any) -> dict[str, Any]:
@@ -5907,6 +6223,8 @@ def record_radar_purchase(config: AppConfig, payload: Any) -> dict[str, Any]:
 def radar_feed_item(row: sqlite3.Row, decision: dict[str, Any] | None, matches: list[dict[str, Any]]) -> dict[str, Any]:
     drop = radar_price_drop(row)
     valuation = radar_json_field(row["valuation_json"] if "valuation_json" in row.keys() else "", {})
+    verification = radar_verification_state(row)
+    stored_band = str(row["best_band"] or "") if "best_band" in row.keys() else ""
     return {
         "id": row["id"],
         "sourceId": row["source_id"],
@@ -5927,12 +6245,19 @@ def radar_feed_item(row: sqlite3.Row, decision: dict[str, Any] | None, matches: 
         "sellerLabel": row["seller_label"],
         "closesAt": row["closes_at"],
         "score": row["best_score"] if "best_score" in row.keys() else None,
-        "band": row["best_band"] if "best_band" in row.keys() else "",
+        "band": effective_band(
+            stored_band,
+            valuation,
+            verification["state"] in {"verified", "available"},
+            bool(verification["contentsVerifiedAt"]),
+        ),
+        "objective": (valuation.get("assessment") or {}).get("objective"),
         "valuation": valuation,
         "priceDrop": drop,
         "decision": decision,
         "matches": matches,
-        "requiresVerification": bool(row["requires_verification"]) if "requires_verification" in row.keys() else False,
+        "verification": verification,
+        "requiresVerification": verification["requiresVerification"],
         "verifiedAt": row["verified_at"] if "verified_at" in row.keys() else None,
         "firstSeenAt": row["first_seen_at"],
         "lastSeenAt": row["last_seen_at"],
@@ -6039,6 +6364,13 @@ def list_radar_feed(config: AppConfig, limit: int = RADAR_FEED_LIMIT) -> dict[st
                     sleeping += 1
                     continue
             if decision and decision["decision"] == "purchased":
+                continue
+            # Un lote que no confirma cuántos juegos trae no cumple su búsqueda:
+            # se ve en la búsqueda, aparte, pero no es una decisión del día.
+            best_valuation = radar_json_field(row["valuation_json"] if "valuation_json" in row.keys() else "", {})
+            if best_valuation.get("section") in RADAR_SECONDARY_SECTIONS and not (
+                decision and decision["decision"] == "following"
+            ):
                 continue
 
             item = radar_feed_item(row, decision, radar_cluster_matches(conn, cluster))
@@ -6179,11 +6511,17 @@ def is_exceptional(item: dict[str, Any]) -> bool:
     nuestra.
     """
 
-    target = (item.get("valuation") or {}).get("target") or {}
-    if target.get("meets") is True:
+    valuation = item.get("valuation") or {}
+    # Lo que no cumple la búsqueda o hay que revisar antes no interrumpe: un
+    # cartucho sin originalidad declarada a mitad de precio es justo el tipo de
+    # «oportunidad» que entrenaba a ignorar los avisos.
+    if valuation.get("section") in RADAR_SECONDARY_SECTIONS:
+        return False
+    target = valuation.get("target") or {}
+    if target.get("meets") is True and item.get("band") != "revisar":
         return True
-    ratio = ((item.get("valuation") or {}).get("ratio"))
-    if isinstance(ratio, (int, float)) and 0 < ratio <= RADAR_ALERT_RATIO:
+    ratio = valuation.get("ratio")
+    if isinstance(ratio, (int, float)) and 0 < ratio <= RADAR_ALERT_RATIO and item.get("band") != "revisar":
         return True
     drop = item.get("priceDrop") or {}
     following = (item.get("decision") or {}).get("decision") == "following"
@@ -6199,10 +6537,14 @@ def radar_email_subject(kind: str, items: list[dict[str, Any]]) -> str:
 
 
 def radar_email_bodies(config: AppConfig, kind: str, items: list[dict[str, Any]], generated_at: str) -> tuple[str, str]:
-    """Texto y HTML de una entrega. Cada card dice cuándo se verificó."""
+    """Texto y HTML de una entrega. Dice cuándo se revisó y qué falta confirmar.
+
+    «Revisado», no «verificado»: la corrida encontró la publicación, pero ninguna
+    fuente confirma que siga comprable. Cada una que no verificó el dueño lo dice.
+    """
     lines = [
         "Collection Radar" if kind == "digest" else "Collection Radar · oportunidad excepcional",
-        f"Verificado {generated_at}",
+        f"Revisado {generated_at}",
         "",
     ]
     rows = []
@@ -6216,6 +6558,8 @@ def radar_email_bodies(config: AppConfig, kind: str, items: list[dict[str, Any]]
             detail.append(f"bajó {round(drop['ratio'] * 100)}% (antes {drop.get('previous')})")
         if item.get("band"):
             detail.append(f"{item['band']}{f' {item['score']}/100' if item.get('score') is not None else ''}")
+        if item.get("requiresVerification", True):
+            detail.append("sin verificar: abrila y confirmá Buy It Now o Add to Cart")
         reasons = (item.get("matches") or [{}])[0].get("reasons") or []
         why = reasons[0] if reasons else ""
 
@@ -6239,7 +6583,7 @@ def radar_email_bodies(config: AppConfig, kind: str, items: list[dict[str, Any]]
     html = (
         "<div style='font-family:system-ui,sans-serif;max-width:640px'>"
         f"<h2 style='font-family:Georgia,serif;color:#0b1a2c'>{html_escape(lines[0])}</h2>"
-        f"<p style='color:#3d536c;font-size:13px'>Verificado {html_escape(generated_at)}</p>"
+        f"<p style='color:#3d536c;font-size:13px'>Revisado {html_escape(generated_at)}</p>"
         f"<table style='width:100%;border-collapse:collapse'>{''.join(rows)}</table>"
         "<p style='color:#3d536c;font-size:13px'>Abrí «Para mí» en Consolas para seguir, descartar o dormir cada una.</p>"
         "</div>"
@@ -6893,6 +7237,13 @@ class Handler(BaseHTTPRequestHandler):
             require_radar_write_request(self)
             payload = read_json_body(self, self.config())
             self.send_json(create_manual_radar_listing(self.config(), payload), HTTPStatus.CREATED)
+            return
+        if path.startswith("/api/radar/listings/") and path.endswith("/verify-contents"):
+            require_radar_write_request(self)
+            listing_id = normalize_radar_id(
+                path.removeprefix("/api/radar/listings/").removesuffix("/verify-contents")
+            )
+            self.send_json(verify_radar_listing_contents(self.config(), listing_id))
             return
         if path.startswith("/api/radar/listings/") and path.endswith("/verify"):
             require_radar_write_request(self)

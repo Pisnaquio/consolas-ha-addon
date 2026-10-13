@@ -160,7 +160,11 @@ class ConditionTests(unittest.TestCase):
             criteria(originalParts="required"),
         )
         self.assertTrue(verdict.matched, "exigir prueba positiva descartaba el mercado entero")
-        self.assertIn("Originalidad sin declarar: verificar antes de comprar", verdict.unverified)
+        # En un cartucho retro, lo que hay que mirar se dice concreto.
+        self.assertTrue(
+            any(item.startswith("Originalidad sin declarar: mirá etiqueta") for item in verdict.unverified),
+            verdict.unverified,
+        )
 
     def test_a_declared_reproduction_is_still_blocked(self) -> None:
         verdict = evaluate_match(

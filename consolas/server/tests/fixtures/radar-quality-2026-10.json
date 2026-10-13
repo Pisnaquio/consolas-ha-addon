@@ -1,0 +1,43 @@
+{
+  "note": "Regresión de calidad del Collection Radar (auditoría del 2026-10-12). Sólo títulos de publicación y la búsqueda que los encontró: sin vendedores, ids, precios reales ni URLs. Los títulos son los que el dueño citó como problema o como control positivo; el resto de cada caso lo arma el test. `expect`: reject (la búsqueda lo descarta), review (entra, pero el veredicto queda en «Requiere revisión»), unconfirmed (entra aparte, con cantidad sin confirmar) o accept (entra como resultado normal).",
+  "cases": [
+    {"search": "game", "platform": "N64", "title": "Super mario 64 STAR ROAD Video Game Cartridge", "expect": "review", "why": "hack con marcas de vendedor de copias"},
+    {"search": "game", "platform": "N64", "title": "Pokémon Stadium 2 Compatible N64 Cartridge", "expect": "reject", "why": "cartucho «compatible»"},
+    {"search": "game", "platform": "SNES", "title": "Contra III The Alien Wars SNES GAME CARD USA VERSION", "expect": "reject", "why": "«game card» en un cartucho retro"},
+    {"search": "game", "platform": "SNES", "title": "Super Mario World SNES Custom English Translated Cartridge", "expect": "reject", "why": "custom / translated"},
+    {"search": "game", "platform": "Game Boy Color", "title": "Pokemon Crystal GBC Gold Shell Holographic Label", "expect": "reject", "why": "gold shell / holographic label"},
+    {"search": "game", "platform": "N64", "title": "Zelda Ocarina of Time N64 Bootleg Cartridge", "expect": "reject", "why": "bootleg"},
+    {"search": "game", "platform": "PS1", "title": "Activision Blizzard Pin Set Crash Bandicoot Spyro", "expect": "reject", "why": "merchandising"},
+    {"search": "game", "platform": "Genesis", "title": "Castlevania Bloodlines Sega Genesis Vintage Video Game Ad Print", "expect": "reject", "why": "publicidad impresa"},
+    {"search": "game", "platform": "Game Boy Color", "title": "Legend of Zelda Oracle of Seasons Game Boy Color Pin Pinback", "expect": "reject", "why": "pin"},
+    {"search": "game", "platform": "Game Boy", "title": "Scholastic Pokemon Red Game Boy Paperback", "expect": "reject", "why": "libro"},
+    {"search": "game", "platform": "SNES", "title": "Super Metroid SNES Manual Only", "expect": "reject", "why": "manual suelto"},
+    {"search": "game", "platform": "Game Boy", "title": "Pokemon Red Game Boy Cartridge Protective Case", "expect": "reject", "why": "estuche"},
+    {"search": "game", "platform": "N64", "title": "Super Mario 64 Nintendo 64 N64 Authentic Cartridge Tested", "expect": "accept", "why": "cartucho que declara ser auténtico"},
+    {"search": "game", "platform": "N64", "title": "Super Mario 64 Nintendo 64 N64 Tested", "expect": "review", "why": "cartucho sin originalidad declarada"},
+    {"search": "game", "platform": "PS1", "title": "Final Fantasy VII PS1 Complete CIB Black Label", "expect": "review", "why": "control positivo: el CIB de PS1 entra, pero un CIB declarado se revisa antes de pagarlo como CIB"},
+
+    {"search": "console", "platform": "Game Boy", "title": "Screen Lens Replacement for the Original Game Boy DMG-01", "expect": "reject", "why": "repuesto"},
+    {"search": "console", "platform": "Game Boy", "title": "Genuine Nintendo 2 Player Game Link Cable DMG-04 for Game Boy Console", "expect": "reject", "why": "cable de link"},
+    {"search": "console", "platform": "Game Boy Color", "title": "Nintendo Game Boy Color Atomic Purple Box And Inserts Only", "expect": "reject", "why": "caja sin consola"},
+    {"search": "console", "platform": "Genesis", "title": "Sega Mega Drive II Console Chinese Bootleg Clone", "expect": "reject", "why": "clon"},
+    {"search": "console", "platform": "NES", "title": "Nintendo NES Classic 2018", "expect": "reject", "why": "reedición, no la NES original"},
+    {"search": "console", "platform": "PS3", "title": "Sony PS3 Slim 160GB Console Tested HDMI Not Working", "expect": "reject", "why": "HDMI defectuoso"},
+    {"search": "console", "platform": "PS3", "title": "Sony PlayStation 3 Fat 80GB Console YLOD", "expect": "reject", "why": "YLOD"},
+    {"search": "console", "platform": "N64", "title": "Nintendo 64 N64 Console W/ OEM Controller, Jumper Pak, All Cords. Tested/Working", "expect": "accept", "why": "control positivo: lista para usar"},
+    {"search": "console", "platform": "N64", "title": "Nintendo 64 Console Only Tested Working", "expect": "accept", "why": "consola sola: entra con costo de completar"},
+    {"search": "console", "platform": "Game Boy", "title": "Nintendo Game Boy DMG-01 Tested Working LCD Lines", "expect": "review", "why": "daño declarado"},
+    {"search": "console", "platform": "PS2", "title": "Sony PlayStation 2 Slim SCPH-79001 Console Powers On", "expect": "accept", "why": "entra, con lectura de CD y DVD pendiente"},
+
+    {"search": "lot", "platform": "PS2", "minLotSize": 15, "title": "Mystery Mixed Lot of 15 PS2 Games Blind Pack", "expect": "reject", "why": "lote sorpresa"},
+    {"search": "lot", "platform": "PS2", "minLotSize": 15, "title": "PS2 2 Game Bundle God of War Shadow of the Colossus", "expect": "reject", "why": "dos juegos en una búsqueda de 15"},
+    {"search": "lot", "platform": "PS2", "minLotSize": 15, "title": "PS2 Game Bundle Kingdom Hearts Final Fantasy X", "expect": "unconfirmed", "why": "no declara cantidad"},
+    {"search": "lot", "platform": "PS1", "minLotSize": 10, "title": "Lot of 20 Video Games PS1 PS2 Xbox Wii PS4", "expect": "reject", "why": "plataformas mezcladas"},
+    {"search": "lot", "platform": "N64", "minLotSize": 6, "title": "Nintendo 64 N64 Console Bundle with 10 Games", "expect": "reject", "why": "bundle de consola"},
+    {"search": "lot", "platform": "Genesis", "minLotSize": 8, "title": "Sega Genesis Sonic Diorama Figure Lot", "expect": "reject", "why": "figuras"},
+    {"search": "lot", "platform": "Game Boy", "minLotSize": 8, "title": "Lot of 10 Game Boy Cartridge Protective Cases for Games", "expect": "reject", "why": "estuches"},
+    {"search": "lot", "platform": "3DS", "minLotSize": 6, "title": "30X WHOLESALE Nintendo 3DS Imagine Babyz Lot", "expect": "reject", "why": "treinta copias del mismo juego"},
+    {"search": "lot", "platform": "PS1", "minLotSize": 10, "title": "Lot of 12 PS1 Games Tested Final Fantasy Crash Spyro", "expect": "accept", "why": "control positivo: lote PS1 con cantidad declarada"},
+    {"search": "lot", "platform": "PS2", "minLotSize": 15, "title": "Lot of 16 PS2 Sports Games Madden NBA Tested", "expect": "accept", "why": "relleno: entra, pero vale menos por pieza"}
+  ]
+}

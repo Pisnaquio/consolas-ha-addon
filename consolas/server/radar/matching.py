@@ -22,8 +22,20 @@ import unicodedata
 from dataclasses import dataclass, field
 from typing import Any
 
-from .classify import classify_listing_item, detect_lot_size, names_games
+from .classify import (
+    KIT_PIECE_LABELS,
+    REPRO_PACKAGING_MARKERS,
+    analyze_lot,
+    assess_authenticity,
+    assess_console_kit,
+    classify_listing_item,
+    detect_hardware_origin,
+    detect_lot_size,
+    names_games,
+)
 from .model import MarketplaceListing
+from .platforms import PROFILES, RETRO_CARTRIDGE_KEYS, resolve_platform
+from .taxonomy import assign_objective
 
 
 ITEM_KIND_LABELS = {
@@ -33,6 +45,18 @@ ITEM_KIND_LABELS = {
     "lot": "un lote",
 }
 
+# Qué clase de «no es el producto» es, dicho como lo va a leer el dueño.
+ITEM_CATEGORY_LABELS = {
+    "accessory": "un accesorio",
+    "printed": "material impreso",
+    "merch": "merchandising",
+    "part": "una pieza de reemplazo",
+}
+
+# Cajas, fundas y protectores «para» juegos: el lote es de estuches aunque el
+# título diga «games».
+_CASES_FOR_GAMES = re.compile(r"\b(?:cases?|protectors?|sleeves?|covers?|boxes)\s+(?:for|fits)\b")
+
 
 # Señales léxicas. Son heurísticas declaradas, no verdad: por eso alimentan
 # razones y confianza, y sólo bloquean cuando la contradicción es explícita.
@@ -40,10 +64,21 @@ TESTED_SIGNALS = ("tested", "working", "fully functional", "functional", "probad
 UNTESTED_SIGNALS = ("untested", "not tested", "as-is", "as is", "for parts", "parts only", "sin probar")
 # Un defecto declarado no es «sin probar»: es probada y con una falla. Medido en
 # la primera corrida del portafolio retro: «PS3 Bad HDMI», «GBC Needs LCD».
+#
+# Lo que impide usar la unidad descarta; lo que la deja jugable pero dañada
+# (líneas en la pantalla, decoloración, un puerto flojo) no descarta: lo lee
+# `classify.assess_console_kit` y la valuación lo penaliza a la vista. Un
+# «working with issues» sin decir cuáles es una falla de alcance desconocido y
+# se trata como «some issues».
 DEFECT_SIGNALS = (
-    "bad", "needs", "defective", "faulty", "dead pixel", "dead pixels", "screen line", "screen lines",
-    "no sound", "no audio", "no video", "not reading", "doesn t read", "doesnt read", "won t read",
-    "read error", "cracked", "some issues", "has issues",
+    "bad", "needs", "defective", "faulty",
+    "no sound", "no audio", "no video", "no display", "no picture", "no signal",
+    "not reading", "doesn t read", "doesnt read", "won t read", "read error",
+    "cracked", "some issues", "has issues", "with issues",
+    # PS3: la luz amarilla y el HDMI muerto son las dos fallas que la dejan inservible.
+    "ylod", "yellow light", "yellow light of death", "blod", "rrod", "red ring",
+    "no hdmi", "hdmi not working", "hdmi doesn t work", "hdmi doesnt work", "hdmi broken",
+    "broken hdmi", "hdmi issue", "hdmi issues", "hdmi port damaged",
 )
 OEM_SIGNALS = ("oem", "original", "genuine", "official")
 AFTERMARKET_SIGNALS = ("aftermarket", "third party", "generic", "clone", "replica", "reproduction", "repro")
@@ -53,6 +88,21 @@ SEALED_SIGNALS = ("sealed", "factory sealed", "new sealed", "brand new sealed")
 LOOSE_SIGNALS = ("loose", "cart only", "disc only", "game only", "console only")
 CASE_ONLY_SIGNALS = ("case only", "box only", "manual only", "empty case", "no disc", "no game")
 REPRODUCTION_SIGNALS = ("reproduction", "repro", "bootleg", "counterfeit", "fake", "pirata")
+NEGATED_COPY_TEXT = (
+    r"\b(?:not|no|non|never|zero)\s+(?:a\s+|an\s+)?"
+    r"(?:repro(?:duction)?s?|fakes?|bootlegs?|counterfeits?|clones?|copy|copies)\b"
+)
+
+
+def without_copy_noise(haystack: str) -> str:
+    """El texto sin negaciones («not a repro») ni envases repro («repro box»).
+
+    Ninguna de las dos dice que la pieza sea una copia: la primera dice que no
+    lo es, y la segunda habla de la caja. Que la caja no sea original lo decide
+    la taxonomía (no es CIB), no el filtro de reproducciones.
+    """
+
+    return re.sub(NEGATED_COPY_TEXT, " ", re.sub("|".join(REPRO_PACKAGING_MARKERS), " ", haystack))
 
 REGION_SIGNALS = {
     # "jpn" y el nombre japonés de la consola son las dos formas más comunes de
@@ -116,6 +166,10 @@ class MatchVerdict:
     blockers: list[str] = field(default_factory=list)
     unverified: list[str] = field(default_factory=list)
     matched_terms: list[str] = field(default_factory=list)
+    # Lo que se leyó del título con estructura —plataforma, originalidad, qué
+    # trae la consola, cuánto declara el lote— para que la valuación decida
+    # con datos y no releyendo frases.
+    assessment: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -125,6 +179,7 @@ class MatchVerdict:
             "blockers": list(self.blockers),
             "unverified": list(self.unverified),
             "matchedTerms": list(self.matched_terms),
+            "assessment": dict(self.assessment),
         }
 
 
@@ -134,21 +189,41 @@ def evaluate_match(
     capabilities: dict[str, Any] | None = None,
     expected_kind: str = "",
     rejects_accessories: bool = False,
+    *,
+    platform: str = "",
+    search_type: str = "",
 ) -> MatchVerdict:
     """Aplica los criterios de una búsqueda a una publicación normalizada.
 
     `expected_kind` es qué tipo de pieza tiene que ser para que esta búsqueda la
     acepte. Quien llama decide si corresponde exigirlo: una búsqueda de lotes o
     de descubrimiento no lo manda, porque justamente busca cosas mezcladas.
+
+    `platform` es la de la búsqueda, como la escribió el dueño; sin ella se usa
+    la que nombre el título. Decide qué reglas de hardware aplican —un cartucho
+    retro, una consola de disco, una portátil—, nunca qué consola es.
     """
 
     verdict = MatchVerdict()
     capabilities = capabilities or {}
     haystack = normalize(listing.searchable_text())
     item = classify_listing_item(listing.title)
+    profile = resolve_platform(platform, listing.title)
+    platform_key = profile.key if profile else ""
+    lot_search = rejects_accessories or search_type == "lot"
+    console_search = expected_kind == "console" or search_type == "console"
+    original_requirement = str(criteria.get("originalParts") or "any")
     currency = str(criteria.get("currency") or "USD").upper()
     signals_total = 0
     signals_hit = 0
+    verdict.assessment = {
+        "platform": platform_key,
+        "itemKind": item.kind,
+        "itemConfident": item.confident,
+        "category": item.category,
+        "searchType": search_type or ("lot" if lot_search else ""),
+        "originalParts": original_requirement,
+    }
 
     # --- Filtros obligatorios: un bloqueo alcanza para descartar ---------------
 
@@ -156,15 +231,70 @@ def evaluate_match(
     # bloquea cuando el título lo dice con todas las letras: una deducción por
     # descarte sirve para estimar peso, no para tirar una publicación.
     if expected_kind and item.confident and item.kind != expected_kind:
+        label = (
+            ITEM_CATEGORY_LABELS.get(item.category, ITEM_KIND_LABELS["accessory"])
+            if item.kind == "accessory"
+            else ITEM_KIND_LABELS.get(item.kind, item.kind)
+        )
         verdict.blockers.append(
-            f"Es {ITEM_KIND_LABELS.get(item.kind, item.kind)} y esta búsqueda pide "
-            f"{ITEM_KIND_LABELS.get(expected_kind, expected_kind)}"
+            f"Es {label} y esta búsqueda pide {ITEM_KIND_LABELS.get(expected_kind, expected_kind)}"
         )
 
     # Una búsqueda de lotes acepta cosas mezcladas, pero no un lote de fundas o
     # de memory cards: si el título dice accesorio y no nombra juegos, no es.
-    if rejects_accessories and item.confident and item.kind == "accessory" and not names_games(listing.title):
-        verdict.blockers.append("Es un accesorio, no un lote de juegos")
+    # Material impreso, merchandising, repuestos y estuches «para» juegos
+    # tampoco, aunque digan «games»: «Lot of 10 Cartridge Cases for Game Boy
+    # Games» son diez estuches.
+    if lot_search and item.confident and item.kind == "accessory" and (
+        not names_games(listing.title)
+        or item.category in {"printed", "merch", "part"}
+        or _CASES_FOR_GAMES.search(listing.title.lower())
+    ):
+        label = ITEM_CATEGORY_LABELS.get(item.category, ITEM_KIND_LABELS["accessory"])
+        verdict.blockers.append(
+            "Es un accesorio, no un lote de juegos"
+            if item.category in {"", "accessory"}
+            else f"Es {label}, no un lote de juegos"
+        )
+
+    # --- Objetivo canónico: con quién se compara esta publicación -------------
+    # Lote, juego loose o CIB, consola loose o CIB. Es de la publicación, no de
+    # la búsqueda: una búsqueda de consola trae consolas sueltas y en caja, y
+    # cada una se mide contra sus pares.
+    objective = assign_objective(
+        listing.title,
+        search_type="lot" if lot_search else ("console" if console_search else search_type),
+        item_kind=item.kind,
+        item_confident=item.confident,
+        platform=platform_key,
+    )
+    verdict.assessment["objective"] = objective.to_dict()
+
+    # --- Lotes: cuántos juegos, de qué plataforma y si son distintos -----------
+    lot = None
+    if lot_search:
+        lot = analyze_lot(listing.title, platform_key, item)
+        verdict.assessment["lot"] = {
+            "pieces": lot.pieces,
+            "quantity": lot.quantity,
+            "note": lot.quantity_note,
+            "filler": list(lot.filler),
+            "otherPlatforms": list(lot.other_platforms),
+        }
+        if item.confident and item.kind == "console":
+            verdict.blockers.append(
+                "Es una consola con juegos, no un lote de juegos: la búsqueda de consola de esa plataforma ya la mira"
+            )
+        elif lot.quantity == "single":
+            verdict.blockers.append("Es un juego suelto, no un lote")
+        if lot.mystery:
+            verdict.blockers.append(f"Es un lote sorpresa («{lot.mystery}»): no se sabe qué juegos trae")
+        if lot.copies:
+            verdict.blockers.append(f"Son copias repetidas («{lot.copies}»), no una biblioteca")
+        if len(lot.other_platforms) >= 2:
+            names = ", ".join(PROFILES[key].label if key in PROFILES else key for key in lot.other_platforms)
+            wanted = profile.label if profile else "la plataforma buscada"
+            verdict.blockers.append(f"Mezcla plataformas ({names}): no se puede atribuir la mayoría a {wanted}")
 
     for term in criteria.get("excludeTerms") or []:
         if contains_term(haystack, term):
@@ -211,6 +341,21 @@ def evaluate_match(
     # los juegos en vez de contarlos.
     declared = detect_lot_size(listing.title)
     min_lot_size = criteria.get("minLotSize")
+    quantity_noted = False
+    if lot is not None and lot.quantity == "unconfirmed" and lot.pieces is not None:
+        quantity_noted = True
+        # Declara un número, pero no de qué: con una consola adentro o juegos de
+        # otra plataforma, el número no cuenta juegos de esta. Un número menor
+        # que el mínimo igual descarta: si el lote entero es más chico, sus
+        # juegos también.
+        if min_lot_size and lot.pieces < int(min_lot_size):
+            verdict.blockers.append(
+                f"Declara {lot.pieces} pieza(s) y la búsqueda pide al menos {int(min_lot_size)}"
+            )
+        else:
+            verdict.unverified.append(lot.quantity_note)
+        declared = None
+        min_lot_size = None
     if min_lot_size:
         minimum = int(min_lot_size)
         signals_total += 1
@@ -256,7 +401,7 @@ def evaluate_match(
                 verdict.reasons.append(
                     f"{money(per_piece, piece_currency)} por pieza ({declared} declaradas)"
                 )
-        elif not min_lot_size:
+        elif not min_lot_size and not quantity_noted:
             verdict.unverified.append(
                 f"No declara cuántas piezas trae: no se puede calcular el precio por pieza "
                 f"(la búsqueda acepta hasta {money(ceiling, currency)})"
@@ -322,8 +467,7 @@ def evaluate_match(
     # primera calibración real. Así que `required` bloquea ante evidencia de
     # NO originalidad, y la ausencia de declaración queda sin verificar, que es
     # la misma regla que rige al resto del módulo.
-    original_requirement = str(criteria.get("originalParts") or "any")
-    aftermarket_signal = any_signal(haystack, AFTERMARKET_SIGNALS)
+    aftermarket_signal = any_signal(without_copy_noise(haystack), AFTERMARKET_SIGNALS)
     if original_requirement != "any":
         signals_total += 1
         if aftermarket_signal:
@@ -335,6 +479,12 @@ def evaluate_match(
         elif any_signal(haystack, OEM_SIGNALS):
             signals_hit += 1
             verdict.reasons.append("Declara piezas originales/OEM")
+        elif platform_key in RETRO_CARTRIDGE_KEYS and item.kind in {"game", "lot"}:
+            # Un cartucho retro tiene mercado de copias: lo que hay que mirar es
+            # concreto, y la card lo dice así.
+            verdict.unverified.append(
+                "Originalidad sin declarar: mirá etiqueta, placa y tornillos en las fotos antes de comprar"
+            )
         else:
             verdict.unverified.append("Originalidad sin declarar: verificar antes de comprar")
 
@@ -355,13 +505,68 @@ def evaluate_match(
     if case_only and completeness != "boxed":
         verdict.blockers.append(f"Es sólo el envase: «{case_only}»")
 
-    # Una reproducción no satisface una búsqueda de copia original.
-    reproduction = any_signal(haystack, REPRODUCTION_SIGNALS)
+    # Una reproducción no satisface una búsqueda de copia original. «Not a
+    # repro» es una negación, no una confesión.
+    is_console_item = item.kind == "console" or (console_search and not item.confident)
+    reproduction = any_signal(without_copy_noise(haystack), REPRODUCTION_SIGNALS)
+    authenticity = None
+    if not is_console_item and item.kind != "accessory":
+        # En un juego o un lote de cartuchos retro la copia también se delata
+        # por cómo se publica: «Game Card», «Compatible N64 Cartridge», «Custom».
+        authenticity = assess_authenticity(listing.title, platform_key)
+        verdict.assessment["authenticity"] = {
+            "status": authenticity.status,
+            "signal": authenticity.signal,
+            "retroCartridge": platform_key in RETRO_CARTRIDGE_KEYS,
+        }
+        if not reproduction and authenticity.status == "copy":
+            reproduction = authenticity.signal
     if reproduction:
-        if original_requirement == "required":
+        blocks = original_requirement == "required" or (
+            original_requirement == "preferred" and not is_console_item and item.kind != "accessory"
+        )
+        if blocks:
             verdict.blockers.append(f"Es una reproducción («{reproduction}») y la búsqueda pide original")
         else:
             verdict.reasons.append(f"Posible reproducción («{reproduction}»): verificar antes de comprar")
+    elif authenticity is not None and authenticity.status == "suspect":
+        verdict.unverified.append(
+            f"Tiene marcas típicas de copia («{authenticity.signal}»): mirá etiqueta y placa en las fotos"
+        )
+
+    # --- Consola: original, completa y con el lector probado -------------------
+    if console_search and item.kind in {"console", "game"} and is_console_item:
+        origin, origin_signal = detect_hardware_origin(listing.title)
+        if origin:
+            what = "una reedición" if origin == "reissue" else "un clon"
+            verdict.assessment["origin"] = {"status": origin, "signal": origin_signal}
+            if original_requirement != "any":
+                verdict.blockers.append(f"Es {what} («{origin_signal}»), no la consola original")
+            else:
+                verdict.reasons.append(f"Es {what} («{origin_signal}»): no es la consola original")
+        kit = assess_console_kit(listing.title, platform_key)
+        verdict.assessment["kit"] = {
+            "status": kit.status,
+            "present": list(kit.present),
+            "missing": list(kit.missing),
+            "undeclared": list(kit.undeclared),
+            "issues": list(kit.issues),
+            "reader": kit.reader,
+            "readerLabel": kit.reader_label,
+        }
+        labels = lambda pieces: " ni ".join(KIT_PIECE_LABELS.get(piece, piece) for piece in pieces)  # noqa: E731
+        if kit.status == "ready":
+            verdict.reasons.append("Lista para usar: declara todo lo que hace falta para jugar")
+        elif kit.status == "cib":
+            verdict.reasons.append("Completa en caja")
+        if kit.undeclared and kit.status not in {"console-only"}:
+            verdict.unverified.append(f"No dice si trae {labels(kit.undeclared)}")
+        if kit.reader == "powers-only":
+            verdict.unverified.append(f"Sólo dice que enciende: falta confirmar que lea {kit.reader_label}")
+        elif kit.reader == "partial":
+            verdict.unverified.append(f"Dice que lee juegos, pero no si lee {kit.reader_label}")
+        elif kit.reader == "unconfirmed":
+            verdict.unverified.append(f"Falta confirmar que lea {kit.reader_label}")
 
     # --- Región ---------------------------------------------------------------
 
@@ -398,6 +603,14 @@ def evaluate_match(
             region = "ntsc-j"
         if region in excluded_regions:
             verdict.blockers.append(f"Es una edición {region.upper()} y la búsqueda excluye esa región")
+
+    # Cualquier otra región es válida, pero no se juega igual: lo que no es
+    # NTSC-U/C pide confirmar compatibilidad e idioma antes de comprar.
+    title_region = detect_region(normalize(listing.title).replace("made in japan", " "))
+    if title_region in {"pal", "ntsc-j"} and title_region not in excluded_regions and not wanted_region:
+        verdict.unverified.append(
+            f"Edición {title_region.upper()}: confirmá que corra en tu consola (región y formato) y en qué idioma está"
+        )
 
     # --- Requisitos que la fuente todavía no puede confirmar -------------------
 

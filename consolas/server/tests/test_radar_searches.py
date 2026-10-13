@@ -465,9 +465,11 @@ class ListingDedupeTests(RadarSearchTestCase):
             self.config,
             {"name": "PS2 lista para usar", "platform": "PS2", "criteria": {"includeTerms": "tested"}},
         )["search"]
+        # Un chase y no un lote: una consola con juegos ya no entra en una
+        # búsqueda de lotes de juegos, y lo que se prueba es la deduplicación.
         lot = create_radar_search(
             self.config,
-            {"name": "Lote PS2", "platform": "PS2", "searchType": "lot", "criteria": {"includeTerms": "game lot"}},
+            {"name": "Lote PS2", "platform": "PS2", "criteria": {"includeTerms": "game lot"}},
         )["search"]
 
         with patch("radar.sources.ebay.EbayBrowseSource.fetch_item_summaries", return_value=[shared]):
