@@ -80,7 +80,8 @@
       const catalogGame = release.catalogRef ? state.game : null;
       // La portada sale del juego de catálogo cuando hay `catalogRef`, porque
       // ese archivo ya pasó por la validación del repo. Cuando no lo hay —la
-      // mayoría de los lanzamientos de PS2, PSP y las compilaciones de PS3— el
+      // mayoría de los lanzamientos de PS2 y PSP, y la Saga y las ediciones
+      // regionales de PS3— el
       // lanzamiento puede declarar la suya: es un asset del repo igual que
       // cualquier portada de juego, no una URL remota ni una invención.
       //

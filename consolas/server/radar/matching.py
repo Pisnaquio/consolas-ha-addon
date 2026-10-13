@@ -635,17 +635,26 @@ def evaluate_match(
 # reconoce por «legend» y «zelda».
 TITLE_STOPWORDS = frozenset({"the", "a", "an", "of", "and", "y", "el", "la", "los", "las", "de"})
 
+# Un número de secuela se escribe de las dos maneras: «God of War III» y «God
+# of War 3» son el mismo juego. Quedan afuera «i» y «x», que en un título casi
+# siempre son letras («Pokémon X», «Mega Man X»).
+ROMAN_NUMERALS = {"ii": "2", "iii": "3", "iv": "4", "v": "5", "vi": "6", "vii": "7", "viii": "8", "ix": "9"}
+
 
 def title_tokens(text: str) -> list[str]:
     """Las palabras que identifican un título, sin apóstrofos ni relleno.
 
     El apóstrofo se borra en vez de separar: «Kirby's» y «Kirbys» tienen que
     ser la misma palabra, y separarlo dejaba una «s» suelta que ninguna
-    publicación escribe igual.
+    publicación escribe igual. Los números romanos se leen como arábigos.
     """
 
     without_apostrophes = re.sub(r"['’`´]", "", str(text or ""))
-    return [token for token in normalize(without_apostrophes).split() if token not in TITLE_STOPWORDS]
+    return [
+        ROMAN_NUMERALS.get(token, token)
+        for token in normalize(without_apostrophes).split()
+        if token not in TITLE_STOPWORDS
+    ]
 
 
 def best_title_target(title: str, targets: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -664,21 +673,35 @@ def best_title_target(title: str, targets: list[dict[str, Any]]) -> dict[str, An
     Entre los que califican gana el que más palabras del nombre completo
     comparte, y después el de nombre principal más largo: así «Donkey Kong
     Country 2» le gana a «Donkey Kong Country».
+
+    Cuando la parte principal es una serie que otro objetivo de la búsqueda
+    también nombra —«God of War: Ascension» junto a «God of War III», o
+    Ocarina of Time junto a Majora's Mask— la serie sola no dice qué juego es:
+    hace falta además alguna palabra del subtítulo. Si no, «God of War Saga» o
+    «Legend of Zelda N64» quedaban etiquetados con el primero de la lista.
     """
 
     words = set(title_tokens(title))
-    best: tuple[int, int] | None = None
-    chosen: dict[str, Any] | None = None
+    parsed: list[tuple[dict[str, Any], list[str], list[str]]] = []
     for target in targets:
         name = str(target.get("name") or "")
         if not name:
             continue
         core_text, _, subtitle_text = name.partition(":")
         core = title_tokens(core_text)
-        subtitle = title_tokens(subtitle_text)
-        if not core:
-            continue
-        by_core = all(token in words for token in core)
+        if core:
+            parsed.append((target, core, title_tokens(subtitle_text)))
+
+    best: tuple[int, int] | None = None
+    chosen: dict[str, Any] | None = None
+    for target, core, subtitle in parsed:
+        core_is_series = bool(subtitle) and any(
+            other is not target and set(core) <= set(other_core + other_subtitle)
+            for other, other_core, other_subtitle in parsed
+        )
+        by_core = all(token in words for token in core) and (
+            not core_is_series or any(token in words for token in subtitle)
+        )
         by_subtitle = (
             bool(subtitle)
             and any(token in words for token in core)

@@ -403,6 +403,40 @@ class BestTitleTargetTests(unittest.TestCase):
         self.assertIsNone(self.name_for("Sonic & Knuckles Genesis"))
         self.assertIsNone(self.name_for("NBA Jam SNES"))
 
+    def test_a_series_name_alone_names_none_of_its_games(self) -> None:
+        self.assertIsNone(self.name_for("Oddworld PS1 black label"))
+
+
+class SeriesTitleTargetTests(unittest.TestCase):
+    """Varios objetivos de una misma serie, como los God of War de PS3."""
+
+    TARGETS = [
+        {"name": name}
+        for name in (
+            "God of War III",
+            "God of War: Ascension",
+            "God of War Collection",
+            "God of War: Origins Collection",
+        )
+    ]
+
+    def name_for(self, title: str) -> str | None:
+        target = best_title_target(title, self.TARGETS)
+        return target["name"] if target else None
+
+    def test_each_game_of_the_series_is_told_apart(self) -> None:
+        self.assertEqual(self.name_for("God of War III PS3 Greatest Hits"), "God of War III")
+        self.assertEqual(self.name_for("God of War Ascension PS3 complete"), "God of War: Ascension")
+        self.assertEqual(self.name_for("God of War Collection PS3 tested"), "God of War Collection")
+        self.assertEqual(self.name_for("God of War Origins Collection PS3"), "God of War: Origins Collection")
+
+    def test_a_roman_numeral_and_its_digit_are_the_same_game(self) -> None:
+        self.assertEqual(self.name_for("God of War 3 PS3 Black Label"), "God of War III")
+
+    def test_a_game_of_the_series_that_is_not_wished_is_none_of_them(self) -> None:
+        self.assertIsNone(self.name_for("God of War Saga PS3 2 discs"))
+        self.assertIsNone(self.name_for("God of War PS3 game"))
+
 
 class PricePerPieceTests(unittest.TestCase):
     def test_a_lot_that_costs_too_much_per_piece_is_rejected(self) -> None:
