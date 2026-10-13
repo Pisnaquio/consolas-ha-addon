@@ -128,6 +128,17 @@ class SearchConfigTests(unittest.TestCase):
         self.assertIn("switch", self.hits("Nintendo Switch con dock y cable ethernet"))
         self.assertIn("switch", self.hits("Nintendo Switch con adaptador HDMI y control"))
 
+    def test_ambiguous_words_count_together_only_around_a_console(self) -> None:
+        # Castells, remate Bazar, lote 291 (2026-10): sin una sola marca.
+        self.assertTrue(self.hits("Lote de controles, consola y cassettes"))
+        self.assertTrue(self.hits("Consola con dos controles"))
+        self.assertTrue(self.hits("Consola y cassettes, no se probó"))
+        self.assertFalse(self.hits("Consola estilo Luis XV con espejo"))
+        self.assertFalse(self.hits("Consola de sonido Behringer 12 canales"))
+        self.assertFalse(self.hits("Lote de cassettes y controles remotos"))
+        self.assertFalse(self.hits("Cassettes de música variada"))
+        self.assertIn("consola", self.hits("Consola Sega Genesis con controles"))
+
     def test_short_ds_and_pong_terms_reject_obvious_non_gaming_uses(self) -> None:
         self.assertFalse(self.hits("Citroën DS 20 clásico"))
         self.assertIn("ds", self.hits("Nintendo DS con cargador"))

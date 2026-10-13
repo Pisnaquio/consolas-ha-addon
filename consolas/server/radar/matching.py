@@ -34,7 +34,7 @@ from .classify import (
     names_games,
 )
 from .model import MarketplaceListing
-from .platforms import PROFILES, RETRO_CARTRIDGE_KEYS, resolve_platform
+from .platforms import PROFILES, RETRO_CARTRIDGE_KEYS, fuse_platform_numbers, resolve_platform
 from .taxonomy import assign_objective
 
 
@@ -640,21 +640,82 @@ TITLE_STOPWORDS = frozenset({"the", "a", "an", "of", "and", "y", "el", "la", "lo
 # siempre son letras («Pokémon X», «Mega Man X»).
 ROMAN_NUMERALS = {"ii": "2", "iii": "3", "iv": "4", "v": "5", "vi": "6", "vii": "7", "viii": "8", "ix": "9"}
 
+# Un número de secuela, ya leído como arábigo: del 2 al 9. Uno más largo es
+# otra cosa —«64», «360», un año— y «x2» ni siquiera es un número suelto.
+SEQUEL_NUMBERS = frozenset("23456789")
+
+# Lo que vuelve cantidad al número que lo precede: «Red Dead Redemption 2
+# discs», «Mario Kart 64 2 player», «Final Fantasy VII 3 disc set» dicen cuánto
+# trae, no qué juego es. «Super Mario Bros 5 screw» es la tirada del cartucho.
+QUANTITY_WORDS = frozenset({
+    "disc", "discs", "disk", "disks", "cd", "cds", "dvds",
+    "player", "players", "games", "controllers", "remotes", "copies",
+    "cartridges", "carts", "pack", "packs", "pk", "pcs", "pieces",
+    "screw", "screws",
+})
+# Salvo «disc only», que es como se publica un disco suelto: «Dark Souls 2 disc
+# only» es el disco de Dark Souls II, no dos discos.
+LOOSE_MEDIA_WORDS = frozenset({"disc", "disk", "cd"})
+
 
 def title_tokens(text: str) -> list[str]:
     """Las palabras que identifican un título, sin apóstrofos ni relleno.
 
     El apóstrofo se borra en vez de separar: «Kirby's» y «Kirbys» tienen que
     ser la misma palabra, y separarlo dejaba una «s» suelta que ninguna
-    publicación escribe igual. Los números romanos se leen como arábigos.
+    publicación escribe igual. Los números romanos se leen como arábigos, y el
+    de una consola («PlayStation 3») queda pegado a ella: no es el de un juego.
     """
 
     without_apostrophes = re.sub(r"['’`´]", "", str(text or ""))
     return [
         ROMAN_NUMERALS.get(token, token)
-        for token in normalize(without_apostrophes).split()
+        for token in fuse_platform_numbers(normalize(without_apostrophes)).split()
         if token not in TITLE_STOPWORDS
     ]
+
+
+def is_sequel_number(tokens: list[str], index: int) -> bool:
+    """Si el token en `index` es el número de una secuela y no una cantidad."""
+
+    if index >= len(tokens) or tokens[index] not in SEQUEL_NUMBERS:
+        return False
+    following = tokens[index + 1 : index + 3]
+    if not following:
+        return True
+    noun = following[0]
+    if noun == "in" and following[1:] and following[1].isdigit():
+        # «God of War Collection 2 in 1»: una compilación, no una secuela.
+        return False
+    if noun in QUANTITY_WORDS:
+        return noun in LOOSE_MEDIA_WORDS and following[1:] == ["only"]
+    return True
+
+
+def names_a_sequel(tokens: list[str], core: list[str], subtitle: list[str]) -> bool:
+    """Si cada vez que la publicación nombra el título le sigue un número que el título no tiene.
+
+    «Dark Souls II», «BioShock 2», «Sonic the Hedgehog 2»: el nombre está
+    entero, pero lo que viene después dice que es otro juego. Se mira el nombre
+    completo si la publicación trae el subtítulo, y si no, la parte principal:
+    «Halo 2» no es «Halo: Combat Evolved», pero «Spyro 3 Year of the Dragon» sí
+    es «Spyro: Year of the Dragon» —el subtítulo lo nombra con todas las
+    letras— y «Star Wars Knights of the Old Republic II» no es el primero.
+
+    Basta con que una mención quede sin número para que la publicación lo
+    nombre: «Dark Souls & Dark Souls II» trae el primero. Y un título que ya
+    termina en número no tiene secuela que confundir: lo que le sigue es el
+    mismo número escrito otra vez («Final Fantasy VII 7», «Tomb Raider II 2»,
+    medido en las corridas de octubre) o una lista («Mass Effect 2/3»).
+    """
+
+    words = set(tokens)
+    name = core + subtitle if all(token in words for token in subtitle) else core
+    if name[-1].isdigit():
+        return False
+    size = len(name)
+    ends = [index + size for index in range(len(tokens) - size + 1) if tokens[index : index + size] == name]
+    return bool(ends) and all(is_sequel_number(tokens, end) for end in ends)
 
 
 def best_title_target(title: str, targets: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -679,18 +740,29 @@ def best_title_target(title: str, targets: list[dict[str, Any]]) -> dict[str, An
     Ocarina of Time junto a Majora's Mask— la serie sola no dice qué juego es:
     hace falta además alguna palabra del subtítulo. Si no, «God of War Saga» o
     «Legend of Zelda N64» quedaban etiquetados con el primero de la lista.
+
+    Y un objetivo sin número no nombra su secuela: «Dark Souls II» no es Dark
+    Souls aunque traiga sus dos palabras (ver `names_a_sequel`). Sin esto, la
+    secuela que la búsqueda no persigue se juzgaba con el techo y el precio del
+    original, y «Registrar compra» escribía el juego equivocado.
+
+    Un objetivo puede tener otros nombres (`aliases`): «Little Big Planet 2»
+    para «LittleBigPlanet 2», «God of War Collection Volume II» para la edición
+    europea de Origins Collection. Cada uno se lee como el nombre y compite con
+    los demás nombres de la búsqueda; si gana, gana su objetivo.
     """
 
-    words = set(title_tokens(title))
+    tokens = title_tokens(title)
+    words = set(tokens)
     parsed: list[tuple[dict[str, Any], list[str], list[str]]] = []
     for target in targets:
-        name = str(target.get("name") or "")
-        if not name:
+        if not str(target.get("name") or ""):
             continue
-        core_text, _, subtitle_text = name.partition(":")
-        core = title_tokens(core_text)
-        if core:
-            parsed.append((target, core, title_tokens(subtitle_text)))
+        for name in (target.get("name"), *(target.get("aliases") or [])):
+            core_text, _, subtitle_text = str(name or "").partition(":")
+            core = title_tokens(core_text)
+            if core:
+                parsed.append((target, core, title_tokens(subtitle_text)))
 
     best: tuple[int, int] | None = None
     chosen: dict[str, Any] | None = None
@@ -707,7 +779,7 @@ def best_title_target(title: str, targets: list[dict[str, Any]]) -> dict[str, An
             and any(token in words for token in core)
             and all(token in words for token in subtitle)
         )
-        if not (by_core or by_subtitle):
+        if not (by_core or by_subtitle) or names_a_sequel(tokens, core, subtitle):
             continue
         shared = sum(1 for token in set(core + subtitle) if token in words)
         rank = (shared, len(core))

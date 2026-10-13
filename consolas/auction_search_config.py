@@ -112,6 +112,10 @@ GENERIC_SIGNAL_TERMS = [
     "wiimote",
     "cartucho",
     "cartuchos",
+    "consola",
+    "consolas",
+    "cassette",
+    "cassettes",
 ]
 
 # Terms only relevant for the broad scraper/watcher match list below, not for
@@ -187,7 +191,21 @@ _NORMALIZED_FRANCHISE_TERMS = []
 _NORMALIZED_GENERIC_TERMS = []
 _NORMALIZED_RISK_TERMS = []
 _NORMALIZED_POSITIVE_TERMS = []
-_CONTEXTUAL_RESTRICTED_TERMS = {"control", "controles"}
+# Palabras que solas no dicen videojuego: «controles» puede ser remotos de TV,
+# «consola» un mueble o una consola de sonido, «cassettes» de audio. Cuentan
+# cuando aparece otra señal, o cuando «consola» viene con alguna de las otras:
+# «Lote de controles, consola y cassettes» (Castells, Bazar, lote 291, 2026-10)
+# no tenía una sola marca y quedaba afuera.
+_CONTEXTUAL_RESTRICTED_TERMS = {"control", "controles", "consola", "consolas", "cassette", "cassettes"}
+_CONSOLE_WORDS = {"consola", "consolas"}
+_RESTRICTED_FAMILIES = {
+    "control": "control",
+    "controles": "control",
+    "consola": "consola",
+    "consolas": "consola",
+    "cassette": "cassette",
+    "cassettes": "cassette",
+}
 _CARTRIDGE_TERMS = {"cartucho", "cartuchos"}
 _FAMILY_TERMS = {"family"}
 _SATURN_TERMS = {"saturn"}
@@ -370,9 +388,15 @@ def matched_terms(text: str, patterns: dict[str, re.Pattern[str]]) -> list[str]:
     if other_hits:
         return hits
 
-    return [
-        hit for hit in hits if normalize_text(hit) not in _CONTEXTUAL_RESTRICTED_TERMS
-    ]
+    # Sin otra señal, las palabras ambiguas se sostienen entre sí sólo si una
+    # es «consola»: «consola con controles» es un lote de videojuegos;
+    # «cassettes y controles», sin consola, puede ser audio y control remoto.
+    restricted = {normalize_text(hit) for hit in hits}
+    families = {_RESTRICTED_FAMILIES[term] for term in restricted if term in _RESTRICTED_FAMILIES}
+    if restricted & _CONSOLE_WORDS and len(families) >= 2:
+        return hits
+
+    return other_hits
 
 
 def _has_mario_context(text_n: str) -> bool:

@@ -465,9 +465,10 @@
       .map((target) => {
         const ceiling = repository.formatAmount(target.maxItemPrice, currency);
         const boxed = repository.formatAmount(target.maxBoxedPrice, currency);
+        const aliases = (target.aliases || []).map((alias) => `«${alias}»`).join(", ");
         return `<li>${escapeHtml(target.name || target.query)}${ceiling ? ` · hasta ${escapeHtml(ceiling)}` : ""}${
           boxed ? ` · en caja hasta ${escapeHtml(boxed)}` : ""
-        }</li>`;
+        }${aliases ? ` · también ${escapeHtml(aliases)}` : ""}</li>`;
       })
       .join("");
     return `<details class="radar-notes radar-title-targets">

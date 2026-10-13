@@ -189,8 +189,31 @@ class TitleTargetCriteriaTests(RadarCatalogTestCase):
         self.assertEqual(len(targets), 1)
         self.assertEqual(
             targets[0],
-            {"query": "Juego A zeta", "gameId": "juego-a", "name": "", "maxItemPrice": 30, "maxBoxedPrice": None},
+            {
+                "query": "Juego A zeta",
+                "gameId": "juego-a",
+                "name": "",
+                "aliases": [],
+                "maxItemPrice": 30,
+                "maxBoxedPrice": None,
+            },
         )
+
+    def test_aliases_persist_trimmed_and_without_repeats(self) -> None:
+        created = self.wishlist(
+            titleTargets=[
+                {"query": "Juego A zeta", "gameId": "juego-a", "name": "Juego A", "aliases": [" Juego  Alfa ", "juego alfa", ""]},
+            ]
+        )
+        self.assertEqual(created["criteria"]["titleTargets"][0]["aliases"], ["Juego Alfa"])
+
+    def test_aliases_must_be_a_short_list_of_names(self) -> None:
+        with self.assertRaises(ApiError):
+            self.wishlist(titleTargets=[{"query": "Juego A zeta", "aliases": "Juego Alfa"}])
+        with self.assertRaises(ApiError):
+            self.wishlist(titleTargets=[{"query": "Juego A zeta", "aliases": [{"name": "Juego Alfa"}]}])
+        with self.assertRaises(ApiError):
+            self.wishlist(titleTargets=[{"query": "Juego A zeta", "aliases": [f"Juego {index}" for index in range(7)]}])
 
     def test_targets_must_be_objects(self) -> None:
         with self.assertRaises(ApiError):
@@ -356,6 +379,28 @@ class TitleAttributionTests(RadarCatalogTestCase):
         )
         self.assertEqual(self.results(search["id"]), [])
 
+    def test_another_name_of_a_title_is_filed_under_it(self) -> None:
+        """La grafía alternativa se juzga con el techo y el precio de su título."""
+        search = self.wishlist(
+            titleTargets=[
+                {"query": "Juego A zeta", "gameId": "juego-a", "name": "Juego A", "aliases": ["Juego Alfa"], "maxItemPrice": 30},
+                {"query": "Juego B zeta", "gameId": "juego-b", "name": "Juego B", "maxItemPrice": 80},
+            ]
+        )
+        self.run_with(
+            search,
+            {
+                "Juego B zeta": [
+                    ebay_summary("alfa", "Juego Alfa Zeta cartridge", "20.00"),
+                    ebay_summary("alfa-cara", "Juego Alfa Zeta cartridge tested", "45.00"),
+                ]
+            },
+        )
+        (result,) = self.results(search["id"])
+        self.assertEqual(result["externalId"], "alfa")
+        self.assertEqual(result["titleTarget"]["gameId"], "juego-a")
+        self.assertEqual(result["valuation"]["benchmark"]["value"], 22)
+
     def test_a_listing_that_names_no_wished_title_is_not_part_of_the_search(self) -> None:
         search = self.wishlist()
         self.run_with(
@@ -403,6 +448,9 @@ class BestTitleTargetTests(unittest.TestCase):
         self.assertIsNone(self.name_for("Sonic & Knuckles Genesis"))
         self.assertIsNone(self.name_for("NBA Jam SNES"))
 
+    def test_a_sequel_that_is_not_wished_is_neither_of_its_predecessors(self) -> None:
+        self.assertIsNone(self.name_for("Donkey Kong Country 3: Dixie Kong's Double Trouble! SNES"))
+
     def test_a_series_name_alone_names_none_of_its_games(self) -> None:
         self.assertIsNone(self.name_for("Oddworld PS1 black label"))
 
@@ -436,6 +484,168 @@ class SeriesTitleTargetTests(unittest.TestCase):
     def test_a_game_of_the_series_that_is_not_wished_is_none_of_them(self) -> None:
         self.assertIsNone(self.name_for("God of War Saga PS3 2 discs"))
         self.assertIsNone(self.name_for("God of War PS3 game"))
+
+    def test_the_number_of_the_console_is_not_the_number_of_the_game(self) -> None:
+        """El formato de título del catálogo de eBay: «(Sony PlayStation 3, 2013)»."""
+        self.assertEqual(
+            self.name_for("God of War Ascension (Sony PlayStation 3, 2013) CIB"), "God of War: Ascension"
+        )
+        self.assertEqual(
+            self.name_for("God of War Collection (Sony PlayStation 3, 2009) Complete"), "God of War Collection"
+        )
+        self.assertEqual(self.name_for("God of War III (Sony PlayStation 3, 2010)"), "God of War III")
+        self.assertIsNone(self.name_for("God of War Sony PlayStation 3 game"))
+
+    def test_two_in_one_is_a_compilation_not_a_sequel(self) -> None:
+        self.assertEqual(self.name_for("God of War Collection 2 in 1 PS3"), "God of War Collection")
+
+
+class SequelTitleTargetTests(unittest.TestCase):
+    """Un título sin número no nombra su secuela, aunque la secuela no esté en la búsqueda."""
+
+    TARGETS = [
+        {"name": name}
+        for name in (
+            "Dark Souls",
+            "BioShock",
+            "Sonic the Hedgehog",
+            "Castlevania",
+            "Super Mario Bros.",
+            "Mario Kart 64",
+            "Red Dead Redemption",
+            "Final Fantasy VII",
+            "Tomb Raider II",
+            "Kingdom Hearts",
+            "Spyro: Year of the Dragon",
+            "Star Wars: Knights of the Old Republic",
+            "Wario Land: Super Mario Land 3",
+        )
+    ]
+
+    def name_for(self, title: str) -> str | None:
+        target = best_title_target(title, self.TARGETS)
+        return target["name"] if target else None
+
+    def test_a_numbered_sequel_is_not_the_original(self) -> None:
+        for title in (
+            "Dark Souls II PS3",
+            "BioShock 2 (Sony PlayStation 3) PS3",
+            "Sonic the Hedgehog 2 Genesis",
+            "Castlevania II: Simon's Quest NES",
+            "Super Mario Bros. 2 Nintendo NES",
+            "Red Dead Redemption 2 - Sony PlayStation 4",
+            "Red dead redemption 2 keychain",
+        ):
+            with self.subTest(title=title):
+                self.assertIsNone(self.name_for(title))
+
+    def test_the_original_still_names_itself(self) -> None:
+        self.assertEqual(self.name_for("Dark Souls PS3 Greatest Hits"), "Dark Souls")
+        self.assertEqual(self.name_for("Sonic the Hedgehog Genesis 1991"), "Sonic the Hedgehog")
+        self.assertEqual(self.name_for("Red Dead Redemption PS3 2 discs"), "Red Dead Redemption")
+
+    def test_a_number_that_counts_is_not_a_sequel(self) -> None:
+        for title, name in (
+            ("Mario Kart 64 N64 2 player", "Mario Kart 64"),
+            ("Red Dead Redemption 2 discs Game of the Year PS3", "Red Dead Redemption"),
+            ("Final Fantasy VII 3 disc set PS1", "Final Fantasy VII"),
+            ("Super Mario Bros 5 Screw NES cartridge", "Super Mario Bros."),
+            ("Super Mario Bros. 5-Screw, 1st Print, NES Cartridge", "Super Mario Bros."),
+            ("PS3 console + Dark Souls 2 controllers", "Dark Souls"),
+        ):
+            with self.subTest(title=title):
+                self.assertEqual(self.name_for(title), name)
+
+    def test_a_console_number_does_not_complete_a_title(self) -> None:
+        targets = [{"name": "Resistance 3"}, {"name": "Mario Kart 64"}]
+        self.assertIsNone(best_title_target("Resistance 1 & 2 Sony PlayStation 3 PS3 CIB bundle", targets))
+        self.assertIsNone(best_title_target("Resistance 2 PS 3 complete", targets))
+        self.assertEqual(best_title_target("Resistance 3 (Sony PlayStation 3, 2011)", targets)["name"], "Resistance 3")
+        # Nintendo 64 no se toca: los juegos «… 64» son de esa consola.
+        self.assertEqual(best_title_target("Mario Kart Nintendo 64 cartridge", targets)["name"], "Mario Kart 64")
+
+    def test_disc_only_is_the_sequels_disc(self) -> None:
+        self.assertIsNone(self.name_for("Dark Souls 2 Disc Only PS3"))
+
+    def test_years_multipliers_and_platforms_are_not_sequels(self) -> None:
+        for title, name in (
+            ("Dark Souls PS3 x2", "Dark Souls"),
+            ("Dark Souls PS 3 tested", "Dark Souls"),
+            ("Kingdom Hearts PlayStation 2 Greatest Hits", "Kingdom Hearts"),
+            ("Kingdom Hearts PS2/N64 lot", "Kingdom Hearts"),
+        ):
+            with self.subTest(title=title):
+                self.assertEqual(self.name_for(title), name)
+
+    def test_the_number_written_twice_is_the_same_game(self) -> None:
+        """Medido en las corridas de octubre: «Final Fantasy 7 VII», «Tomb Raider II 2»."""
+        self.assertEqual(self.name_for("Final Fantasy 7 VII PS1 Black Label"), "Final Fantasy VII")
+        self.assertEqual(self.name_for("Tomb Raider II 2 (Playstation PS1) CIB"), "Tomb Raider II")
+        self.assertIsNone(self.name_for("Castlevania 2 II Simon's Quest CIB NES"))
+
+    def test_a_listing_that_also_names_the_original_brings_it(self) -> None:
+        self.assertEqual(self.name_for("Dark Souls & Dark Souls II PS3 lot"), "Dark Souls")
+
+    def test_a_subtitle_written_out_names_the_game_despite_its_number(self) -> None:
+        self.assertEqual(self.name_for("Spyro 3 Year of the Dragon PS1"), "Spyro: Year of the Dragon")
+        self.assertIsNone(self.name_for("Spyro 2 Ripto's Rage PS1"))
+        self.assertEqual(
+            self.name_for("Wario Land Super Mario Land 3 Game Boy"), "Wario Land: Super Mario Land 3"
+        )
+        self.assertIsNone(self.name_for("Wario Land 3 (Game Boy Color, 2000) *CARTRIDGE ONLY*"))
+
+    def test_a_number_after_the_whole_title_is_a_sequel_too(self) -> None:
+        self.assertIsNone(self.name_for("Star Wars Knights of the Old Republic II The Sith Lords Xbox"))
+
+
+class AliasTitleTargetTests(unittest.TestCase):
+    """Un título que se publica con más de un nombre, como los de PS3."""
+
+    TARGETS = [
+        {"name": "God of War Collection"},
+        {"name": "God of War: Origins Collection", "aliases": ["God of War Collection Volume II"]},
+        {"name": "Metal Gear Solid 4: Guns of the Patriots", "aliases": ["MGS4"]},
+        {"name": "MotorStorm Pacific Rift", "aliases": ["Motor Storm Pacific Rift"]},
+        {"name": "LittleBigPlanet 2", "aliases": ["Little Big Planet 2"]},
+    ]
+
+    def name_for(self, title: str, targets: list[dict] | None = None) -> str | None:
+        target = best_title_target(title, self.TARGETS if targets is None else targets)
+        return target["name"] if target else None
+
+    def test_another_spelling_names_the_same_title(self) -> None:
+        for title, name in (
+            ("LittleBigPlanet 2 PS3 complete", "LittleBigPlanet 2"),
+            ("Little Big Planet 2 PS3 CIB", "LittleBigPlanet 2"),
+            ("Motor Storm Pacific Rift PS3", "MotorStorm Pacific Rift"),
+            ("MotorStorm Pacific Rift PS3 Greatest Hits", "MotorStorm Pacific Rift"),
+        ):
+            with self.subTest(title=title):
+                self.assertEqual(self.name_for(title), name)
+
+    def test_the_european_name_goes_to_its_own_game(self) -> None:
+        for title in (
+            "God of War Collection Volume II PS3 PAL",
+            "God of War HD Collection Volume 2 PS3",
+            "God of War Origins Collection Volume II PS3",
+        ):
+            with self.subTest(title=title):
+                self.assertEqual(self.name_for(title), "God of War: Origins Collection")
+        self.assertEqual(self.name_for("God of War Collection PS3 complete"), "God of War Collection")
+
+    def test_without_the_alias_the_european_name_was_another_game(self) -> None:
+        targets = [{"name": "God of War Collection"}, {"name": "God of War: Origins Collection"}]
+        self.assertEqual(
+            self.name_for("God of War Collection Volume II PS3 PAL", targets), "God of War Collection"
+        )
+
+    def test_an_abbreviation_is_a_name_too(self) -> None:
+        self.assertEqual(self.name_for("MGS4 PS3 complete in box"), "Metal Gear Solid 4: Guns of the Patriots")
+
+    def test_an_alias_does_not_name_other_games(self) -> None:
+        self.assertIsNone(self.name_for("Little Big Planet 3 PS4"))
+        self.assertIsNone(self.name_for("LittleBigPlanet Karting PS3"))
+        self.assertIsNone(self.name_for("MotorStorm Apocalypse PS3"))
 
 
 class PricePerPieceTests(unittest.TestCase):

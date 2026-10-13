@@ -120,6 +120,34 @@ _ALIASES: tuple[tuple[str, str], ...] = tuple(
     )
 )
 
+# Las consolas cuyo nombre termina en un solo dígito, escritas con espacio:
+# «playstation 3», «ps 2». Salen de la tabla de alias.
+_SPACED_SINGLE_DIGIT_NAMES: tuple[str, ...] = tuple(
+    sorted(
+        {
+            f"{found.group(1)} {found.group(2)}"
+            for alias, _ in _ALIASES
+            if (found := re.fullmatch(r"([a-z]+) ?([1-9])", alias))
+        }
+    )
+)
+_SPACED_SINGLE_DIGIT_PATTERN = re.compile(
+    r"(?<![a-z0-9])(" + "|".join(re.escape(name) for name in _SPACED_SINGLE_DIGIT_NAMES) + r")(?![a-z0-9])"
+)
+
+
+def fuse_platform_numbers(text: str) -> str:
+    """El texto normalizado, con «playstation 3» como una sola palabra.
+
+    El número suelto de una consola se confundía con el de un juego: «God of
+    War Ascension (Sony PlayStation 3, 2013)» completaba el nombre de God of
+    War III. Sólo las de un dígito: ningún juego numerado llega a 64 o 360, y
+    «Mario Kart (Nintendo 64)» sí es Mario Kart 64.
+    """
+
+    return _SPACED_SINGLE_DIGIT_PATTERN.sub(lambda found: found.group(1).replace(" ", ""), text)
+
+
 # Formatos de cartucho con mercado de reproducciones. «Game card» es el nombre
 # oficial de un juego de DS o 3DS y no dice nada de su originalidad.
 RETRO_CARTRIDGE_KEYS = frozenset(key for key, profile in PROFILES.items() if profile.medium == "cartridge")
@@ -206,6 +234,7 @@ __all__ = [
     "PROFILES",
     "PlatformProfile",
     "RETRO_CARTRIDGE_KEYS",
+    "fuse_platform_numbers",
     "normalize_platform",
     "platform_key",
     "platform_payload",

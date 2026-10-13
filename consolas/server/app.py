@@ -73,7 +73,7 @@ from radar.sources import registry as radar_registry  # noqa: E402
 
 
 SERVICE_NAME = "consolas-server"
-SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.71")
+SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.72")
 DEFAULT_DATA_DIR = "/data"
 DEFAULT_STATIC_DIR = "/app/web"
 DATABASE_NAME = "consolas.sqlite"
@@ -122,6 +122,10 @@ RADAR_MAX_QUERIES = 48
 RADAR_MAX_QUERY_LENGTH = 300
 # Un objetivo por consulta como máximo: la principal más las extra.
 RADAR_MAX_TITLE_TARGETS = RADAR_MAX_QUERIES + 1
+# Otros nombres de un mismo título: grafías («Little Big Planet 2»), ediciones
+# de otra región («God of War Collection Volume II»), abreviaturas («MGS4»).
+RADAR_MAX_TITLE_ALIASES = 6
+RADAR_MAX_TITLE_NAME_LENGTH = 200
 RADAR_DEFAULT_RESULT_LIMIT = 12
 RADAR_MAX_RESULT_LIMIT = 50
 RADAR_MIGRATION_CHASING_GAMES = "chasing_games_v1"
@@ -2880,6 +2884,10 @@ def normalize_radar_title_targets(value: Any) -> list[dict[str, Any]]:
     La consola del juego no va acá: es la de la búsqueda (`entityConsoleId`).
     Un objetivo cuya consulta ya no existe en la búsqueda no rompe nada; sólo
     deja de aplicarse.
+
+    `aliases` son otros nombres con los que se publica el mismo título: sirven
+    para reconocerlo (`best_title_target`), no se mandan a la fuente. Si una
+    grafía necesita su propia consulta, va en `queries`.
     """
 
     if value is None:
@@ -2900,7 +2908,10 @@ def normalize_radar_title_targets(value: Any) -> list[dict[str, Any]]:
             {
                 "query": query,
                 "gameId": normalize_radar_text(item.get("gameId"), "titleTargets.gameId", 120, required=False),
-                "name": normalize_radar_text(item.get("name"), "titleTargets.name", 200, required=False),
+                "name": normalize_radar_text(
+                    item.get("name"), "titleTargets.name", RADAR_MAX_TITLE_NAME_LENGTH, required=False
+                ),
+                "aliases": normalize_radar_title_aliases(item.get("aliases")),
                 "maxItemPrice": normalize_radar_amount(item.get("maxItemPrice"), "titleTargets.maxItemPrice"),
                 "maxBoxedPrice": normalize_radar_amount(item.get("maxBoxedPrice"), "titleTargets.maxBoxedPrice"),
             }
@@ -2910,6 +2921,29 @@ def normalize_radar_title_targets(value: Any) -> list[dict[str, Any]]:
             HTTPStatus.BAD_REQUEST, f"titleTargets accepts up to {RADAR_MAX_TITLE_TARGETS} targets"
         )
     return targets
+
+
+def normalize_radar_title_aliases(value: Any) -> list[str]:
+    """Los otros nombres de un objetivo, sin vacíos ni repetidos."""
+
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ApiError(HTTPStatus.BAD_REQUEST, "titleTargets.aliases must be a list of names")
+    aliases: list[str] = []
+    for item in value:
+        if isinstance(item, (list, dict)):
+            raise ApiError(HTTPStatus.BAD_REQUEST, "titleTargets.aliases must be a list of names")
+        alias = normalize_radar_text(
+            item, "titleTargets.aliases", RADAR_MAX_TITLE_NAME_LENGTH, required=False
+        )
+        if alias and alias.lower() not in {existing.lower() for existing in aliases}:
+            aliases.append(alias)
+    if len(aliases) > RADAR_MAX_TITLE_ALIASES:
+        raise ApiError(
+            HTTPStatus.BAD_REQUEST, f"titleTargets.aliases accepts up to {RADAR_MAX_TITLE_ALIASES} names"
+        )
+    return aliases
 
 
 def radar_title_target(criteria: dict[str, Any], query: Any) -> dict[str, Any] | None:
