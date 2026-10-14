@@ -40,6 +40,7 @@ _MAX_METADATA_HEAD_BYTES = 12 * 1024 * 1024
 
 _GROUP_ID_RE = re.compile(r"/participar/remate/([^/?#]+)", re.IGNORECASE)
 _SAFE_GROUP_ID_RE = re.compile(r"^[A-Za-z0-9._~-]+$")
+_ITEM_ID_RE = re.compile(r"/files/items/(\d+)/", re.IGNORECASE)
 _COMMISSION_RE = re.compile(
     r"comisi[oó]n[^0-9%]{0,60}([0-9]+(?:[.,][0-9]+)?)\s*%",
     re.IGNORECASE,
@@ -174,6 +175,13 @@ def _lot_number(url: str) -> str:
     return ""
 
 
+def _item_id(image_url: str) -> str:
+    """Remotes' own item id, which only its photo path exposes in the RSS."""
+
+    match = _ITEM_ID_RE.search(urlsplit(image_url).path)
+    return match.group(1) if match else ""
+
+
 def _fallback_lot_id(group_id: str, url: str, title: str) -> str:
     digest = sha256(f"{url}\0{title}".encode("utf-8")).hexdigest()[:16]
     return f"{group_id}:rss-{digest}"
@@ -208,7 +216,7 @@ def _parse_feed(payload: bytes | str) -> tuple[list[AuctionGroup], list[AuctionL
     groups: list[AuctionGroup] = []
     lots: list[AuctionLot] = []
     seen_groups: set[str] = set()
-    seen_lots: set[str] = set()
+    seen_lots: dict[str, str] = {}
 
     for item in _children(channel, "item"):
         title = _child_text(item, "title") or "Remate sin título"
@@ -253,11 +261,20 @@ def _parse_feed(payload: bytes | str) -> tuple[list[AuctionGroup], list[AuctionL
                 if lot_number
                 else _fallback_lot_id(group_id, lot_url, lot_title)
             )
-            if lot_id in seen_lots:
-                continue
-            seen_lots.add(lot_id)
-
             image_url = urljoin(BASE_URL, _child_text(lot_node, "foto"))
+            item_id = _item_id(image_url)
+            if lot_id in seen_lots:
+                # Remotes sometimes reuses a lot number for a different item
+                # (7626 published two distinct "98AA" and counted both in
+                # cantLotes). Their item ids tell them apart; without both, the
+                # repeat is an editorial duplicate and is dropped.
+                first_item_id = seen_lots[lot_id]
+                if not item_id or not first_item_id or item_id == first_item_id:
+                    continue
+                lot_id = f"{lot_id}:item-{item_id}"
+                if lot_id in seen_lots:
+                    continue
+            seen_lots[lot_id] = item_id
             lots.append(
                 AuctionLot(
                     source_id=SOURCE_ID,

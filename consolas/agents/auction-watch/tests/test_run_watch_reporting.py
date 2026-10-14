@@ -488,6 +488,46 @@ class ReportingTests(unittest.TestCase):
             "El servidor cortó la conexión mientras se consultaban los lotes.",
         )
 
+    def test_source_without_confirmed_inventory_is_named_in_web_snapshot(self) -> None:
+        issues = build_run_issues(
+            {
+                "extra_sources": {
+                    "sources": [
+                        {
+                            "source_id": "remotes",
+                            "label": "Remotes",
+                            "status": "success",
+                            "errors": [],
+                            "inventory_authoritative": False,
+                            "receipts": [
+                                {"groupId": "7600", "status": "complete"},
+                                {"groupId": "7626", "status": "partial"},
+                            ],
+                        },
+                        {
+                            "source_id": "prado",
+                            "label": "Prado Subastas",
+                            "status": "success",
+                            "errors": [],
+                            "inventory_authoritative": True,
+                        },
+                    ]
+                }
+            }
+        )
+
+        self.assertEqual(
+            issues,
+            [
+                {
+                    "sourceId": "remotes",
+                    "sourceLabel": "Remotes",
+                    "status": "partial",
+                    "summary": "El remate 7626 no confirmó todos sus lotes; el resto se procesó.",
+                }
+            ],
+        )
+
     def test_lifecycle_keeps_unfiltered_keys_and_marks_partial_sources_unsafe(self) -> None:
         lifecycle = build_publication_lifecycle(
             {

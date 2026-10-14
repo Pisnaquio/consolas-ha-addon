@@ -393,6 +393,20 @@ def summarize_issue_detail(raw: str) -> str:
     return "La fuente no pudo completar la consulta."
 
 
+def summarize_unconfirmed_inventory(source: dict) -> str:
+    receipts = [item for item in source.get("receipts") or [] if isinstance(item, dict)]
+    incomplete = [
+        str(item.get("groupId") or "").strip()
+        for item in receipts
+        if str(item.get("status") or "").strip().lower() != "complete"
+    ]
+    if len(incomplete) == 1 and incomplete[0]:
+        return f"El remate {incomplete[0]} no confirmó todos sus lotes; el resto se procesó."
+    if incomplete:
+        return f"{len(incomplete)} remates no confirmaron todos sus lotes; el resto se procesó."
+    return "No se pudo confirmar el inventario completo de esta fuente."
+
+
 def build_run_issues(run_json: dict) -> list[dict[str, str]]:
     issues: list[dict[str, str]] = []
     reported_sources: set[str] = set()
@@ -402,9 +416,23 @@ def build_run_issues(run_json: dict) -> list[dict[str, str]]:
         if not isinstance(source, dict):
             continue
         status = str(source.get("status") or "unknown").strip().lower()
+        source_id = str(source.get("source_id") or "").strip().lower()
+        if status == "success" and source.get("inventory_authoritative") is False:
+            # The runner already counts unproven coverage as a partial run;
+            # without this the banner says "partial" and names no source.
+            issues.append(
+                {
+                    "sourceId": source_id,
+                    "sourceLabel": str(source.get("label") or source_id or "Fuente externa"),
+                    "status": "partial",
+                    "summary": summarize_unconfirmed_inventory(source),
+                }
+            )
+            if source_id:
+                reported_sources.add(source_id)
+            continue
         if status not in {"failed", "partial"}:
             continue
-        source_id = str(source.get("source_id") or "").strip().lower()
         errors = source.get("errors") or []
         detail = next((str(item).strip() for item in errors if str(item).strip()), "")
         issues.append(

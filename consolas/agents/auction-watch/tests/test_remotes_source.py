@@ -166,6 +166,51 @@ class RemotesSourceTests(unittest.TestCase):
         self.assertEqual(session.calls[0][1]["timeout"], 7)
         self.assertTrue(response.closed)
 
+    def test_reused_lot_number_with_distinct_items_keeps_both_lots(self) -> None:
+        feed = b"""<?xml version="1.0" encoding="UTF-8" ?>
+<rss version="2.0"><channel>
+  <item>
+    <title>Liquidacion</title>
+    <link>https://www.remotes.com.uy/participar/remate/7626</link>
+    <cantLotes>3</cantLotes>
+    <lotes>
+      <lote>
+        <title>Perfume nuevo caja sellada</title>
+        <link>https://www.remotes.com.uy/participar/remate/7626?lote=98AA</link>
+        <foto>https://static3.remotes.com.uy/img/thumb/1000/files/items/1152720/a.jpg</foto>
+      </lote>
+      <lote>
+        <title>Perfume nuevo caja sellada</title>
+        <link>https://www.remotes.com.uy/participar/remate/7626?lote=98AA</link>
+        <foto>https://static3.remotes.com.uy/img/thumb/1000/files/items/1178887/b.jpeg</foto>
+      </lote>
+      <lote>
+        <title>Perfume nuevo caja sellada</title>
+        <link>https://www.remotes.com.uy/participar/remate/7626?lote=98AA</link>
+        <foto>https://static3.remotes.com.uy/img/thumb/1000/files/items/1178887/b.jpeg</foto>
+      </lote>
+      <lote>
+        <title>Perfume Hombre</title>
+        <link>https://www.remotes.com.uy/participar/remate/7626?lote=98</link>
+        <foto>https://static3.remotes.com.uy/img/thumb/1000/files/items/1144164/c.jpg</foto>
+      </lote>
+    </lotes>
+  </item>
+</channel></rss>"""
+        session = FakeSession({FEED_URL: FakeResponse(feed)})
+        result = RemotesSource().collect(session, timeout=7)
+
+        self.assertEqual(
+            [lot.lot_id for lot in result.lots],
+            ["7626:98AA", "7626:98AA:item-1178887", "7626:98"],
+        )
+        self.assertEqual([lot.lot_number for lot in result.lots], ["98AA", "98AA", "98"])
+        self.assertTrue(result.discovery_complete)
+        self.assertEqual(
+            [(receipt.group_id, receipt.status, receipt.lot_count) for receipt in result.receipts],
+            [("7626", "complete", 3)],
+        )
+
     def test_enrichment_fetches_once_per_candidate_auction(self) -> None:
         source, result, _, _ = self.collect()
         response = FakeResponse(self.metadata_html, chunk_size=19)
