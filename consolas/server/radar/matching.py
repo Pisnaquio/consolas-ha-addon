@@ -660,6 +660,21 @@ QUANTITY_WORDS = frozenset({
 # only» es el disco de Dark Souls II, no dos discos.
 LOOSE_MEDIA_WORDS = frozenset({"disc", "disk", "cd"})
 
+# Las palabras con que se nombra una compilación, cada una por su forma
+# canónica: «Vol. 2» y «Volume II» dicen lo mismo. «Series» no está: el
+# catálogo de eBay la usa de etiqueta de franquicia («Kirby Series», «God of
+# War Series») en publicaciones de un solo juego.
+COMPILATION_WORDS = {
+    "collection": "collection", "collections": "collection",
+    "trilogy": "trilogy", "trilogies": "trilogy", "quadrilogy": "quadrilogy",
+    "saga": "saga",
+    "anthology": "anthology", "anthologies": "anthology",
+    "compilation": "compilation", "compilations": "compilation",
+    "volume": "volume", "volumes": "volume", "vol": "volume",
+}
+# «From my collection» es la colección del vendedor, no la de un juego.
+SELLER_COLLECTION_WORDS = frozenset({"my", "personal", "private"})
+
 
 def title_tokens(text: str) -> list[str]:
     """Las palabras que identifican un título, sin apóstrofos ni relleno.
@@ -721,6 +736,34 @@ def names_a_sequel(tokens: list[str], core: list[str], subtitle: list[str]) -> b
     return bool(ends) and all(is_sequel_number(tokens, end) for end in ends)
 
 
+def compilation_words(tokens: list[str]) -> set[str]:
+    """Qué palabras de compilación trae un título, en su forma canónica."""
+
+    return {
+        COMPILATION_WORDS[token]
+        for index, token in enumerate(tokens)
+        if token in COMPILATION_WORDS
+        and not (
+            COMPILATION_WORDS[token] == "collection" and index and tokens[index - 1] in SELLER_COLLECTION_WORDS
+        )
+    }
+
+
+def names_a_compilation(tokens: list[str], core: list[str], subtitle: list[str]) -> bool:
+    """Si la publicación nombra una compilación que el título no es.
+
+    «Mass Effect 2 - Trilogy … DISC ONLY» trae el nombre entero de Mass Effect
+    2, pero es el disco de la Trilogy; «Uncharted Trilogy 1 2 3 Bundle Lot» son
+    tres juegos. Basta una palabra de compilación que el nombre del objetivo no
+    tenga para que sea otro producto. Un objetivo que ya es una compilación
+    acepta la suya —«God of War Collection», «God of War: Origins
+    Collection»— pero no otra: «God of War Saga» no es Origins Collection, y
+    «God of War Collection Volume II» sólo es de quien lo tenga por nombre.
+    """
+
+    return bool(compilation_words(tokens) - compilation_words(core + subtitle))
+
+
 def best_title_target(title: str, targets: list[dict[str, Any]]) -> dict[str, Any] | None:
     """Qué título de la búsqueda nombra esta publicación, o `None` si ninguno.
 
@@ -748,6 +791,10 @@ def best_title_target(title: str, targets: list[dict[str, Any]]) -> dict[str, An
     Souls aunque traiga sus dos palabras (ver `names_a_sequel`). Sin esto, la
     secuela que la búsqueda no persigue se juzgaba con el techo y el precio del
     original, y «Registrar compra» escribía el juego equivocado.
+
+    Por lo mismo, un objetivo no nombra una compilación que no es: «Mass Effect
+    2 - Trilogy» no es Mass Effect 2 ni «God of War Saga» es Origins Collection
+    (ver `names_a_compilation`).
 
     Un objetivo puede tener otros nombres (`aliases`): «Little Big Planet 2»
     para «LittleBigPlanet 2», «God of War Collection Volume II» para la edición
@@ -783,6 +830,8 @@ def best_title_target(title: str, targets: list[dict[str, Any]]) -> dict[str, An
             and all(token in words for token in subtitle)
         )
         if not (by_core or by_subtitle) or names_a_sequel(tokens, core, subtitle):
+            continue
+        if names_a_compilation(tokens, core, subtitle):
             continue
         shared = sum(1 for token in set(core + subtitle) if token in words)
         rank = (shared, len(core))

@@ -633,11 +633,10 @@ class AliasTitleTargetTests(unittest.TestCase):
                 self.assertEqual(self.name_for(title), "God of War: Origins Collection")
         self.assertEqual(self.name_for("God of War Collection PS3 complete"), "God of War Collection")
 
-    def test_without_the_alias_the_european_name_was_another_game(self) -> None:
+    def test_without_the_alias_the_european_name_is_none_of_them(self) -> None:
+        """Antes se atribuía a God of War Collection; «Volume» dice que es otra compilación."""
         targets = [{"name": "God of War Collection"}, {"name": "God of War: Origins Collection"}]
-        self.assertEqual(
-            self.name_for("God of War Collection Volume II PS3 PAL", targets), "God of War Collection"
-        )
+        self.assertIsNone(self.name_for("God of War Collection Volume II PS3 PAL", targets))
 
     def test_an_abbreviation_is_a_name_too(self) -> None:
         self.assertEqual(self.name_for("MGS4 PS3 complete in box"), "Metal Gear Solid 4: Guns of the Patriots")
@@ -646,6 +645,90 @@ class AliasTitleTargetTests(unittest.TestCase):
         self.assertIsNone(self.name_for("Little Big Planet 3 PS4"))
         self.assertIsNone(self.name_for("LittleBigPlanet Karting PS3"))
         self.assertIsNone(self.name_for("MotorStorm Apocalypse PS3"))
+
+
+class CompilationTitleTargetTests(unittest.TestCase):
+    """Una compilación no es uno de sus juegos, aunque traiga su nombre entero.
+
+    Los títulos son reales: de las corridas de octubre y, los demás, de eBay el
+    2026-10-13.
+    """
+
+    TARGETS = [
+        {"name": "God of War III"},
+        {"name": "God of War Collection"},
+        {"name": "God of War: Origins Collection", "aliases": ["God of War Collection Volume II"]},
+        {"name": "God of War: Ascension"},
+        {"name": "Mass Effect 2"},
+        {"name": "inFamous 2"},
+        {"name": "Uncharted 2: Among Thieves"},
+        {"name": "Dead Space 2"},
+        {"name": "Metal Gear Solid"},
+        {"name": "Killzone 2"},
+        {"name": "Castlevania Lords of Shadow"},
+    ]
+
+    def name_for(self, title: str) -> str | None:
+        target = best_title_target(title, self.TARGETS)
+        return target["name"] if target else None
+
+    def test_a_disc_from_a_compilation_is_not_the_single_game(self) -> None:
+        for title in (
+            "Mass Effect 2 - Trilogy ( PlayStation 3, PS3) DISC ONLY | NO TRACKING | M3703",
+            "Infamous 2 Collection (Sony PlayStation 3) PS3 DISC ONLY",
+            "Metal Gear Solid 1 -From The Essential Collection (PS1/PS2) CIB Complete Works",
+            "God of War III 3 PS3 Disc 2 Replacement From God of War Saga Collection",
+            "Metal Gear Solid: Master Collection Vol.1 - PlayStation 5 - Brand NEW - Sealed",
+            "Castlevania: Lords of Shadow Collection PS3 (PlayStation 3, 2013) CIB *TESTED",
+        ):
+            with self.subTest(title=title):
+                self.assertIsNone(self.name_for(title))
+
+    def test_a_compilation_lot_is_none_of_its_games(self) -> None:
+        for title in (
+            "Uncharted Trilogy 1 2 3 Bundle Lot (Sony PlayStation 3 PS3)",
+            "Sony PlayStation 3 PS3 CIB Dead Space 1 2 3 Trilogy Bundle Lot X",
+            "God of War Saga and God of War Ascension PS3 Bundle. Mint",
+            "Ps3 Lot Killzone 2 3 Farcry Far Cry 2 3 Cib Fps Game Collection Playstation 3",
+        ):
+            with self.subTest(title=title):
+                self.assertIsNone(self.name_for(title))
+
+    def test_another_compilation_is_not_the_target_compilation(self) -> None:
+        """Sin el término excluido «saga», God of War Saga caía en Collection o en III."""
+        for title in (
+            "God of War Saga Collection Sony PS3 PlayStation 3 - CIB Complete",
+            "God of War Saga Collection PS3 (Sony Playstation 3, 2012) 2-Discs No Manual.",
+            "God of War Saga Dual Pack (Sony PlayStation 3 PS3) 1, 2, 3 - Cleaned & Tested",
+            "God of War Saga Sony PlayStation 3 PS3 2012 5 Game Collection BCUS-98299",
+        ):
+            with self.subTest(title=title):
+                self.assertIsNone(self.name_for(title))
+
+    def test_a_compilation_target_keeps_its_own_listings(self) -> None:
+        for title, name in (
+            ("God of War Collection (PlayStation 3, PS3) I & II Remastered in HD, with Manual", "God of War Collection"),
+            ("God of War Collection 2 in 1 PS3", "God of War Collection"),
+            ("God of War Origins Collection (Sony PlayStation 3 PS3, 2011) Disc Only", "God of War: Origins Collection"),
+            ("God of War Collection Volume II PS3 PAL", "God of War: Origins Collection"),
+            ("God of War HD Collection Volume 2 PS3", "God of War: Origins Collection"),
+        ):
+            with self.subTest(title=title):
+                self.assertEqual(self.name_for(title), name)
+
+    def test_the_single_game_still_names_itself(self) -> None:
+        """«Series» es la etiqueta de franquicia del catálogo de eBay, y «Personal
+        Collection» la colección del vendedor: ninguna nombra una compilación."""
+        for title, name in (
+            ("Mass Effect 2 Sony PlayStation 3 PS3 CIB Complete In Box Tested And Working", "Mass Effect 2"),
+            ("Metal Gear Solid Greatest Hits (Sony PlayStation 1, PS1) - CIB Complete TESTED", "Metal Gear Solid"),
+            ("Sony Computer Entertainment inFAMOUS 2 PS3 Disc w/ Case T Infamous Series", "inFamous 2"),
+            ("Sony God of War: Ascension PS3 God of War Series Action M NTSC 2013", "God of War: Ascension"),
+            ("Killzone 2 PS3 Mint Complete Personal Collection", "Killzone 2"),
+            ("Castlevania: Lords of Shadow (Sony PlayStation 3, 2010) Complete Tested & Works", "Castlevania Lords of Shadow"),
+        ):
+            with self.subTest(title=title):
+                self.assertEqual(self.name_for(title), name)
 
 
 class PricePerPieceTests(unittest.TestCase):
