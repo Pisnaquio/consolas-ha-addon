@@ -169,11 +169,6 @@ h1 {
   font-size: 0.75rem;
 }
 
-.dashboard-alerts {
-  display: grid;
-  gap: 8px;
-}
-
 .action-queue {
   display: grid;
   gap: 14px;
@@ -194,38 +189,6 @@ h1 {
   color: #546777;
   font-family: "IBM Plex Mono", monospace;
   font-size: 0.75rem;
-}
-
-.dashboard-alert-row {
-  border: 1px solid #e5c8c8;
-  border-radius: 10px;
-  background: linear-gradient(180deg, #fff7f7, #fffdfd);
-  padding: 8px 10px;
-  display: grid;
-  grid-template-columns: 1fr auto auto;
-  align-items: center;
-  gap: 8px;
-}
-
-.dashboard-alert-row strong {
-  font-size: 0.88rem;
-}
-
-.dashboard-alert-row span {
-  color: #6f4f4f;
-  font-size: 0.76rem;
-  font-family: "IBM Plex Mono", monospace;
-}
-
-.dashboard-alert-row a {
-  color: #0f4f8a;
-  font-size: 0.76rem;
-  font-family: "IBM Plex Mono", monospace;
-  text-decoration: none;
-}
-
-.dashboard-alert-row a:hover {
-  text-decoration: underline;
 }
 
 .stat {

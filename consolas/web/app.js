@@ -167,32 +167,6 @@ function renderGlobalDashboard(items) {
   const unknownRunning = items.filter((c) => c.tengo === true && c.funcionando == null).length;
   const alertCount = ownedNotRunning + unknownRunning;
 
-  const operationalAlerts = items
-    .filter((item) => item.tengo === true && item.funcionando === false)
-    .map(
-      (item) => `
-        <article class="dashboard-alert-row">
-          <strong>${item.nombre}</strong>
-          <span>Marcada como no funcionando</span>
-          <a href="${window.CollectionRepository.getConsoleDetailHref(item.id)}">Revisar</a>
-        </article>
-      `
-    )
-    .join("");
-
-  const unknownAlerts = items
-    .filter((item) => item.tengo === true && item.funcionando == null)
-    .map(
-      (item) => `
-        <article class="dashboard-alert-row">
-          <strong>${item.nombre}</strong>
-          <span>Sin estado de funcionamiento</span>
-          <a href="${window.CollectionRepository.getConsoleDetailHref(item.id)}">Completar</a>
-        </article>
-      `
-    )
-    .join("");
-
   node.innerHTML = `
     <div class="dashboard-head">
       <h2>Panel operativo de colección</h2>
@@ -203,21 +177,6 @@ function renderGlobalDashboard(items) {
       <article class="dashboard-kpi"><small>Listas para jugar</small><strong>${operationalConsoles}</strong><span>tengo + funcionando</span></article>
       <article class="dashboard-kpi"><small>Alertas</small><strong>${alertCount}</strong><span>requieren revisión</span></article>
       <article class="dashboard-kpi"><small>Juegos registrados</small><strong>${registeredGames}</strong><span>solo juegos reales</span></article>
-    </div>
-  `;
-
-  const insightsNode = document.getElementById("collectionInsights");
-  if (!insightsNode) return;
-
-  insightsNode.innerHTML = `
-    <div class="dashboard-head">
-      <h2>Alertas operativas</h2>
-      <small>${alertCount} alerta(s) operativa(s)</small>
-    </div>
-    <div class="dashboard-alerts">
-      ${operationalAlerts || ""}
-      ${unknownAlerts || ""}
-      ${!operationalAlerts && !unknownAlerts ? '<p class="muted">No hay alertas operativas por ahora.</p>' : ""}
     </div>
   `;
 }

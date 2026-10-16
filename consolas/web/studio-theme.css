@@ -76,8 +76,7 @@ body.studio-variant .edit-panel,
 body.studio-variant .mini-card,
 body.studio-variant .manual-game-dialog,
 body.studio-variant .manual-preview-panel,
-body.studio-variant .game-edit-panel,
-body.studio-variant .dashboard-alert-row {
+body.studio-variant .game-edit-panel {
   border: 1px solid var(--line);
   background: linear-gradient(180deg, var(--surface-2), rgba(5, 19, 36, 0.78));
   color: var(--ink);
@@ -131,7 +130,6 @@ body.studio-variant .price-model-title,
 body.studio-variant .dashboard-head small,
 body.studio-variant .action-queue-head span,
 body.studio-variant .dashboard-kpi span,
-body.studio-variant .dashboard-alert-row span,
 body.studio-variant .games-count,
 body.studio-variant .games-subtitle-count,
 body.studio-variant .gba-game-meta,
@@ -477,11 +475,6 @@ body.studio-variant .gba-price-item {
   border-radius: 14px;
   background: rgba(4, 18, 35, 0.44);
   color: var(--ink);
-}
-
-body.studio-variant .dashboard-alerts {
-  display: grid;
-  gap: 8px;
 }
 
 body.studio-variant .opportunity-card {
