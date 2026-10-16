@@ -410,7 +410,7 @@
     const counts = feed?.counts || {};
     const sandbox = feed?.environment === "sandbox";
 
-    root.innerHTML = `<div class="back-link"><a href="./index.html">← Volver a la colección</a></div>
+    root.innerHTML = `<div class="back-link"><a href="./index.html">← Volver a la colección</a> · <a href="./chasing-games.html">Búsquedas</a></div>
       <header class="detail-hero feed-hero">
         <div>
           <p class="eyebrow">Collection Radar</p>
