@@ -544,8 +544,18 @@
   }
 
   function isNonGameEntry(game = {}) {
-    const text = normalizeText([game?.nombre, game?.franquicia, game?.genero, game?.notas].filter(Boolean).join(" "));
-    return /(^|[\s-])(soundtrack|artbook|comic|vr experience|family fun pack|bundle|season pass|vrv|illusionist|avatar|theme|app)([\s-]|$)/.test(text);
+    const identity = normalizeText([game?.nombre, game?.franquicia, game?.genero].filter(Boolean).join(" "));
+    if (/(^|[\s-])(soundtrack|artbook|comic|vr experience|family fun pack|bundle|season pass|vrv|illusionist|avatar|theme|app)([\s-]|$)/.test(identity)) {
+      return true;
+    }
+
+    // Las notas describen procedencia, completitud y contenido incluido. No
+    // alcanzan por sí solas para convertir un juego real en "extra": frases
+    // comunes como "incluido en el bundle" o "incluye artbook y soundtrack"
+    // estaban sacando juegos físicos de Registrados. Sólo conservamos aquí
+    // señales explícitas de que la entidad misma no es un juego principal.
+    const notes = normalizeText(game?.notas || "");
+    return /(^|[.!?]\s*)(app|aplicacion) de\b/.test(notes) || /\bno (es )?juego principal\b/.test(notes);
   }
 
   function gameIsOwned(game = {}) {

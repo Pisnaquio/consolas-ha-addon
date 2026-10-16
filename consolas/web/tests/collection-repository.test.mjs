@@ -55,6 +55,43 @@ test("never reads a legacy snapshot as the live catalog", () => {
   assert.deepEqual(repository.getGamesForConsole({ ps4: baseGames }, "ps4"), baseGames);
 });
 
+test("a real game included in a bundle stays in the registered games section", () => {
+  const { repository } = loadRepository();
+
+  assert.equal(
+    repository.isNonGameEntry({
+      nombre: "Grand Theft Auto V",
+      genero: "Action Adventure",
+      notas: "Incluido en el bundle de la PS3, sin precio individual asignado."
+    }),
+    false
+  );
+});
+
+test("edition extras mentioned in notes do not turn the game itself into an extra", () => {
+  const { repository } = loadRepository();
+
+  assert.equal(
+    repository.isNonGameEntry({
+      nombre: "God of War Sons of Sparta",
+      notas: "Incluye artbook y soundtrack digitales y los extras de la edición Deluxe."
+    }),
+    false
+  );
+});
+
+test("an explicitly identified app remains a non-game entry", () => {
+  const { repository } = loadRepository();
+
+  assert.equal(
+    repository.isNonGameEntry({
+      nombre: "Pokemon HOME",
+      notas: "App de gestión Pokémon; contenido extra, no juego principal."
+    }),
+    true
+  );
+});
+
 // persistGamePatch existe para la escritura cross-console (Franchise Collection
 // Tracker, otras pantallas futuras que tocan un juego sin cargar la consola
 // entera). El riesgo que estos tests cierran: escribir un solo juego sin
