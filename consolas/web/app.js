@@ -43,7 +43,6 @@ const escapeHtml = (text = "") =>
     .replaceAll("'", "&#39;");
 
 const normalize = (text = "") => window.CollectionRepository.normalizeText(text);
-const normalizeOwnershipType = (raw = "", loTengo = false) => window.CollectionRepository.normalizeOwnershipType(raw, loTengo);
 
 function readOverrides() {
   return window.CollectionRepository.readOverrides();
@@ -79,7 +78,6 @@ function removeConsoleFromWishlist(consoleId) {
   writeOverrides(overrides);
   state.allConsoles = applyDetailEdits(applyOverrides(mergeWithAdditions(state.allConsoles)));
   renderSummary(state.allConsoles);
-  renderGlobalDashboard(state.allConsoles);
   updateSelectOptions(state.allConsoles);
   applyFilters();
 }
@@ -132,8 +130,8 @@ function renderPriceReference(prices, item) {
 
 function renderSummary(items) {
   const summary = document.getElementById("summary");
-  const collection = items.filter((i) => i.categoria === "coleccion");
-  const wishlist = items.filter((i) => i.categoria === "wishlist");
+  const collection = items.filter((i) => isRegisteredConsole(i));
+  const wishlist = items.filter((i) => isWishlistConsole(i));
   const funcionando = collection.filter((i) => i.funcionando === true).length;
 
   summary.innerHTML = `
@@ -150,35 +148,6 @@ function getGamesForConsole(consoleId) {
 
 function isNonGameEntry(game = {}) {
   return window.CollectionRepository.isNonGameEntry(game);
-}
-
-function renderGlobalDashboard(items) {
-  const node = document.getElementById("globalDashboard");
-  if (!node) return;
-
-  const registeredGames = items.reduce((acc, consoleItem) => {
-    const games = getGamesForConsole(consoleItem.id).filter((g) => !isNonGameEntry(g));
-    return acc + games.filter((g) => normalizeOwnershipType(g.ownershipType, g.loTengo) !== "none").length;
-  }, 0);
-
-  const ownedConsoles = items.filter((c) => c.tengo === true).length;
-  const operationalConsoles = items.filter((c) => c.tengo === true && c.funcionando === true).length;
-  const ownedNotRunning = items.filter((c) => c.tengo === true && c.funcionando === false).length;
-  const unknownRunning = items.filter((c) => c.tengo === true && c.funcionando == null).length;
-  const alertCount = ownedNotRunning + unknownRunning;
-
-  node.innerHTML = `
-    <div class="dashboard-head">
-      <h2>Panel operativo de colección</h2>
-      <small>estado compacto</small>
-    </div>
-    <div class="dashboard-kpis">
-      <article class="dashboard-kpi"><small>Consolas que tengo</small><strong>${ownedConsoles}</strong><span>inventario actual</span></article>
-      <article class="dashboard-kpi"><small>Listas para jugar</small><strong>${operationalConsoles}</strong><span>tengo + funcionando</span></article>
-      <article class="dashboard-kpi"><small>Alertas</small><strong>${alertCount}</strong><span>requieren revisión</span></article>
-      <article class="dashboard-kpi"><small>Juegos registrados</small><strong>${registeredGames}</strong><span>solo juegos reales</span></article>
-    </div>
-  `;
 }
 
 function updateSelectOptions(items) {
@@ -512,8 +481,7 @@ async function init() {
     state.allConsoles = applyDetailEdits(applyOverrides(merged));
 
     renderSummary(state.allConsoles);
-    renderGlobalDashboard(state.allConsoles);
-    updateSelectOptions(state.allConsoles);
+      updateSelectOptions(state.allConsoles);
     updateNoHaveSubFilterVisibility();
     bindControls();
     applyFilters();

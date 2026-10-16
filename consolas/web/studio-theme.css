@@ -61,7 +61,6 @@ body.studio-variant .eyebrow {
 
 body.studio-variant .hero,
 body.studio-variant .controls,
-body.studio-variant .dashboard,
 body.studio-variant .opportunities,
 body.studio-variant .card,
 body.studio-variant .db-card,
@@ -81,10 +80,6 @@ body.studio-variant .game-edit-panel {
   background: linear-gradient(180deg, var(--surface-2), rgba(5, 19, 36, 0.78));
   color: var(--ink);
   box-shadow: var(--shadow);
-}
-
-body.studio-variant #globalDashboard {
-  display: none;
 }
 
 body.studio-variant .hero {
@@ -127,9 +122,7 @@ body.studio-variant .opportunity-kicker,
 body.studio-variant .count,
 body.studio-variant .save-indicator,
 body.studio-variant .price-model-title,
-body.studio-variant .dashboard-head small,
 body.studio-variant .action-queue-head span,
-body.studio-variant .dashboard-kpi span,
 body.studio-variant .games-count,
 body.studio-variant .games-subtitle-count,
 body.studio-variant .gba-game-meta,
@@ -144,14 +137,12 @@ body.studio-variant .manual-detect-hint {
 }
 
 body.studio-variant .summary,
-body.studio-variant .dashboard-kpis,
 body.studio-variant .games-stats-strip {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
 }
 
 body.studio-variant .stat,
-body.studio-variant .dashboard-kpi,
 body.studio-variant .games-stat-item,
 body.studio-variant .detail-quick-metrics article {
   min-height: 110px;
@@ -165,7 +156,6 @@ body.studio-variant .detail-quick-metrics article {
 }
 
 body.studio-variant .stat::before,
-body.studio-variant .dashboard-kpi::before,
 body.studio-variant .games-stat-item::before {
   content: "";
   position: absolute;
@@ -175,7 +165,6 @@ body.studio-variant .games-stat-item::before {
 }
 
 body.studio-variant .stat small,
-body.studio-variant .dashboard-kpi small,
 body.studio-variant .games-stat-item small,
 body.studio-variant .detail-quick-metrics small,
 body.studio-variant .price-box small,
@@ -187,7 +176,6 @@ body.studio-variant .gba-price-item small {
 }
 
 body.studio-variant .stat strong,
-body.studio-variant .dashboard-kpi strong,
 body.studio-variant .games-stat-item strong,
 body.studio-variant .detail-quick-metrics strong,
 body.studio-variant .price-box strong,
@@ -195,15 +183,13 @@ body.studio-variant .gba-price-item strong {
   color: #f4f9ff;
 }
 
-body.studio-variant .stat strong,
-body.studio-variant .dashboard-kpi strong {
+body.studio-variant .stat strong {
   margin-top: 0.35rem;
   font-size: clamp(1.85rem, 3vw, 2.35rem);
   line-height: 1;
 }
 
 body.studio-variant .controls,
-body.studio-variant .dashboard,
 body.studio-variant .opportunities,
 body.studio-variant .detail-block,
 body.studio-variant .detail-toolbar,
@@ -330,7 +316,6 @@ body.studio-variant .section-title-row {
 }
 
 body.studio-variant .section-title-row h2,
-body.studio-variant .dashboard-head h2,
 body.studio-variant .section-head h2,
 body.studio-variant .games-subtitle {
   font-size: clamp(1.14rem, 2vw, 1.56rem);
@@ -695,7 +680,6 @@ body.studio-variant .empty {
 
 @media (max-width: 1020px) {
   body.studio-variant .summary,
-  body.studio-variant .dashboard-kpis,
   body.studio-variant .games-stats-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -728,7 +712,6 @@ body.studio-variant .empty {
 
   body.studio-variant .hero,
   body.studio-variant .controls,
-  body.studio-variant .dashboard,
   body.studio-variant .opportunities,
   body.studio-variant .detail-card,
   body.studio-variant .detail-media,
