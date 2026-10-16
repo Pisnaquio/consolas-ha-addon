@@ -1,0 +1,162 @@
+/* Nacho's Wishlist — los deseos reales del dueño.
+   Mismo lenguaje que la colección temática (studio-theme: fondo oscuro,
+   Fraunces para títulos, mono para números). El dorado (--warn) es el color
+   de «deseo»: es el mismo que marca lo opcional/joya en el tracker, y acá
+   señala lo que falta. Verde (--accent-2) es lo que ya tenés. */
+
+.nw-hero { display: block; }
+.nw-hero h1 { margin: 0.1rem 0 0; }
+.nw-summary { max-width: 62ch; color: var(--muted); margin: 8px 0 0; }
+.nw-count { margin: 12px 0 0; font: 500 0.9rem "IBM Plex Mono", monospace; color: var(--warn); }
+.nw-hero .card-actions { margin-top: 16px; }
+
+.nw-feedback { margin: 14px 0 0; color: var(--muted); }
+.nw-feedback.is-success { color: var(--accent-2); }
+.nw-feedback.is-error { color: var(--danger); }
+.nw-hint { margin: 6px 0 0; font-size: 0.88rem; }
+.nw-warning { margin: 4px 0 0; color: var(--warn); font-size: 0.86rem; }
+.nw-tag { color: var(--accent); }
+
+.pill-group { display: flex; gap: 6px; flex-wrap: wrap; }
+.pill {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 6px 13px;
+  font: 500 0.84rem inherit;
+  cursor: pointer;
+}
+.pill.is-active { border-color: var(--warn); color: var(--warn); background: rgba(241, 189, 100, 0.1); }
+.nw-filters { margin: 26px 0 0; }
+
+.nw-cover,
+.nw-thumb {
+  object-fit: contain;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  flex: none;
+}
+.nw-cover { width: 48px; height: 64px; }
+.nw-thumb { width: 30px; height: 40px; }
+
+/* --- Sorpresa --------------------------------------------------------------- */
+
+.nw-surprise {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  margin-top: 20px;
+  padding: 16px 18px;
+  border: 1px solid rgba(241, 189, 100, 0.5);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(241, 189, 100, 0.12), rgba(5, 19, 36, 0.7));
+}
+.nw-surprise .eyebrow { margin: 0; }
+.nw-surprise-title { margin: 2px 0; font: 700 1.25rem "Fraunces", serif; }
+.nw-surprise-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+
+/* --- Editor ----------------------------------------------------------------- */
+
+.nw-editor { margin-top: 20px; display: grid; gap: 14px; }
+.nw-editor-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.nw-editor-head h2 { margin: 0; }
+.nw-field { display: grid; gap: 6px; font-size: 0.86rem; color: var(--muted); }
+.nw-field input,
+.nw-field select {
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ink);
+  border-radius: 10px;
+  padding: 9px 12px;
+  font: 400 0.95rem inherit;
+}
+.nw-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.nw-result {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  cursor: pointer;
+  font-size: 0.92rem;
+}
+.nw-results li + li .nw-result { border-top: 1px solid rgba(153, 191, 230, 0.12); }
+.nw-result.is-chosen { background: rgba(241, 189, 100, 0.08); }
+.nw-chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.nw-chip-remove {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0 0 0 4px;
+}
+
+/* --- Deseos ----------------------------------------------------------------- */
+
+.nw-wishes { display: grid; gap: 16px; margin-top: 18px; }
+.nw-empty { margin-top: 20px; }
+.nw-wish {
+  position: relative;
+  padding: 18px 20px 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: linear-gradient(180deg, var(--surface-2), rgba(5, 19, 36, 0.7));
+}
+.nw-wish::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  border-radius: 16px 0 0 16px;
+  background: var(--warn);
+}
+.nw-wish.is-fulfilled::before { background: var(--accent-2); }
+.nw-wish.is-fulfilled { opacity: 0.82; }
+.nw-wish-head { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
+.nw-wish-title { margin: 0; font: 700 1.2rem "Fraunces", serif; }
+.nw-wish-note { margin: 4px 0 0; color: var(--muted); font-style: italic; }
+.nw-wish-head .muted { margin: 4px 0 0; }
+.nw-wish-progress { display: grid; justify-items: end; gap: 6px; min-width: 110px; }
+.nw-progress-value { font: 500 1.1rem "IBM Plex Mono", monospace; color: var(--warn); white-space: nowrap; }
+.nw-wish.is-fulfilled .nw-progress-value { color: var(--accent-2); }
+.nw-track { width: 110px; height: 5px; border-radius: 999px; background: rgba(255, 255, 255, 0.09); overflow: hidden; }
+.nw-track span { display: block; height: 100%; background: var(--accent-2); border-radius: inherit; }
+
+.nw-pieces { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 10px; }
+.nw-piece { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 14px; align-items: center; }
+.nw-piece-title { margin: 0; font-weight: 600; }
+.nw-piece-id .muted { margin: 2px 0 0; font-size: 0.86rem; }
+.nw-piece-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+
+.nw-owned-toggle {
+  margin-top: 12px;
+  border: 0;
+  background: transparent;
+  color: var(--accent-2);
+  cursor: pointer;
+  padding: 0;
+  font: 500 0.86rem inherit;
+}
+.nw-owned { margin: 6px 0 0; padding-left: 18px; font-size: 0.88rem; }
+.nw-wish-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+
+@media (max-width: 720px) {
+  .nw-surprise { grid-template-columns: auto minmax(0, 1fr); }
+  .nw-surprise-actions { grid-column: 1 / -1; justify-content: flex-start; }
+  .nw-wish-head { flex-direction: column; }
+  .nw-wish-progress { justify-items: start; }
+  .nw-piece { grid-template-columns: auto minmax(0, 1fr); }
+  .nw-piece-actions { grid-column: 1 / -1; justify-content: flex-start; }
+  .nw-wish-actions { justify-content: flex-start; }
+}

@@ -89,7 +89,11 @@
     const additions = storeState.user?.additionsById || {};
     const edits = storeState.user?.detailEditsById || {};
     const detailEntries = Object.values(edits || {});
-    const consolesWithState = new Set([...Object.keys(overrides), ...Object.keys(additions), ...Object.keys(edits)]);
+    const consolesWithState = new Set([
+      ...Object.keys(overrides),
+      ...Object.keys(additions),
+      ...Object.keys(edits).filter((key) => !window.CollectionRepository.isAuxiliaryBucketKey(key))
+    ]);
     const manualEntityCount = detailEntries.reduce((total, item) => {
       const manualAccessories = Object.keys(item?.manualAccessoriesById || {}).length;
       const manualGames = Object.keys(item?.manualGamesById || {}).length;

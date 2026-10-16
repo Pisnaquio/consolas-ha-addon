@@ -12757,6 +12757,31 @@
           "sourceType": "catalog"
         },
         {
+          "id": "n64-pokemon-stadium",
+          "nombre": "Pokemon Stadium",
+          "franquicia": "Pokemon",
+          "genero": "Battle",
+          "priceGuide": {
+            "priceCharting": null,
+            "ebaySold": null,
+            "cib": null,
+            "targetBuy": null,
+            "notes": ""
+          },
+          "priceRange": {
+            "low": 40,
+            "mid": 50,
+            "high": 60,
+            "notes": "Copia suelta (cartucho solo), NTSC-U, USD. Precios de lista consultados el 2026-10-16: DKOldies USD 59.99 (Good Cartridge); Game Over Videogames USD 39.99 (sin stock). Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo. Lukie Games no se consultó: bloquea la consulta con Cloudflare."
+          },
+          "coverUrl": "./assets/game-covers/n64/pokemon-stadium.jpg",
+          "coverImage": "./assets/game-covers/n64/pokemon-stadium.jpg",
+          "imageSearchName": "Pokemon Stadium",
+          "imageSource": "wikipedia",
+          "imageStatus": "found",
+          "sourceType": "catalog"
+        },
+        {
           "id": "n64-pokemon-stadium-2",
           "nombre": "Pokemon Stadium 2",
           "franquicia": "Pokemon",
@@ -12778,6 +12803,81 @@
           "coverImage": "./assets/game-covers/n64/pokemon-stadium-2.svg",
           "imageSearchName": "Pokemon Stadium 2",
           "imageSource": "catalog-generated",
+          "imageStatus": "found",
+          "sourceType": "catalog"
+        },
+        {
+          "id": "n64-pokemon-snap",
+          "nombre": "Pokemon Snap",
+          "franquicia": "Pokemon",
+          "genero": "Adventure",
+          "priceGuide": {
+            "priceCharting": null,
+            "ebaySold": null,
+            "cib": null,
+            "targetBuy": null,
+            "notes": ""
+          },
+          "priceRange": {
+            "low": 30,
+            "mid": 31,
+            "high": 32,
+            "notes": "Copia suelta (cartucho solo), NTSC-U, USD. Precios de lista consultados el 2026-10-16: DKOldies USD 31.99 (Good Cartridge, en oferta; precio tachado USD 33.99); Game Over Videogames USD 29.99 (sin stock). Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo. Lukie Games no se consultó: bloquea la consulta con Cloudflare."
+          },
+          "coverUrl": "./assets/game-covers/n64/pokemon-snap.png",
+          "coverImage": "./assets/game-covers/n64/pokemon-snap.png",
+          "imageSearchName": "Pokemon Snap",
+          "imageSource": "wikipedia",
+          "imageStatus": "found",
+          "sourceType": "catalog"
+        },
+        {
+          "id": "n64-pokemon-puzzle-league",
+          "nombre": "Pokemon Puzzle League",
+          "franquicia": "Pokemon",
+          "genero": "Puzzle",
+          "priceGuide": {
+            "priceCharting": null,
+            "ebaySold": null,
+            "cib": null,
+            "targetBuy": null,
+            "notes": ""
+          },
+          "priceRange": {
+            "low": 40,
+            "mid": 40,
+            "high": 40,
+            "notes": "Copia suelta (cartucho solo), NTSC-U, USD. Precios de lista consultados el 2026-10-16: DKOldies USD 39.99 (Good Cartridge, en oferta; precio tachado USD 54.99); Game Over Videogames USD 39.99 (sin stock). Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo. Lukie Games no se consultó: bloquea la consulta con Cloudflare."
+          },
+          "coverUrl": "./assets/game-covers/n64/pokemon-puzzle-league.png",
+          "coverImage": "./assets/game-covers/n64/pokemon-puzzle-league.png",
+          "imageSearchName": "Pokemon Puzzle League",
+          "imageSource": "wikipedia",
+          "imageStatus": "found",
+          "sourceType": "catalog"
+        },
+        {
+          "id": "n64-hey-you-pikachu",
+          "nombre": "Hey You, Pikachu!",
+          "franquicia": "Pokemon",
+          "genero": "Simulation",
+          "priceGuide": {
+            "priceCharting": null,
+            "ebaySold": null,
+            "cib": null,
+            "targetBuy": null,
+            "notes": ""
+          },
+          "priceRange": {
+            "low": 10,
+            "mid": 12,
+            "high": 15,
+            "notes": "Copia suelta (cartucho solo), NTSC-U, USD. Precios de lista consultados el 2026-10-16: DKOldies USD 9.99 (Good Cartridge, en oferta; precio tachado USD 19.99); Game Over Videogames USD 14.99 (Game Only, sin stock). El cartucho solo no alcanza para jugar: necesita el Voice Recognition Unit (VRU) y su micrófono, que van aparte. Son precios minoristas de tiendas retro de EE.UU.; una compra entre particulares suele cerrar por debajo. Lukie Games no se consultó: bloquea la consulta con Cloudflare."
+          },
+          "coverUrl": "./assets/game-covers/n64/hey-you-pikachu.png",
+          "coverImage": "./assets/game-covers/n64/hey-you-pikachu.png",
+          "imageSearchName": "Hey You, Pikachu!",
+          "imageSource": "wikipedia",
           "imageStatus": "found",
           "sourceType": "catalog"
         },

@@ -399,6 +399,44 @@
     return next;
   }
 
+  /**
+   * Nacho's Wishlist — los deseos reales del dueño, no recomendaciones.
+   *
+   * `loQuiero` no sirve para esto: la calibración del radar lo usó para marcar
+   * el top de cada consola, así que hoy mezcla deseo y recomendación. Un deseo
+   * personal es una entidad propia (un juego o un grupo de juegos con nombre,
+   * o una colección temática entera) y vive en otro bucket auxiliar del mismo
+   * `DataStore.detailEditsById`, igual que el tracker de franquicias. Nunca
+   * escribe `loQuiero` ni `keepInWishlist`: lo que ya tenés se sigue leyendo
+   * del juego real.
+   */
+  const PERSONAL_WISHLIST_BUCKET_KEY = "wishlist:personal";
+
+  /** Las claves auxiliares llevan `:`; ningún id de consola lo lleva. */
+  function isAuxiliaryBucketKey(key) {
+    return String(key || "").includes(":");
+  }
+
+  function getPersonalWishes() {
+    return normalizeRecordMap(getConsoleEditBucket(PERSONAL_WISHLIST_BUCKET_KEY).wishesById);
+  }
+
+  function persistPersonalWish(wishId, wish = {}) {
+    if (!wishId) return null;
+    const current = getPersonalWishes();
+    const next = { ...current, [wishId]: { ...wish, id: wishId } };
+    replaceConsoleEntitySlice(PERSONAL_WISHLIST_BUCKET_KEY, { wishesById: next });
+    return next;
+  }
+
+  function removePersonalWish(wishId) {
+    const next = getPersonalWishes();
+    if (!wishId || !next[wishId]) return next;
+    delete next[wishId];
+    replaceConsoleEntitySlice(PERSONAL_WISHLIST_BUCKET_KEY, { wishesById: next });
+    return next;
+  }
+
   function composeAccessoriesFromEntity(baseAccessories = [], entityState = {}) {
     const patches = entityState.accessoryEditsById || {};
     const manuals = entityState.manualAccessoriesById || {};
@@ -465,6 +503,7 @@
     const edits = readDetailEdits();
     let migratedCount = 0;
     Object.keys(edits || {}).forEach((consoleId) => {
+      if (isAuxiliaryBucketKey(consoleId)) return;
       const changed = migrateConsoleEntityState(consoleId, {
         baseGames: gamesByConsole[consoleId] || [],
         baseAccessories: accessoriesByConsole[consoleId] || []
@@ -601,6 +640,10 @@
     persistGamePatch,
     getFranchiseTrackedItems,
     persistFranchiseTrackedItem,
+    isAuxiliaryBucketKey,
+    getPersonalWishes,
+    persistPersonalWish,
+    removePersonalWish,
     composeAccessoriesFromEntity,
     composeGamesFromEntity,
     mergeEntityState,
