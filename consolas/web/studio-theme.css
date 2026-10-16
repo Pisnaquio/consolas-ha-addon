@@ -77,10 +77,7 @@ body.studio-variant .mini-card,
 body.studio-variant .manual-game-dialog,
 body.studio-variant .manual-preview-panel,
 body.studio-variant .game-edit-panel,
-body.studio-variant .dashboard-progress-wrap,
-body.studio-variant .dashboard-console-row,
-body.studio-variant .dashboard-alert-row,
-body.studio-variant .dashboard-progress-item {
+body.studio-variant .dashboard-alert-row {
   border: 1px solid var(--line);
   background: linear-gradient(180deg, var(--surface-2), rgba(5, 19, 36, 0.78));
   color: var(--ink);
@@ -131,14 +128,10 @@ body.studio-variant .opportunity-kicker,
 body.studio-variant .count,
 body.studio-variant .save-indicator,
 body.studio-variant .price-model-title,
-body.studio-variant .dashboard-footnote,
 body.studio-variant .dashboard-head small,
 body.studio-variant .action-queue-head span,
 body.studio-variant .dashboard-kpi span,
-body.studio-variant .dashboard-console-row p,
 body.studio-variant .dashboard-alert-row span,
-body.studio-variant .dashboard-progress-item-header span,
-body.studio-variant .dashboard-progress-wrap summary,
 body.studio-variant .games-count,
 body.studio-variant .games-subtitle-count,
 body.studio-variant .gba-game-meta,
@@ -486,8 +479,6 @@ body.studio-variant .gba-price-item {
   color: var(--ink);
 }
 
-body.studio-variant .dashboard-progress-list,
-body.studio-variant .dashboard-console-list,
 body.studio-variant .dashboard-alerts {
   display: grid;
   gap: 8px;
@@ -594,14 +585,6 @@ body.studio-variant .opportunity-meta span {
 
 body.studio-variant .opportunity-copy {
   color: #c7d8ea;
-}
-
-body.studio-variant .dashboard-progress-bar {
-  background: rgba(171, 202, 234, 0.16);
-}
-
-body.studio-variant .dashboard-progress-bar span {
-  background: linear-gradient(90deg, var(--accent-2), var(--accent));
 }
 
 body.studio-variant .detail-page {

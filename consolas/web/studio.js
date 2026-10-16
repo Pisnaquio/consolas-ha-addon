@@ -241,27 +241,6 @@
     `;
   }
 
-  function renderLibraryRow(item, index) {
-    return `
-      <article class="library-row">
-        <span class="rank">${String(index + 1).padStart(2, "0")}</span>
-        <div class="library-main">
-          <div class="library-title">
-            <a href="${window.CollectionRepository.getConsoleDetailHref(item.id)}">${escapeHtml(item.nombre)}</a>
-            <span>${item.owned}/${item.total} juegos</span>
-          </div>
-          <div class="progress" aria-label="${item.progress}% registrado">
-            <span style="width:${item.progress}%"></span>
-          </div>
-        </div>
-        <div class="library-meta">
-          <strong>${item.progress}%</strong>
-          <span>${item.extras ? `${item.extras} extras` : `${item.wishlist} deseados`}</span>
-        </div>
-      </article>
-    `;
-  }
-
   function renderWantedCard(item) {
     const target = Number(item.precioObjetivoCompra) || null;
     return `
@@ -315,14 +294,6 @@
       actions.slice(0, 8).map(renderActionItem).join("") ||
       emptyState("Sin acciones urgentes", "No hay alertas operativas ni oportunidades registradas por ahora.");
     document.getElementById("actionsCount").textContent = actions.length ? `${actions.length} item(s)` : "al día";
-
-    const ranked = [...perConsole]
-      .filter((item) => item.total > 0)
-      .sort((a, b) => b.owned - a.owned || b.progress - a.progress || a.nombre.localeCompare(b.nombre));
-    document.getElementById("libraryRows").innerHTML =
-      ranked.slice(0, 8).map(renderLibraryRow).join("") ||
-      emptyState("Sin bibliotecas cargadas", "Cuando haya catálogos por consola, el avance va a aparecer en este ranking.");
-    document.getElementById("libraryCount").textContent = `${Math.min(ranked.length, 8)} de ${ranked.length}`;
 
     const wantedSorted = [...wanted].sort((a, b) => a.nombre.localeCompare(b.nombre));
     document.getElementById("wantedConsoles").innerHTML =

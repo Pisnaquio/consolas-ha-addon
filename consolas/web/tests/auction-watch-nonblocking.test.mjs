@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-for (const file of ["app.js", "console.js"]) {
+for (const file of ["console.js"]) {
   test(`${file} does not block the main collection render on Auction Watch`, async () => {
     const source = await readFile(new URL(`../${file}`, import.meta.url), "utf8");
 
@@ -14,7 +14,6 @@ for (const file of ["app.js", "console.js"]) {
 
 test("all Auction Watch consumers use the same cache-busted repository asset", async () => {
   const files = [
-    "index.html",
     "opportunities.html",
     "auction-watch-action.html",
     "console.html",

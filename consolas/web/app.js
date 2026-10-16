@@ -152,192 +152,14 @@ function isNonGameEntry(game = {}) {
   return window.CollectionRepository.isNonGameEntry(game);
 }
 
-async function loadAuctionWatchSnapshot() {
-  return window.AuctionWatchRepository?.loadSnapshot?.() || null;
-}
-
-function renderOpportunityBadges(item = {}) {
-  const repo = window.AuctionWatchRepository;
-  const badges = [
-    repo?.getSourceLabel?.(item.source) || "Auction Watch",
-    item.urgencyLabel || "seguimiento",
-    ...(item.watchlist ? ["watchlist"] : []),
-    ...(item.matchedKeywords || []).slice(0, 2)
-  ];
-
-  return badges
-    .filter(Boolean)
-    .map((badge) => `<span class="opportunity-badge">${escapeHtml(badge)}</span>`)
-    .join("");
-}
-
-function renderOpportunityCard(item = {}, { featured = false } = {}) {
-  const repo = window.AuctionWatchRepository;
-  const primaryUrl = repo?.getPrimaryUrl?.(item) || "";
-  const secondaryUrl = repo?.getSecondaryUrl?.(item) || "";
-  const primaryLabel = repo?.getPrimaryCtaLabel?.(item) || "Ver detalle";
-  const secondaryLabel = repo?.getSecondaryCtaLabel?.(item) || "";
-  const consoleId = item.consoleIds?.[0] || "";
-  const consoleUrl = consoleId ? window.CollectionRepository?.getConsoleDetailHref?.(consoleId) || "" : "";
-  const description = item.description || item.notes || "Oportunidad detectada por el monitoreo activo.";
-
-  return `
-    <article class="${featured ? "opportunity-card opportunity-card--featured" : "opportunity-card"}">
-      <div class="opportunity-card-head">
-        <div>
-          <p class="opportunity-kicker">${escapeHtml(repo?.getSourceLabel?.(item.source) || "Auction Watch")}</p>
-          <h4>${escapeHtml(item.title || "Oportunidad activa")}</h4>
-        </div>
-        <span class="opportunity-timer">${escapeHtml(item.remainingText || "-")}</span>
-      </div>
-      <div class="opportunity-badges">
-        ${renderOpportunityBadges(item)}
-      </div>
-      <p class="opportunity-copy">${escapeHtml(description)}</p>
-      <div class="opportunity-meta">
-        ${item.priceLabel ? `<span>${escapeHtml(item.priceLabel)}</span>` : ""}
-        ${item.groupLabel ? `<span>${escapeHtml(item.groupLabel)}</span>` : ""}
-      </div>
-      <div class="card-actions">
-        ${consoleUrl ? `<a class="btn-link" href="${escapeHtml(consoleUrl)}">Ver consola</a>` : ""}
-        ${primaryUrl ? `<a class="btn-link" href="${escapeHtml(primaryUrl)}" target="_blank" rel="noreferrer noopener">${escapeHtml(primaryLabel)}</a>` : ""}
-        ${secondaryUrl ? `<a class="btn-link" href="${escapeHtml(secondaryUrl)}" target="_blank" rel="noreferrer noopener">${escapeHtml(secondaryLabel)}</a>` : ""}
-      </div>
-    </article>
-  `;
-}
-
-function renderHomeOpportunitiesBlock() {
-  const repo = window.AuctionWatchRepository;
-  const snapshot = repo?.getSnapshot?.();
-  const sync = repo?.getSyncState?.() || {
-    status: repo?.getSnapshotSource?.() === "server" ? "ready" : "unavailable",
-    source: repo?.getSnapshotSource?.() || "none"
-  };
-  const featured = repo?.getFeaturedOpportunity?.();
-  const items = repo?.getHomeOpportunities?.(4) || [];
-  const activeCount = (snapshot?.matches?.length || 0) + (featured && !snapshot?.matches?.some((item) => item.id === featured.id) ? 1 : 0);
-
-  if (!repo?.hasData?.()) {
-    const verifiedEmpty = sync.status === "empty";
-    return `
-      <section class="action-queue-group">
-        <div class="action-queue-head">
-          <strong>Oportunidades activas</strong>
-          <span>${verifiedEmpty ? "0 abiertas" : "sin confirmar"}</span>
-        </div>
-        <p class="muted">${
-          verifiedEmpty
-            ? "La última corrida confirmada no dejó matches activos."
-            : "Auction Watch todavía no confirmó un snapshot vigente. Revisá Oportunidades para ver el estado de sincronización."
-        }</p>
-      </section>
-    `;
-  }
-
-  return `
-    <section class="action-queue-group">
-      <div class="action-queue-head">
-        <strong>Oportunidades activas</strong>
-        <span>${activeCount} ${sync.status === "stale" ? "en snapshot" : "abiertas"}${snapshot?.generatedAtLabel ? ` • act. ${escapeHtml(snapshot.generatedAtLabel)}` : ""}</span>
-      </div>
-      ${["stale", "degraded", "unavailable"].includes(sync.status) ? `<p class="muted">Snapshot sin vigencia completa. Revisá Oportunidades antes de decidir.</p>` : ""}
-      <div class="opportunity-stack">
-        ${featured ? renderOpportunityCard(featured, { featured: true }) : ""}
-        <div class="opportunity-list">
-          ${items.map((item) => renderOpportunityCard(item)).join("")}
-        </div>
-      </div>
-    </section>
-  `;
-}
-
-function renderOpportunitiesEntry() {
-  const repo = window.AuctionWatchRepository;
-  const snapshot = repo?.getSnapshot?.();
-  const sync = repo?.getSyncState?.() || { status: "unavailable" };
-  const href = window.CollectionRepository?.getOpportunitiesHref?.() || "./opportunities.html";
-  const featured = repo?.getFeaturedOpportunity?.();
-  const snapshotMatches = snapshot?.matches || [];
-  const matches = featured && !snapshotMatches.some((item) => item.id === featured.id) ? [featured, ...snapshotMatches] : snapshotMatches;
-  const activeCount = matches.length;
-  const watchlistCount = matches.filter((item) => item.watchlist === true).length;
-  const featuredLabel = featured?.title || "No hay lote destacado ahora mismo.";
-  const updatedLabel = snapshot?.generatedAtLabel
-    ? `${sync.status === "stale" ? "Snapshot vencido" : "Actualizado"} ${snapshot.generatedAtLabel}`
-    : "Esperando snapshot confirmado del agente";
-
-  return `
-    <div class="dashboard-progress-wrap">
-      <div class="dashboard-head">
-        <h3>Oportunidades</h3>
-        <small>${activeCount} activa(s)</small>
-      </div>
-      <p class="muted">Seguimiento de publicaciones activas de Babastro y Castells, con prioridad para los lotes que más te interesan.</p>
-      <div class="mini-grid">
-        <article class="mini-card">
-          <h4>${escapeHtml(featured ? "Lote destacado" : "Monitoreo activo")}</h4>
-          <p class="muted">${escapeHtml(featuredLabel)}</p>
-        </article>
-        <article class="mini-card">
-          <h4>${watchlistCount} seguimiento(s) prioritario(s)</h4>
-          <p class="muted">${escapeHtml(updatedLabel)}</p>
-        </article>
-      </div>
-      <div class="card-actions">
-        <a class="btn-link btn-primary" href="${escapeHtml(href)}">Oportunidades</a>
-      </div>
-    </div>
-  `;
-}
-
 function renderGlobalDashboard(items) {
   const node = document.getElementById("globalDashboard");
   if (!node) return;
 
-  const perConsole = items.map((consoleItem) => {
-    const allEntries = getGamesForConsole(consoleItem.id);
-    const games = allEntries.filter((g) => !isNonGameEntry(g));
-    const extras = allEntries.filter((g) => isNonGameEntry(g));
-    const total = games.length;
-    const owned = games.filter((g) => normalizeOwnershipType(g.ownershipType, g.loTengo) !== "none").length;
-    const available = games.length;
-    const standby = games.filter((g) => g.standby === true).length;
-    const physical = games.filter((g) => normalizeOwnershipType(g.ownershipType, g.loTengo) === "physical").length;
-    const digital = games.filter((g) => normalizeOwnershipType(g.ownershipType, g.loTengo) === "digital").length;
-    const both = games.filter((g) => normalizeOwnershipType(g.ownershipType, g.loTengo) === "both").length;
-    const progress = available > 0 ? Math.round((owned / available) * 100) : 0;
-    return {
-      id: consoleItem.id,
-      nombre: consoleItem.nombre,
-      tengo: consoleItem.tengo === true,
-      funcionando: consoleItem.funcionando === true,
-      funcionandoRaw: consoleItem.funcionando,
-      total,
-      owned,
-      available,
-      standby,
-      physical,
-      digital,
-      both,
-      extras: extras.length,
-      progress
-    };
-  });
-
-  const totals = perConsole.reduce(
-    (acc, item) => {
-      acc.total += item.total;
-      acc.owned += item.owned;
-      acc.standby += item.standby;
-      acc.physical += item.physical;
-      acc.digital += item.digital;
-      acc.both += item.both;
-      acc.extras += item.extras;
-      return acc;
-    },
-    { total: 0, owned: 0, standby: 0, physical: 0, digital: 0, both: 0, extras: 0 }
-  );
+  const registeredGames = items.reduce((acc, consoleItem) => {
+    const games = getGamesForConsole(consoleItem.id).filter((g) => !isNonGameEntry(g));
+    return acc + games.filter((g) => normalizeOwnershipType(g.ownershipType, g.loTengo) !== "none").length;
+  }, 0);
 
   const ownedConsoles = items.filter((c) => c.tengo === true).length;
   const operationalConsoles = items.filter((c) => c.tengo === true && c.funcionando === true).length;
@@ -345,43 +167,8 @@ function renderGlobalDashboard(items) {
   const unknownRunning = items.filter((c) => c.tengo === true && c.funcionando == null).length;
   const alertCount = ownedNotRunning + unknownRunning;
 
-  const ranked = [...perConsole]
-    .filter((item) => item.available > 0)
-    .sort((a, b) => b.owned - a.owned || b.progress - a.progress || a.nombre.localeCompare(b.nombre));
-
-  const topOwned = ranked
-    .filter((item) => item.owned > 0)
-    .slice(0, 8)
-    .map(
-      (item) => `
-        <article class="dashboard-progress-item">
-          <div class="dashboard-progress-item-header">
-            <strong>${item.nombre}</strong>
-            <span>${item.owned} registrados</span>
-          </div>
-          <div class="dashboard-progress-bar"><span style="width:${item.progress}%"></span></div>
-        </article>
-      `
-    )
-    .join("");
-
-  const byConsoleInventory = ranked
-    .slice(0, 8)
-    .map(
-      (item) => `
-        <article class="dashboard-console-row">
-          <div class="dashboard-console-row-head">
-            <a href="${window.CollectionRepository.getConsoleDetailHref(item.id)}">${item.nombre}</a>
-            <span>${item.owned}/${item.total} juegos</span>
-          </div>
-          <p>${item.physical} físico • ${item.digital} digital • ${item.both} ambos${item.extras ? ` • ${item.extras} extras` : ""}</p>
-        </article>
-      `
-    )
-    .join("");
-
-  const operationalAlerts = perConsole
-    .filter((item) => item.tengo && item.funcionandoRaw === false)
+  const operationalAlerts = items
+    .filter((item) => item.tengo === true && item.funcionando === false)
     .map(
       (item) => `
         <article class="dashboard-alert-row">
@@ -393,8 +180,8 @@ function renderGlobalDashboard(items) {
     )
     .join("");
 
-  const unknownAlerts = perConsole
-    .filter((item) => item.tengo && item.funcionandoRaw == null)
+  const unknownAlerts = items
+    .filter((item) => item.tengo === true && item.funcionando == null)
     .map(
       (item) => `
         <article class="dashboard-alert-row">
@@ -415,7 +202,7 @@ function renderGlobalDashboard(items) {
       <article class="dashboard-kpi"><small>Consolas que tengo</small><strong>${ownedConsoles}</strong><span>inventario actual</span></article>
       <article class="dashboard-kpi"><small>Listas para jugar</small><strong>${operationalConsoles}</strong><span>tengo + funcionando</span></article>
       <article class="dashboard-kpi"><small>Alertas</small><strong>${alertCount}</strong><span>requieren revisión</span></article>
-      <article class="dashboard-kpi"><small>Juegos registrados</small><strong>${totals.owned}</strong><span>solo juegos reales</span></article>
+      <article class="dashboard-kpi"><small>Juegos registrados</small><strong>${registeredGames}</strong><span>solo juegos reales</span></article>
     </div>
   `;
 
@@ -424,37 +211,14 @@ function renderGlobalDashboard(items) {
 
   insightsNode.innerHTML = `
     <div class="dashboard-head">
-      <h2>Biblioteca y seguimiento</h2>
-      <small>después de la colección activa</small>
+      <h2>Alertas operativas</h2>
+      <small>${alertCount} alerta(s) operativa(s)</small>
     </div>
-    <div class="dashboard-progress-wrap">
-      <div class="dashboard-head">
-        <h3>Alertas operativas</h3>
-        <small>${alertCount} alerta(s) operativa(s)</small>
-      </div>
-      <div class="dashboard-alerts">
-        ${operationalAlerts || ""}
-        ${unknownAlerts || ""}
-        ${!operationalAlerts && !unknownAlerts ? '<p class="muted">No hay alertas operativas por ahora.</p>' : ""}
-      </div>
+    <div class="dashboard-alerts">
+      ${operationalAlerts || ""}
+      ${unknownAlerts || ""}
+      ${!operationalAlerts && !unknownAlerts ? '<p class="muted">No hay alertas operativas por ahora.</p>' : ""}
     </div>
-    ${renderOpportunitiesEntry()}
-    <div class="dashboard-progress-wrap">
-      <div class="dashboard-head">
-        <h3>Biblioteca por consola</h3>
-        <small>top 8</small>
-      </div>
-      <div class="dashboard-console-list">
-        ${byConsoleInventory || '<p class="muted">Sin consolas con catálogo cargado.</p>'}
-      </div>
-      <p class="dashboard-footnote">Extras no-juego detectados (demos/apps/soundtracks): ${totals.extras}</p>
-    </div>
-    <details class="dashboard-progress-wrap">
-      <summary>Top consolas por juegos registrados</summary>
-      <div class="dashboard-progress-list">
-        ${topOwned || '<p class="muted">Todavía no hay juegos registrados en consolas con catálogo.</p>'}
-      </div>
-    </details>
   `;
 }
 
@@ -772,11 +536,7 @@ async function init() {
     const payload = await consolesResponse.json();
     const gamesPayload = await gamesResponse.json();
     const accessoriesPayload = await accessoriesResponse.json();
-    const auctionWatchRefresh = loadAuctionWatchSnapshot().catch((error) => {
-      console.info("[AuctionWatch] home refresh unavailable", error);
-      return null;
-    });
-    state.gamesByConsole = Object.fromEntries(
+      state.gamesByConsole = Object.fromEntries(
       Object.entries(gamesPayload.byConsole || {}).map(([consoleId, entry]) => [consoleId, Array.isArray(entry?.juegosCatalogo) ? entry.juegosCatalogo : []])
     );
     const accessoriesByConsole = Object.fromEntries(
@@ -798,9 +558,6 @@ async function init() {
     updateNoHaveSubFilterVisibility();
     bindControls();
     applyFilters();
-    auctionWatchRefresh.then(() => {
-      renderGlobalDashboard(state.allConsoles);
-    });
   } catch (error) {
     document.body.innerHTML = `<main class="container"><p>Error al cargar la colección: ${error.message}</p></main>`;
   }

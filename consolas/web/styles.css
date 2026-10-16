@@ -146,43 +146,6 @@ h1 {
   font-size: 0.78rem;
 }
 
-.dashboard-progress-wrap {
-  border: 1px solid #d8cfbe;
-  border-radius: 12px;
-  padding: 10px;
-  background: #fffcf6;
-}
-
-.dashboard-progress-wrap summary {
-  cursor: pointer;
-  font-family: "IBM Plex Mono", monospace;
-  color: #4e5d69;
-  font-size: 0.8rem;
-}
-
-.dashboard-progress-wrap[open] summary {
-  margin-bottom: 8px;
-}
-
-.dashboard-progress-list {
-  display: grid;
-  gap: 8px;
-}
-
-.dashboard-console-list {
-  display: grid;
-  gap: 8px;
-}
-
-.dashboard-console-row {
-  border: 1px solid #c2d3e8;
-  border-radius: 10px;
-  background: linear-gradient(180deg, #ffffff, #f5faff);
-  padding: 8px 10px;
-  display: grid;
-  gap: 4px;
-}
-
 .dashboard-console-row-head {
   display: flex;
   justify-content: space-between;
@@ -206,20 +169,6 @@ h1 {
   font-size: 0.75rem;
 }
 
-.dashboard-console-row p {
-  margin: 0;
-  color: #4c5f70;
-  font-size: 0.8rem;
-  font-family: "IBM Plex Mono", monospace;
-}
-
-.dashboard-footnote {
-  margin: 8px 0 0;
-  color: #5a6e7e;
-  font-size: 0.76rem;
-  font-family: "IBM Plex Mono", monospace;
-}
-
 .dashboard-alerts {
   display: grid;
   gap: 8px;
@@ -228,11 +177,6 @@ h1 {
 .action-queue {
   display: grid;
   gap: 14px;
-}
-
-.action-queue-group {
-  display: grid;
-  gap: 10px;
 }
 
 .action-queue-head {
@@ -282,34 +226,6 @@ h1 {
 
 .dashboard-alert-row a:hover {
   text-decoration: underline;
-}
-
-.dashboard-progress-item {
-  display: grid;
-  gap: 6px;
-}
-
-.dashboard-progress-item-header {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.85rem;
-}
-
-.dashboard-progress-item-header strong {
-  font-size: 0.9rem;
-}
-
-.dashboard-progress-bar {
-  height: 8px;
-  border-radius: 999px;
-  background: #e9e2d2;
-  overflow: hidden;
-}
-
-.dashboard-progress-bar span {
-  display: block;
-  height: 100%;
-  background: linear-gradient(90deg, #1b8aa6, #5ba8bf);
 }
 
 .stat {
@@ -657,11 +573,6 @@ h2 {
 }
 
 .opportunity-cluster {
-  display: grid;
-  gap: 10px;
-}
-
-.opportunity-stack {
   display: grid;
   gap: 10px;
 }
