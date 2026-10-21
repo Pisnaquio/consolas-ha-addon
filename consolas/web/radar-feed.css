@@ -30,7 +30,17 @@
 .shipment-widget span { font-size:.74rem; color:var(--muted); }
 .shipment-widget.is-over { border-color:#ffd68c; }
 .shipment-widget.is-over strong { color:#ffd68c; }
-.shipment-widget button { margin-left:auto; }
+/* Los botones van juntos a la derecha: el primero empuja, el otro lo sigue. */
+.shipment-widget [data-manual-purchase] { margin-left:auto; }
+.shipment-widget.is-empty { padding:8px 16px; }
+.shipment-widget.shipment-form { align-items:end; }
+.shipment-widget.shipment-form label { display:block; font-size:.78rem; color:var(--muted); margin-bottom:4px; }
+.shipment-widget.shipment-form input { min-width:0; }
+.shipment-widget.shipment-form [type=submit] { margin-left:auto; }
+@media (max-width:720px) {
+  .shipment-widget.shipment-form { flex-direction:column; align-items:stretch; }
+  .shipment-widget.shipment-form [type=submit] { margin-left:0; }
+}
 
 /* El objetivo lo fijaste vos: cuando se cruza manda sobre cualquier otra
    señal de la card, y cuando falta se dice cuánto sin dramatizar. */

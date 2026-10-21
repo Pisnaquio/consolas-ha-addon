@@ -74,6 +74,16 @@ test("a console purchase marks it owned with the price paid, through DataStore",
   );
 });
 
+test("the purchase keeps the catalog name, so it still says what it was after the listing expires", async () => {
+  const { RadarPurchase, recordPurchaseCalls } = load();
+
+  await RadarPurchase.registerPurchase({
+    listingId: "ebay-us-1", entityType: "console", entityId: "ps2", entityName: "PlayStation 2", priceAmount: 55,
+  });
+
+  assert.equal(recordPurchaseCalls[0].title, "PlayStation 2");
+});
+
 test("the server always hears about the purchase first, evidence before collection", async () => {
   const { RadarPurchase, recordPurchaseCalls } = load();
 

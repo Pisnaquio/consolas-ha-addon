@@ -449,9 +449,46 @@ test("with no target set the card says nothing about targets", async () => {
 });
 
 
-test("an empty mailbox says nothing: there is no package being assembled", async () => {
+test("an empty mailbox shows no amounts, only the way to load a purchase by hand", async () => {
   const { html } = await renderFeed({ items: [item()] });
   assert.doesNotMatch(html, /en la casilla/);
+  assert.doesNotMatch(html, /data-close-shipment/);
+  assert.match(html, /Casilla vacía/);
+  assert.match(html, /data-manual-purchase="1"/);
+});
+
+test("a mailbox with purchases still offers to load one bought outside the radar", async () => {
+  const { html } = await renderFeed({
+    items: [item()],
+    shipment: { currency: "USD", limit: 200, merchandise: 155, headroom: 45, overLimit: false, count: 1, items: [] },
+  });
+  assert.match(html, /Cargar compra a mano/);
+});
+
+test("a manual purchase goes to the purchases endpoint with a name and no listing", async () => {
+  const { repository, requests } = await renderFeed({ items: [item()] });
+  requests.length = 0;
+
+  await repository.recordPurchase({ title: "Super Nintendo SNS-001", priceAmount: 155, currency: "USD" });
+
+  assert.equal(requests[0].options.method, "POST");
+  assert.equal(requests[0].options.headers["X-Consolas-Radar"], "1");
+  assert.match(requests[0].url, /\/radar\/purchases$/);
+  const body = JSON.parse(requests[0].options.body);
+  assert.equal(body.title, "Super Nintendo SNS-001");
+  assert.equal(body.listingId, undefined);
+});
+
+test("a purchase loaded by hand says so in the history", async () => {
+  const { html } = await renderFeed({
+    items: [item()],
+    purchases: {
+      items: [{ id: "purchase-1", listingId: "", manual: true, title: "Tiny Toon Adventures", priceAmount: 15.5,
+        currency: "USD", purchasedAt: "2026-10-20T03:00:00Z", shippedAt: null }],
+    },
+  });
+  assert.match(html, /Tiny Toon Adventures/);
+  assert.match(html, /cargada a mano/);
 });
 
 test("what is waiting in the mailbox is shown against the franchise", async () => {

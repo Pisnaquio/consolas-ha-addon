@@ -111,6 +111,9 @@
       entityType,
       entityId,
       entityConsoleId,
+      // El nombre del catálogo, no el título de eBay: la publicación vence a
+      // las 24 h de venderse y la compra tiene que seguir diciendo qué fue.
+      title: entityName || "",
       priceAmount,
       currency,
       purchasedAt

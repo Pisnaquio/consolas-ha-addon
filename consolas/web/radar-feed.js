@@ -29,6 +29,7 @@
   let dismissing = "";
   let purchasing = "";
   let editingBudget = false;
+  let addingManualPurchase = false;
   let feedback = "";
   let feedbackTone = "info";
   let busy = false;
@@ -100,15 +101,51 @@
    * libera espacio en la caja.
    */
   function shipmentWidget() {
-    if (!shipment || !shipment.count) return "";
+    if (!shipment) return "";
+    if (addingManualPurchase) return manualPurchaseForm();
+    const cargarAMano = `<button class="btn-link" type="button" data-manual-purchase="1"${
+      busy ? " disabled" : ""
+    }>Cargar compra a mano</button>`;
+    if (!shipment.count) {
+      return `<div class="shipment-widget is-empty">
+        <span class="muted">Casilla vacía.</span>
+        ${cargarAMano}
+      </div>`;
+    }
     const sobre = shipment.overLimit;
     return `<div class="shipment-widget${sobre ? " is-over" : ""}">
       <div><strong>${escapeHtml(money(shipment.merchandise, "USD"))}</strong><span>en la casilla (${shipment.count})</span></div>
       <div><strong>${escapeHtml(money(shipment.headroom, "USD"))}</strong><span>${
         sobre ? "pasado de la franquicia" : `hasta los ${escapeHtml(money(shipment.limit, "USD"))}`
       }</span></div>
+      ${cargarAMano}
       <button class="btn-link" type="button" data-close-shipment="1"${busy ? " disabled" : ""}>Ya lo reenvié</button>
     </div>`;
+  }
+
+  /**
+   * Lo comprado fuera del radar —un pedido de eBay que el feed nunca mostró—
+   * pesa igual contra la franquicia. Se pide sólo lo que la casilla usa: qué
+   * es y cuánto vale la mercadería, sin el envío ni el courier.
+   */
+  function manualPurchaseForm() {
+    return `<form class="shipment-widget shipment-form" data-manual-purchase-form="1">
+      <div>
+        <label for="manualPurchaseTitle">Qué compraste</label>
+        <input id="manualPurchaseTitle" name="title" type="text" maxlength="200" required
+          placeholder="Ej: Super Nintendo con 2 controles" />
+      </div>
+      <div>
+        <label for="manualPurchasePrice">Mercadería (USD)</label>
+        <input id="manualPurchasePrice" name="priceAmount" type="number" min="0" step="0.01" required />
+      </div>
+      <div>
+        <label for="manualPurchaseDate">Fecha de compra</label>
+        <input id="manualPurchaseDate" name="purchasedAt" type="date" />
+      </div>
+      <button class="btn-link btn-primary" type="submit">Cargar</button>
+      <button class="btn-link" type="button" data-cancel-manual-purchase="1">Cancelar</button>
+    </form>`;
   }
 
   /**
@@ -135,7 +172,7 @@
                 <strong>${escapeHtml(compra.title || compra.entityId)}</strong>
                 <span>${escapeHtml(money(compra.priceAmount, compra.currency))} · ${escapeHtml(
                   purchaseDate(compra.purchasedAt)
-                )}${compra.shippedAt ? " · ya reenviada" : ""}</span>
+                )}${compra.manual ? " · cargada a mano" : ""}${compra.shippedAt ? " · ya reenviada" : ""}</span>
               </div>
               <button class="btn-link" type="button" data-undo-purchase="${escapeHtml(compra.id)}"
                       data-listing="${escapeHtml(compra.listingId || "")}"${busy ? " disabled" : ""}>Deshacer</button>
@@ -543,6 +580,43 @@
         render();
       })
     );
+
+    each("[data-manual-purchase]", (button) =>
+      button.addEventListener("click", () => {
+        addingManualPurchase = true;
+        render();
+      })
+    );
+
+    each("[data-cancel-manual-purchase]", (button) =>
+      button.addEventListener("click", () => {
+        addingManualPurchase = false;
+        render();
+      })
+    );
+
+    const manualPurchaseFormEl = root.querySelector?.("[data-manual-purchase-form]");
+    manualPurchaseFormEl?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const data = new FormData(event.currentTarget);
+      const day = String(data.get("purchasedAt") || "").trim();
+      const saved = await perform(
+        "Cargando la compra…",
+        () =>
+          repository.recordPurchase({
+            title: String(data.get("title") || "").trim(),
+            priceAmount: Number(data.get("priceAmount")),
+            currency: "USD",
+            // Medianoche de Montevideo: la compra de hoy nunca queda en el futuro.
+            ...(day ? { purchasedAt: `${day}T00:00:00-03:00` } : {}),
+          }),
+        "Compra cargada en la casilla."
+      );
+      if (saved) {
+        addingManualPurchase = false;
+        render();
+      }
+    });
 
     const budgetForm = root.querySelector?.("[data-budget-form]");
     budgetForm?.addEventListener("submit", async (event) => {

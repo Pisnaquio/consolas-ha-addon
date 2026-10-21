@@ -506,3 +506,183 @@ class PartialPreferenceUpdateTests(RadarBudgetTestCase):
         update_radar_preferences(self.config, {"monthlyBudgetUsd": 150})
         update_radar_preferences(self.config, {"monthlyBudgetUsd": None})
         self.assertIsNone(get_radar_preferences(self.config)["monthlyBudgetUsd"])
+
+
+class ManualPurchaseTests(RadarBudgetTestCase):
+    """Lo comprado fuera del radar también ocupa la casilla.
+
+    Un pedido de eBay que el radar nunca vio pesa igual contra la franquicia:
+    si la casilla sólo conoce lo que pasó por el feed, la cuenta que importa
+    queda mal justo cuando hay que decidir si reenviar.
+    """
+
+    def test_a_manual_purchase_needs_no_listing_and_fills_the_mailbox(self) -> None:
+        from server.app import compute_radar_shipment
+
+        out = record_radar_purchase(
+            self.config, {"title": "Super Nintendo SNS-001 con 3 juegos", "priceAmount": 155.0}
+        )
+        self.assertTrue(out["purchase"]["manual"])
+        self.assertEqual(out["purchase"]["listingId"], "")
+        self.assertIsNone(out["decision"])
+
+        envio = compute_radar_shipment(self.config)
+        self.assertEqual(envio["merchandise"], 155.0)
+        self.assertEqual(envio["items"][0]["title"], "Super Nintendo SNS-001 con 3 juegos")
+        self.assertTrue(envio["items"][0]["manual"])
+
+    def test_a_manual_purchase_counts_as_spent_this_month(self) -> None:
+        record_radar_purchase(self.config, {"title": "Tiny Toon Adventures (SNES)", "priceAmount": 15.5})
+        self.assertEqual(compute_radar_budget(self.config)["spent"], 15.5)
+
+    def test_a_manual_purchase_without_a_name_is_rejected(self) -> None:
+        # Sin publicación no hay otra forma de saber qué es.
+        with self.assertRaises(ApiError) as raised:
+            record_radar_purchase(self.config, {"priceAmount": 20.0})
+        self.assertEqual(raised.exception.status, 400)
+
+    def test_a_manual_purchase_can_still_name_its_entity(self) -> None:
+        from server.app import list_radar_purchases
+
+        record_radar_purchase(
+            self.config,
+            {"title": "Super Nintendo", "entityType": "console", "entityId": "snes", "priceAmount": 155.0},
+        )
+        [compra] = list_radar_purchases(self.config)["items"]
+        self.assertTrue(compra["manual"], "llevar entidad no la vuelve una compra del radar")
+        self.assertEqual(compra["entityId"], "snes")
+
+    def test_a_manual_purchase_can_be_undone(self) -> None:
+        from server.app import compute_radar_shipment, delete_radar_purchase
+
+        out = record_radar_purchase(self.config, {"title": "A Bug's Life (PS1)", "priceAmount": 12.99})
+        delete_radar_purchase(self.config, out["purchase"]["id"])
+        self.assertEqual(compute_radar_shipment(self.config)["count"], 0)
+
+    def test_a_listing_that_does_not_exist_is_still_refused(self) -> None:
+        # Mandar una publicación sigue queriendo decir "esta, del radar".
+        with self.assertRaises(ApiError) as raised:
+            record_radar_purchase(
+                self.config,
+                {"listingId": "ebay-us-noexiste", "entityType": "console", "entityId": "ps2", "priceAmount": 10.0},
+            )
+        self.assertEqual(raised.exception.status, 404)
+
+
+class PurchaseOutlivesListingTests(RadarBudgetTestCase):
+    """Una compra no puede depender de que su publicación siga guardada.
+
+    eBay da 24 h de licencia sobre el contenido de una publicación que dejó de
+    aparecer, y una publicación comprada deja de aparecer porque se vendió. Con
+    la cascada vieja, al día siguiente la compra desaparecía del gasto del mes
+    y de la casilla.
+    """
+
+    def expire_all_listings(self) -> None:
+        from server.app import purge_expired_radar_content
+
+        with connect_db(self.config) as conn:
+            conn.execute("UPDATE radar_listings SET content_expires_at = '2000-01-01T00:00:00Z'")
+        purge_expired_radar_content(self.config)
+
+    def test_a_purchase_survives_the_purge_of_its_listing(self) -> None:
+        from server.app import compute_radar_shipment, list_radar_purchases
+
+        [listing_id] = self.seed([ebay_summary("v1|1|0")])
+        record_radar_purchase(
+            self.config,
+            {
+                "listingId": listing_id,
+                "entityType": "console",
+                "entityId": "ps2",
+                "title": "PlayStation 2",
+                "priceAmount": 90.0,
+            },
+        )
+        self.expire_all_listings()
+
+        self.assertEqual(compute_radar_budget(self.config)["spent"], 90.0)
+        self.assertEqual(compute_radar_shipment(self.config)["merchandise"], 90.0)
+        [compra] = list_radar_purchases(self.config)["items"]
+        self.assertEqual(compra["title"], "PlayStation 2")
+        self.assertEqual(compra["listingId"], "")
+        self.assertFalse(compra["manual"], "sigue siendo una compra del radar")
+
+    def test_without_its_own_name_it_falls_back_to_the_entity(self) -> None:
+        from server.app import list_radar_purchases
+
+        [listing_id] = self.seed([ebay_summary("v1|1|0")])
+        record_radar_purchase(
+            self.config,
+            {"listingId": listing_id, "entityType": "console", "entityId": "ps2", "priceAmount": 90.0},
+        )
+        self.assertIn("PlayStation 2", list_radar_purchases(self.config)["items"][0]["title"])
+        self.expire_all_listings()
+        self.assertEqual(list_radar_purchases(self.config)["items"][0]["title"], "ps2")
+
+
+class PurchasesMigrationTests(unittest.TestCase):
+    """Una base con la tabla vieja se reconstruye sin perder ninguna compra."""
+
+    def setUp(self) -> None:
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp_dir.cleanup)
+        self.config = TestConfig(Path(self.temp_dir.name))
+        self.config.static_dir.mkdir(parents=True)
+        init_db(self.config)
+
+    def downgrade_to_the_old_table(self) -> None:
+        with connect_db(self.config) as conn:
+            conn.executescript(
+                """
+                DROP TABLE radar_purchases;
+                CREATE TABLE radar_purchases (
+                  id TEXT PRIMARY KEY,
+                  listing_id TEXT NOT NULL,
+                  entity_type TEXT NOT NULL,
+                  entity_id TEXT NOT NULL,
+                  price_amount REAL NOT NULL,
+                  currency TEXT NOT NULL DEFAULT 'USD',
+                  purchased_at TEXT NOT NULL,
+                  created_at TEXT NOT NULL,
+                  entity_console_id TEXT NOT NULL DEFAULT '',
+                  shipped_at TEXT,
+                  FOREIGN KEY(listing_id) REFERENCES radar_listings(id) ON DELETE CASCADE
+                );
+                DELETE FROM radar_migrations WHERE id = 'radar_purchases_off_listing_v1';
+                """
+            )
+
+    def test_the_old_table_is_rebuilt_keeping_its_rows(self) -> None:
+        from server.app import compute_radar_shipment
+
+        self.downgrade_to_the_old_table()
+        with connect_db(self.config) as conn:
+            conn.execute("PRAGMA foreign_keys = OFF")
+            conn.execute(
+                """INSERT INTO radar_purchases (id, listing_id, entity_type, entity_id, price_amount,
+                     currency, purchased_at, created_at, entity_console_id, shipped_at)
+                   VALUES ('purchase-vieja', 'ebay-us-ya-no-esta', 'game', 'gow', 30.0, 'USD',
+                     '2026-10-01T00:00:00Z', '2026-10-01T00:00:00Z', 'ps3', NULL)"""
+            )
+
+        init_db(self.config)
+
+        with connect_db(self.config) as conn:
+            columns = {str(row["name"]): row for row in conn.execute("PRAGMA table_info(radar_purchases)")}
+            self.assertEqual(columns["listing_id"]["notnull"], 0)
+            self.assertIn("title", columns)
+            self.assertIn("manual", columns)
+            actions = {str(row["on_delete"]) for row in conn.execute("PRAGMA foreign_key_list(radar_purchases)")}
+            self.assertEqual(actions, {"SET NULL"})
+            row = conn.execute("SELECT * FROM radar_purchases WHERE id = 'purchase-vieja'").fetchone()
+        self.assertEqual(row["entity_console_id"], "ps3")
+        self.assertEqual(row["manual"], 0)
+        self.assertEqual(compute_radar_shipment(self.config)["merchandise"], 30.0)
+
+    def test_a_fresh_database_needs_no_rebuild(self) -> None:
+        with connect_db(self.config) as conn:
+            applied = conn.execute(
+                "SELECT 1 FROM radar_migrations WHERE id = 'radar_purchases_off_listing_v1'"
+            ).fetchone()
+        self.assertIsNotNone(applied)

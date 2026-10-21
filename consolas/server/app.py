@@ -73,7 +73,7 @@ from radar.sources import registry as radar_registry  # noqa: E402
 
 
 SERVICE_NAME = "consolas-server"
-SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.82")
+SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.83")
 DEFAULT_DATA_DIR = "/data"
 DEFAULT_STATIC_DIR = "/app/web"
 DATABASE_NAME = "consolas.sqlite"
@@ -133,6 +133,7 @@ RADAR_MIGRATION_LISTINGS = "radar_listings_v1"
 RADAR_MIGRATION_SEED = "seed_iss_deluxe_v1"
 RADAR_MIGRATION_PSP_LIBRARY = "seed_psp_library_v1"
 RADAR_MIGRATION_SELLER_IDENTITY = "drop_seller_identity_v1"
+RADAR_MIGRATION_PURCHASES_OFF_LISTING = "radar_purchases_off_listing_v1"
 
 # Scheduler durable. Los horarios están cerrados en el PRD §16: tres corridas
 # diarias en la zona del usuario. Un slot genera como máximo un scan.
@@ -615,16 +616,22 @@ def init_db(config: AppConfig) -> None:
             -- (gastado del mes) y el historial. El estado de usuario real
             -- (tengo/ownershipType/precioPagado) lo escribe el frontend por
             -- CollectionRepository, nunca esta tabla.
+            --
+            -- La publicación es opcional y su borrado no arrastra la compra:
+            -- una compra hecha fuera del radar no tiene publicación, y la que
+            -- sí la tiene la pierde a las 24 h de venderse (TTL de licencia).
             CREATE TABLE IF NOT EXISTS radar_purchases (
               id TEXT PRIMARY KEY,
-              listing_id TEXT NOT NULL,
-              entity_type TEXT NOT NULL,
-              entity_id TEXT NOT NULL,
+              listing_id TEXT,
+              entity_type TEXT NOT NULL DEFAULT '',
+              entity_id TEXT NOT NULL DEFAULT '',
+              title TEXT NOT NULL DEFAULT '',
+              manual INTEGER NOT NULL DEFAULT 0,
               price_amount REAL NOT NULL,
               currency TEXT NOT NULL DEFAULT 'USD',
               purchased_at TEXT NOT NULL,
               created_at TEXT NOT NULL,
-              FOREIGN KEY(listing_id) REFERENCES radar_listings(id) ON DELETE CASCADE
+              FOREIGN KEY(listing_id) REFERENCES radar_listings(id) ON DELETE SET NULL
             );
 
             CREATE INDEX IF NOT EXISTS radar_purchases_purchased_at_idx
@@ -744,6 +751,7 @@ def init_db(config: AppConfig) -> None:
         # pila que hay que mantener bajo la franquicia.
         if "shipped_at" not in purchase_columns:
             conn.execute("ALTER TABLE radar_purchases ADD COLUMN shipped_at TEXT")
+        migrate_radar_purchases_off_listing_lifetime(conn)
         listing_columns = {
             str(row["name"]) for row in conn.execute("PRAGMA table_info(radar_listings)").fetchall()
         }
@@ -2350,6 +2358,66 @@ def mark_radar_migration(conn: sqlite3.Connection, migration_id: str) -> None:
         "INSERT OR IGNORE INTO radar_migrations (id, applied_at) VALUES (?, ?)",
         (migration_id, utc_now()),
     )
+
+
+def migrate_radar_purchases_off_listing_lifetime(conn: sqlite3.Connection) -> None:
+    """Desata la compra de la vida de su publicación.
+
+    La tabla original exigía publicación y la borraba en cascada con ella. Pero
+    una publicación de eBay vence a las 24 h de dejar de aparecer, y una
+    publicación comprada deja de aparecer justamente porque se vendió: el
+    purgado de contenido se llevaba la compra, y con ella el gasto del mes y lo
+    que esperaba en la casilla. Tampoco había lugar para una compra hecha fuera
+    del radar.
+
+    SQLite no deja cambiar ni el NOT NULL ni la acción de la clave foránea, así
+    que la tabla se reconstruye copiando cada fila tal como está.
+    """
+
+    if radar_migration_applied(conn, RADAR_MIGRATION_PURCHASES_OFF_LISTING):
+        return
+    columns = {str(row["name"]): row for row in conn.execute("PRAGMA table_info(radar_purchases)").fetchall()}
+    listing_required = bool(columns.get("listing_id") and columns["listing_id"]["notnull"])
+    cascades = any(
+        str(row["table"]) == "radar_listings" and str(row["on_delete"]).upper() == "CASCADE"
+        for row in conn.execute("PRAGMA foreign_key_list(radar_purchases)").fetchall()
+    )
+    if listing_required or cascades or "title" not in columns or "manual" not in columns:
+        conn.executescript(
+            """
+            CREATE TABLE radar_purchases_rebuilt (
+              id TEXT PRIMARY KEY,
+              listing_id TEXT,
+              entity_type TEXT NOT NULL DEFAULT '',
+              entity_id TEXT NOT NULL DEFAULT '',
+              title TEXT NOT NULL DEFAULT '',
+              manual INTEGER NOT NULL DEFAULT 0,
+              price_amount REAL NOT NULL,
+              currency TEXT NOT NULL DEFAULT 'USD',
+              purchased_at TEXT NOT NULL,
+              created_at TEXT NOT NULL,
+              entity_console_id TEXT NOT NULL DEFAULT '',
+              shipped_at TEXT,
+              FOREIGN KEY(listing_id) REFERENCES radar_listings(id) ON DELETE SET NULL
+            );
+            INSERT INTO radar_purchases_rebuilt (
+              id, listing_id, entity_type, entity_id, price_amount, currency,
+              purchased_at, created_at, entity_console_id, shipped_at
+            )
+            SELECT id,
+                   -- Una fila que ya apunta a una publicación inexistente no
+                   -- puede frenar la migración: la compra se conserva igual.
+                   CASE WHEN listing_id IN (SELECT id FROM radar_listings) THEN listing_id END,
+                   entity_type, entity_id, price_amount, currency,
+                   purchased_at, created_at, entity_console_id, shipped_at
+              FROM radar_purchases;
+            DROP TABLE radar_purchases;
+            ALTER TABLE radar_purchases_rebuilt RENAME TO radar_purchases;
+            CREATE INDEX IF NOT EXISTS radar_purchases_purchased_at_idx
+              ON radar_purchases (purchased_at);
+            """
+        )
+    mark_radar_migration(conn, RADAR_MIGRATION_PURCHASES_OFF_LISTING)
 
 
 def migrate_chasing_games_to_radar(conn: sqlite3.Connection) -> None:
@@ -6002,7 +6070,8 @@ def compute_radar_shipment(config: AppConfig) -> dict[str, Any]:
         "items": [
             {
                 "id": row["id"],
-                "title": row["listing_title"] or row["entity_id"],
+                "title": radar_purchase_title(row),
+                "manual": radar_purchase_is_manual(row),
                 "priceAmount": row["price_amount"],
                 "purchasedAt": row["purchased_at"],
             }
@@ -6060,7 +6129,7 @@ def delete_radar_purchase(config: AppConfig, purchase_id: Any) -> dict[str, Any]
         "ok": True,
         "deleted": {
             "id": target_id,
-            "listingId": row["listing_id"],
+            "listingId": row["listing_id"] or "",
             "entityType": row["entity_type"],
             "entityId": row["entity_id"],
             "priceAmount": row["price_amount"],
@@ -6068,6 +6137,25 @@ def delete_radar_purchase(config: AppConfig, purchase_id: Any) -> dict[str, Any]
         "budget": compute_radar_budget(config),
         "shipment": compute_radar_shipment(config),
     }
+
+
+def radar_purchase_title(row: sqlite3.Row) -> str:
+    """Qué se compró, aunque la publicación ya no exista.
+
+    El nombre guardado con la compra manda. La publicación sólo vive 24 h
+    después de venderse, así que su título es apenas un respaldo para compras
+    registradas antes de que existiera ese nombre.
+    """
+    keys = row.keys()
+    own = str(row["title"] or "") if "title" in keys else ""
+    listing = str(row["listing_title"] or "") if "listing_title" in keys else ""
+    return own or listing or str(row["entity_id"] or "")
+
+
+def radar_purchase_is_manual(row: sqlite3.Row) -> bool:
+    # No alcanza con mirar listing_id: una compra del radar también lo pierde
+    # cuando su publicación se purga.
+    return bool(row["manual"]) if "manual" in row.keys() else False
 
 
 def list_radar_purchases(config: AppConfig) -> dict[str, Any]:
@@ -6084,8 +6172,9 @@ def list_radar_purchases(config: AppConfig) -> dict[str, Any]:
         "items": [
             {
                 "id": row["id"],
-                "listingId": row["listing_id"],
-                "title": row["listing_title"] or row["entity_id"],
+                "listingId": row["listing_id"] or "",
+                "title": radar_purchase_title(row),
+                "manual": radar_purchase_is_manual(row),
                 "entityType": row["entity_type"],
                 "entityId": row["entity_id"],
                 "entityConsoleId": row["entity_console_id"] if "entity_console_id" in row.keys() else "",
@@ -6194,13 +6283,19 @@ def compute_radar_lot_valuation(payload: Any) -> dict[str, Any]:
 def record_radar_purchase(config: AppConfig, payload: Any) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise ApiError(HTTPStatus.BAD_REQUEST, "JSON body must be an object")
-    listing_id = normalize_radar_id(payload.get("listingId"))
+    # Sin publicación es una compra cargada a mano: algo comprado fuera del
+    # radar que igual ocupa la casilla y cuenta como gasto. No hay de dónde
+    # sacar qué es, así que el nombre pasa a ser obligatorio, y la entidad, que
+    # sólo sirve para escribir la colección desde el feed, es opcional.
+    manual = not str(payload.get("listingId") or "").strip()
+    listing_id = None if manual else normalize_radar_id(payload.get("listingId"))
+    title = normalize_radar_text(payload.get("title"), "title", 200, required=manual)
     entity_type = normalize_radar_enum(payload.get("entityType"), RADAR_PURCHASE_ENTITY_TYPES, "", "entityType")
-    if not entity_type:
+    if not entity_type and not manual:
         raise ApiError(
             HTTPStatus.BAD_REQUEST, f"entityType must be one of: {', '.join(RADAR_PURCHASE_ENTITY_TYPES)}"
         )
-    entity_id = normalize_radar_text(payload.get("entityId"), "entityId", 120, required=True)
+    entity_id = normalize_radar_text(payload.get("entityId"), "entityId", 120, required=bool(entity_type))
     entity_console_id = normalize_radar_entity_console_id(payload.get("entityConsoleId"), entity_type)
     # Un juego o un accesorio siempre pertenecen a una consola. Registrar la
     # compra sin saber a cuál dejaría una evidencia que nadie puede aplicar
@@ -6228,40 +6323,34 @@ def record_radar_purchase(config: AppConfig, payload: Any) -> dict[str, Any]:
     else:
         purchased_at = now
 
+    decision_row = None
     with _RADAR_LOCK, connect_db(config) as conn:
-        listing = conn.execute("SELECT * FROM radar_listings WHERE id = ?", (listing_id,)).fetchone()
-        if listing is None:
-            raise ApiError(HTTPStatus.NOT_FOUND, "Listing not found")
+        if not manual:
+            listing = conn.execute("SELECT * FROM radar_listings WHERE id = ?", (listing_id,)).fetchone()
+            if listing is None:
+                raise ApiError(HTTPStatus.NOT_FOUND, "Listing not found")
         purchase_id = f"purchase-{uuid.uuid4().hex[:20]}"
         conn.execute(
             """INSERT INTO radar_purchases (
-                 id, listing_id, entity_type, entity_id, entity_console_id, price_amount, currency,
-                 purchased_at, created_at
-               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                 id, listing_id, entity_type, entity_id, entity_console_id, title, manual, price_amount,
+                 currency, purchased_at, created_at
+               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
-                purchase_id, listing_id, entity_type, entity_id, entity_console_id, price_amount,
-                currency, purchased_at, now,
+                purchase_id, listing_id, entity_type, entity_id, entity_console_id, title, int(manual),
+                price_amount, currency, purchased_at, now,
             ),
         )
-        # Reservado deja de tener sentido una vez comprada: ya no es "plan
-        # probable", es gasto real, y contarlo dos veces infla el presupuesto.
-        conn.execute(
-            """INSERT INTO radar_decisions (
-                 listing_id, decision, reason, note, snooze_until, price_at_decision, reserved,
-                 created_at, updated_at
-               ) VALUES (?, 'purchased', '', '', NULL, ?, 0, ?, ?)
-               ON CONFLICT(listing_id) DO UPDATE SET
-                 decision='purchased', snooze_until=NULL, reserved=0,
-                 price_at_decision=excluded.price_at_decision, updated_at=excluded.updated_at""",
-            (listing_id, price_amount, now, now),
-        )
-        decision_row = conn.execute("SELECT * FROM radar_decisions WHERE listing_id = ?", (listing_id,)).fetchone()
+        if not manual:
+            record_purchased_decision(conn, listing_id, price_amount, now)
+            decision_row = conn.execute("SELECT * FROM radar_decisions WHERE listing_id = ?", (listing_id,)).fetchone()
 
     return {
         "ok": True,
         "purchase": {
             "id": purchase_id,
-            "listingId": listing_id,
+            "listingId": listing_id or "",
+            "manual": manual,
+            "title": title,
             "entityType": entity_type,
             "entityId": entity_id,
             "entityConsoleId": entity_console_id,
@@ -6269,11 +6358,26 @@ def record_radar_purchase(config: AppConfig, payload: Any) -> dict[str, Any]:
             "currency": currency,
             "purchasedAt": purchased_at,
         },
-        "decision": radar_decision_row(decision_row),
+        "decision": radar_decision_row(decision_row) if decision_row is not None else None,
         # Cómo queda la casilla después de esta compra: es el momento en que el
         # dato sirve para decidir si conviene pedir el reenvío antes de seguir.
         "shipment": compute_radar_shipment(config),
     }
+
+
+def record_purchased_decision(conn: sqlite3.Connection, listing_id: str, price_amount: float, now: str) -> None:
+    # Reservado deja de tener sentido una vez comprada: ya no es "plan
+    # probable", es gasto real, y contarlo dos veces infla el presupuesto.
+    conn.execute(
+        """INSERT INTO radar_decisions (
+             listing_id, decision, reason, note, snooze_until, price_at_decision, reserved,
+             created_at, updated_at
+           ) VALUES (?, 'purchased', '', '', NULL, ?, 0, ?, ?)
+           ON CONFLICT(listing_id) DO UPDATE SET
+             decision='purchased', snooze_until=NULL, reserved=0,
+             price_at_decision=excluded.price_at_decision, updated_at=excluded.updated_at""",
+        (listing_id, price_amount, now, now),
+    )
 
 
 def radar_feed_item(row: sqlite3.Row, decision: dict[str, Any] | None, matches: list[dict[str, Any]]) -> dict[str, Any]:
