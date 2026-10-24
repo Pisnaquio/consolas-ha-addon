@@ -700,6 +700,14 @@
           "PCH-2000"
         ],
         "pendiente": "Faltan PriceCharting, eBay sold y CIB por revisión."
+      },
+      "pesoEnvio": {
+        "kg": 0.6,
+        "aparatoKg": 0.279,
+        "variante": "PCH-1100 (OLED 3G)",
+        "verificadoEn": "2026-10-24",
+        "fuente": "Especificaciones de Sony: PCH-1000 ~260 g, PCH-1100 ~279 g, PCH-2000 ~219 g",
+        "nota": "Portátil: el embalaje y el cargador pesan más que la consola, igual que en la PSP. Se declara el aparato más pesado de la familia. Peso de envío = aparato + embalaje, caja y relleno. La previsión de embalaje es una estimación declarada, no un dato medido."
       }
     },
     {

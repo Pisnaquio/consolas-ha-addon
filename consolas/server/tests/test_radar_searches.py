@@ -975,7 +975,7 @@ class ConsoleShippingWeightTests(unittest.TestCase):
     def test_every_console_with_a_declared_weight_is_readable(self) -> None:
         from server.app import radar_console_shipping_weight
 
-        for console_id in ("ps2", "ps3", "psp", "dreamcast", "snes"):
+        for console_id in ("ps2", "ps3", "psp", "ps-vita", "dreamcast", "snes"):
             with self.subTest(console=console_id):
                 peso = radar_console_shipping_weight(self.config, console_id)
                 self.assertIsNotNone(peso, f"{console_id} sin peso declarado")
@@ -988,6 +988,15 @@ class ConsoleShippingWeightTests(unittest.TestCase):
         ps3 = radar_console_shipping_weight(self.config, "ps3")
         self.assertLess(psp, 1.0, "una portátil no pesa como una consola de mesa")
         self.assertGreater(ps3, psp * 5)
+
+    def test_the_vita_is_costed_like_the_psp_not_like_a_home_console(self) -> None:
+        # Sin peso declarado caía en los 3 kg genéricos: US$52,50 de courier
+        # para una portátil que viaja en 0,6 kg.
+        from server.app import radar_console_shipping_weight
+
+        vita = radar_console_shipping_weight(self.config, "ps-vita")
+        self.assertLess(vita, 1.0)
+        self.assertEqual(vita, radar_console_shipping_weight(self.config, "psp"))
 
     def test_every_declared_weight_states_its_source(self) -> None:
         # Un peso sin procedencia no es evidencia, igual que un precio.
