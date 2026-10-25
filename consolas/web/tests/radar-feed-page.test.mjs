@@ -140,6 +140,15 @@ async function renderFeed({
   return { html, requests, repository: windowStub.RadarRepository };
 }
 
+test("Búsquedas is a tab next to Para mí, not a small link beside Volver", async () => {
+  const { html } = await renderFeed({ items: [item()] });
+
+  assert.match(html, /<nav class="radar-tabs"/);
+  assert.match(html, /class="radar-tab is-active" href="\.\/radar\.html" aria-current="page">Para mí</);
+  assert.match(html, /class="radar-tab" href="\.\/chasing-games\.html">Búsquedas</);
+  assert.doesNotMatch(html, /Volver a la colección<\/a> · /);
+});
+
 test("an opportunity leads with why it fits and what it really costs", async () => {
   const { html } = await renderFeed({ items: [item()] });
 

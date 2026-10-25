@@ -190,6 +190,14 @@ async function renderPage({
   };
 }
 
+test("both faces of the radar are tabs, with Búsquedas marked as the current one", async () => {
+  const { html } = await renderPage({ items: [search()] });
+
+  assert.match(html, /<nav class="radar-tabs"/);
+  assert.match(html, /class="radar-tab" href="\.\/radar\.html">Para mí</);
+  assert.match(html, /class="radar-tab is-active" href="\.\/chasing-games\.html" aria-current="page">Búsquedas</);
+});
+
 test("renders an active search with its status, criteria and run action", async () => {
   const { html } = await renderPage({ items: [search()] });
 

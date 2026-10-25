@@ -1351,7 +1351,11 @@
         ? "Agregá una búsqueda para que el radar empiece a trabajar."
         : "No hay búsquedas en este estado.";
 
-    root.innerHTML = `<div class="back-link"><a href="./index.html">← Volver a la colección</a> · <a href="./radar.html">Para mí</a></div>
+    root.innerHTML = `<div class="back-link"><a href="./index.html">← Volver a la colección</a></div>
+      <nav class="radar-tabs" aria-label="Collection Radar">
+        <a class="radar-tab" href="./radar.html">Para mí</a>
+        <a class="radar-tab is-active" href="./chasing-games.html" aria-current="page">Búsquedas</a>
+      </nav>
       <header class="detail-hero chasing-hero">
         <div>
           <p class="eyebrow">Collection Radar</p>
