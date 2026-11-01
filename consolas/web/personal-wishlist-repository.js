@@ -106,6 +106,9 @@
         key: `franchise/${release.id}`,
         source: "franchise",
         consoleId: release.platformId,
+        // El juego de catálogo detrás del lanzamiento: es lo que el radar
+        // reconoce como entidad, igual que en un deseo de juegos.
+        gameId: release.catalogRef?.gameId || release.id,
         releaseId: release.id,
         exists: true,
         title: release.title,
@@ -190,6 +193,58 @@
     );
     if (!candidates.length) return null;
     return candidates[Math.min(candidates.length - 1, Math.floor(random() * candidates.length))];
+  }
+
+  // --- Radar: el deseo es lo que se busca -----------------------------------
+  //
+  // La búsqueda no se copia dentro del deseo ni el deseo dentro de la
+  // búsqueda: el radar ya guarda a qué juego apunta cada búsqueda
+  // (`entityType: "game"`, `entityId`, `entityConsoleId`), así que el vínculo
+  // se lee de ahí. Borrar el deseo no toca la búsqueda, y viceversa.
+
+  const RADAR_STATUS_RANK = { active: 0, paused: 1, draft: 2 };
+
+  /** El nombre con el que «Buscar con Radar» creaba búsquedas antes de este vínculo. */
+  function radarSearchName(entry) {
+    return `${entry.title} (${entry.platform})`;
+  }
+
+  /**
+   * La búsqueda del radar que persigue esta pieza, o null.
+   *
+   * Primero por entidad; si no hay, por el nombre que ponía el botón viejo,
+   * para que una búsqueda creada antes siga apareciendo en su deseo en vez de
+   * duplicarse. Las archivadas no cuentan: el dueño ya las retiró.
+   */
+  function findRadarSearch(entry, searches = []) {
+    if (!entry?.gameId) return null;
+    const live = (searches || []).filter((search) => search && search.status in RADAR_STATUS_RANK);
+    const byEntity = live.filter(
+      (search) =>
+        search.entityType === "game" &&
+        String(search.entityId) === String(entry.gameId) &&
+        (!search.entityConsoleId || String(search.entityConsoleId) === String(entry.consoleId))
+    );
+    const name = radarSearchName(entry).toLowerCase();
+    const candidates = byEntity.length
+      ? byEntity
+      : live.filter((search) => !search.entityId && String(search.name || "").trim().toLowerCase() === name);
+    return candidates.sort((a, b) => RADAR_STATUS_RANK[a.status] - RADAR_STATUS_RANK[b.status])[0] || null;
+  }
+
+  /** Lo que se le pide al radar para que salga a buscar esta pieza. */
+  function radarSearchDraft(entry) {
+    return {
+      name: radarSearchName(entry),
+      platform: entry.platform,
+      searchType: "chase",
+      origin: "user",
+      status: "active",
+      entityType: "game",
+      entityId: entry.gameId,
+      entityConsoleId: entry.consoleId,
+      notes: "Creada desde Nacho's Wishlist."
+    };
   }
 
   function createWishId(title, existingIds = [], now = Date.now()) {
@@ -308,6 +363,9 @@
     composeModel,
     searchGames,
     pickSurprise,
+    radarSearchName,
+    findRadarSearch,
+    radarSearchDraft,
     createWishId,
     buildWish,
     // con efectos

@@ -226,3 +226,45 @@ test("pickSurprise only offers missing pieces of pending wishes", () => {
   assert.equal(wishlist.pickSurprise(model, () => 0.99).entry.key, "snes/b");
   assert.equal(wishlist.pickSurprise({ wishes: [] }), null);
 });
+
+// --- Radar: el vínculo se lee de la búsqueda, no se guarda en el deseo --------
+
+const dkcEntry = { key: "snes/donkey-kong-country", source: "game", consoleId: "snes", gameId: "donkey-kong-country", title: "Donkey Kong Country", platform: "Super Nintendo" };
+
+test("a piece finds the radar search that targets its game, preferring an active one", () => {
+  const { wishlist } = loadRepositories();
+  const searches = [
+    { id: "paused", status: "paused", entityType: "game", entityId: "donkey-kong-country", entityConsoleId: "snes" },
+    { id: "other-console", status: "active", entityType: "game", entityId: "donkey-kong-country", entityConsoleId: "gba" },
+    { id: "active", status: "active", entityType: "game", entityId: "donkey-kong-country", entityConsoleId: "snes" },
+    { id: "archived", status: "archived", entityType: "game", entityId: "donkey-kong-country", entityConsoleId: "snes" }
+  ];
+
+  assert.equal(wishlist.findRadarSearch(dkcEntry, searches).id, "active");
+  assert.equal(wishlist.findRadarSearch(dkcEntry, searches.filter((item) => item.id !== "active")).id, "paused");
+  assert.equal(wishlist.findRadarSearch(dkcEntry, [searches[3]]), null, "una búsqueda archivada ya fue retirada");
+});
+
+test("a search created by the old «Buscar con Radar» button is still found by its name", () => {
+  const { wishlist } = loadRepositories();
+  const legacy = { id: "legacy", status: "active", entityType: "", entityId: "", name: "donkey kong country (super nintendo)" };
+  const unrelated = { id: "lot", status: "active", entityType: "", entityId: "", name: "Lote SNES" };
+
+  assert.equal(wishlist.findRadarSearch(dkcEntry, [unrelated, legacy]).id, "legacy");
+  assert.equal(wishlist.findRadarSearch(dkcEntry, [unrelated]), null);
+});
+
+test("the radar draft points at the real game so the link survives renames", () => {
+  const { wishlist } = loadRepositories();
+  deepEqual(wishlist.radarSearchDraft(dkcEntry), {
+    name: "Donkey Kong Country (Super Nintendo)",
+    platform: "Super Nintendo",
+    searchType: "chase",
+    origin: "user",
+    status: "active",
+    entityType: "game",
+    entityId: "donkey-kong-country",
+    entityConsoleId: "snes",
+    notes: "Creada desde Nacho's Wishlist."
+  });
+});

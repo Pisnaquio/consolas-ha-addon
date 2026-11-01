@@ -2,10 +2,14 @@
   /**
    * Nacho's Wishlist — los deseos reales del dueño.
    *
-   * No es Oportunidades (lo que el mercado ofrece hoy) ni Chasing Games (lo
-   * que el radar sale a buscar, sembrado con el top de cada consola). Es la
+   * No es Oportunidades (los remates) ni las recomendaciones del radar. Es la
    * lista que el dueño arma a mano para el día que quiera darse un gusto:
    * cualquier pieza que figure acá es, por definición, un regalo que vale.
+   *
+   * Cada pieza que falta puede quedar a cargo del Radar sin salir de acá: el
+   * interruptor crea la búsqueda apuntando al juego y lo que encuentra se ve
+   * debajo de la pieza. Antes había que saltar a Búsquedas con un formulario
+   * medio lleno, y el deseo y la búsqueda quedaban sin relación.
    *
    * Por eso la página muestra lo que falta antes que lo que ya está, y no
    * opina de precios: el precio de referencia es una ayuda para saber de qué
@@ -13,6 +17,7 @@
    * `PersonalWishlistRepository`; esta página sólo decide cómo mostrarlo.
    */
   const wishlist = window.PersonalWishlistRepository;
+  const radar = window.RadarRepository;
   const root = document.getElementById("nachosWishlistRoot");
 
   const FILTERS = [
@@ -29,6 +34,8 @@
   let filter = "pending";
   let editor = null;
   let surprise = null;
+  // Sin backend (modo local) no hay radar: la página sigue andando sin él.
+  let radarSearches = null;
   const openOwned = new Set();
 
   const escapeHtml = (value = "") =>
@@ -44,8 +51,20 @@
     feedbackTone = tone;
   }
 
+  async function loadRadar() {
+    if (!radar) return null;
+    try {
+      await radar.load();
+      return radar.getSearches();
+    } catch {
+      return null;
+    }
+  }
+
   async function reload() {
-    model = await wishlist.load();
+    const [nextModel, searches] = await Promise.all([wishlist.load(), loadRadar()]);
+    model = nextModel;
+    radarSearches = searches;
   }
 
   async function perform(pending, action, success) {
@@ -72,13 +91,61 @@
       .join(" · ");
   }
 
-  function radarSearchHref(entry) {
-    const params = new URLSearchParams({
-      open: "create",
-      prefillName: `${entry.title} (${entry.platform})`,
-      prefillPlatform: entry.platform
-    });
-    return `./chasing-games.html?${params.toString()}`;
+  // --- Radar por pieza ----------------------------------------------------------
+
+  const RADAR_STATE = {
+    active: "El Radar lo está buscando",
+    paused: "Búsqueda en pausa",
+    draft: "Búsqueda en borrador"
+  };
+
+  function radarSearchFor(entry) {
+    return radarSearches ? wishlist.findRadarSearch(entry, radarSearches) : null;
+  }
+
+  /** El botón que prende o apaga el radar para una pieza. */
+  function radarToggle(wishId, entry) {
+    if (!radarSearches || !entry.gameId) return "";
+    const ref = `${escapeHtml(wishId)}|${escapeHtml(entry.key)}`;
+    const disabled = busy ? " disabled" : "";
+    const search = radarSearchFor(entry);
+    if (!search) {
+      return `<button class="btn-link btn-primary" type="button" data-radar-start="${ref}"${disabled}>Que el Radar lo busque</button>`;
+    }
+    const next = search.status === "active" ? "paused" : "active";
+    return `<button class="btn-link" type="button" data-radar-status="${escapeHtml(search.id)}" data-radar-next="${next}"${disabled}>${
+      search.status === "active" ? "Pausar Radar" : "Reanudar Radar"
+    }</button>`;
+  }
+
+  function radarResult(result) {
+    const band = result.band ? radar.getBandLabel(result.band) : "";
+    return `<li>
+      <a href="${escapeHtml(result.listingUrl)}" target="_blank" rel="noreferrer noopener">${escapeHtml(result.title)}</a>
+      <span class="muted">${escapeHtml([result.priceLabel, band].filter(Boolean).join(" · "))}</span>
+    </li>`;
+  }
+
+  /** Lo que encontró el Radar para esta pieza, debajo de ella. */
+  function radarFindings(entry) {
+    const search = radarSearchFor(entry);
+    if (!search) return "";
+    const top = radar.pickTopResults(search.results || [], 3);
+    const checked = radar.formatAgo(search.lastCheckedAt);
+    const found = search.activeMatches || 0;
+    const summary = [
+      RADAR_STATE[search.status] || search.status,
+      found ? `${found} ${found === 1 ? "publicación" : "publicaciones"}` : checked ? "todavía nada" : "primera vuelta pendiente",
+      checked ? `revisó ${checked}` : ""
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    return `<div class="nw-radar">
+      <p class="nw-radar-state is-${escapeHtml(search.status)}">${escapeHtml(summary)}
+        <a href="./chasing-games.html">Ajustar búsqueda</a></p>
+      ${search.lastError ? `<p class="nw-warning">La última vuelta falló: ${escapeHtml(search.lastError)}</p>` : ""}
+      ${top.length ? `<ul class="nw-radar-results">${top.map(radarResult).join("")}</ul>` : ""}
+    </div>`;
   }
 
   // --- Hero ------------------------------------------------------------------
@@ -113,7 +180,7 @@
         <p class="muted">${escapeHtml([entry.platform, wishTitle, priceLine(entry.priceRange)].filter(Boolean).join(" · "))}</p>
       </div>
       <div class="nw-surprise-actions">
-        <a class="btn-link" href="${escapeHtml(radarSearchHref(entry))}">Buscar con Radar</a>
+        ${radarToggle(surprise.wishId, entry)}
         <button class="btn-link" type="button" data-action="surprise">Otro</button>
         <button class="btn-link" type="button" data-action="close-surprise">Cerrar</button>
       </div>
@@ -277,9 +344,10 @@
         ${entry.exists ? "" : `<p class="nw-warning">Este juego ya no está en la biblioteca de la consola.</p>`}
       </div>
       <div class="nw-piece-actions">
-        <a class="btn-link" href="${escapeHtml(radarSearchHref(entry))}">Buscar con Radar</a>
+        ${radarToggle(wish.id, entry)}
         ${action}
       </div>
+      ${radarFindings(entry)}
     </li>`;
   }
 
@@ -388,6 +456,21 @@
     return model.wishes.find((wish) => wish.id === wishId) || null;
   }
 
+  function findEntry(ref) {
+    const [wishId, key] = String(ref || "").split("|");
+    return findWish(wishId)?.entries.find((item) => item.key === key) || null;
+  }
+
+  /**
+   * Crea la búsqueda y le pide una primera vuelta, para que el dueño vea algo
+   * sin esperar al próximo turno del radar. Si la vuelta falla (cuota, fuente
+   * caída) la búsqueda igual queda creada y corre en su turno.
+   */
+  async function startRadar(entry) {
+    const created = await radar.createSearch(wishlist.radarSearchDraft(entry));
+    if (created?.search?.canRun) await radar.runSearch(created.search.id).catch(() => null);
+  }
+
   function bindEditorLists() {
     each("[data-pick-item]", (input) =>
       input.addEventListener("change", () => {
@@ -477,10 +560,30 @@
         perform("Borrando deseo…", async () => wishlist.deleteWish(wish.id), "Deseo borrado.");
       })
     );
+    each("[data-radar-start]", (button) =>
+      button.addEventListener("click", () => {
+        const entry = findEntry(button.dataset.radarStart);
+        if (!entry) return;
+        perform(
+          `Poniendo al Radar a buscar ${entry.title}…`,
+          async () => startRadar(entry),
+          `El Radar ya busca ${entry.title}. Lo que encuentre aparece debajo.`
+        );
+      })
+    );
+    each("[data-radar-status]", (button) =>
+      button.addEventListener("click", () => {
+        const next = button.dataset.radarNext;
+        perform(
+          next === "active" ? "Reanudando el Radar…" : "Pausando el Radar…",
+          async () => radar.setStatus(button.dataset.radarStatus, next),
+          next === "active" ? "El Radar volvió a buscar." : "Radar en pausa: la búsqueda queda guardada."
+        );
+      })
+    );
     each("[data-mark-owned]", (button) =>
       button.addEventListener("click", () => {
-        const [wishId, key] = button.dataset.markOwned.split("|");
-        const entry = findWish(wishId)?.entries.find((item) => item.key === key);
+        const entry = findEntry(button.dataset.markOwned);
         if (!entry || !window.confirm(`¿Registrar ${entry.title} como tuyo en físico?`)) return;
         perform(
           `Registrando ${entry.title}…`,

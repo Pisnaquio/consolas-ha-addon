@@ -139,6 +139,15 @@
 .nw-piece-id .muted { margin: 2px 0 0; font-size: 0.86rem; }
 .nw-piece-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 
+/* Lo que encontró el Radar para una pieza: debajo de ella, a todo el ancho. */
+.nw-radar { grid-column: 2 / -1; border-left: 2px solid var(--line); padding-left: 12px; }
+.nw-radar-state { margin: 0; font-size: 0.86rem; color: var(--muted); }
+.nw-radar-state.is-active { color: var(--accent); }
+.nw-radar-state a { margin-left: 8px; color: var(--accent-2); }
+.nw-radar-results { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; font-size: 0.9rem; }
+.nw-radar-results a { color: inherit; }
+.nw-radar-results .muted { margin-left: 6px; }
+
 .nw-owned-toggle {
   margin-top: 12px;
   border: 0;
@@ -158,5 +167,6 @@
   .nw-wish-progress { justify-items: start; }
   .nw-piece { grid-template-columns: auto minmax(0, 1fr); }
   .nw-piece-actions { grid-column: 1 / -1; justify-content: flex-start; }
+  .nw-radar { grid-column: 1 / -1; }
   .nw-wish-actions { justify-content: flex-start; }
 }
