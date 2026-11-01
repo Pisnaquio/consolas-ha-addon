@@ -268,3 +268,21 @@ test("the radar draft points at the real game so the link survives renames", () 
     notes: "Creada desde Nacho's Wishlist."
   });
 });
+
+test("radar capacity says when the active ceiling is reached", () => {
+  const { wishlist } = loadRepositories();
+  const searches = [{ status: "active" }, { status: "active" }, { status: "paused" }];
+  deepEqual(wishlist.radarCapacity(searches, 2), { active: 2, cap: 2, full: true });
+  deepEqual(wishlist.radarCapacity(searches, 3), { active: 2, cap: 3, full: false });
+  assert.equal(wishlist.radarCapacity(searches, undefined).full, false, "sin techo conocido no se bloquea");
+});
+
+test("retirement candidates are the active searches, oldest first, none preselected", () => {
+  const { wishlist } = loadRepositories();
+  const searches = [
+    { id: "new", status: "active", createdAt: "2026-10-24T10:00:00Z", name: "PS Vita" },
+    { id: "paused", status: "paused", createdAt: "2026-10-01T10:00:00Z", name: "Pausada" },
+    { id: "old", status: "active", createdAt: "2026-10-12T10:00:00Z", name: "Deseados SNES" }
+  ];
+  deepEqual(wishlist.radarRetirementCandidates(searches).map((search) => search.id), ["old", "new"]);
+});

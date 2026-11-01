@@ -232,6 +232,32 @@
     return candidates.sort((a, b) => RADAR_STATUS_RANK[a.status] - RADAR_STATUS_RANK[b.status])[0] || null;
   }
 
+  /**
+   * Si hay lugar para una búsqueda activa más. El techo lo guarda el radar
+   * (`maxActiveSearches`); acá sólo se compara, para preguntar antes de que el
+   * servidor rechace el alta.
+   */
+  function radarCapacity(searches = [], maxActive = Infinity) {
+    const active = (searches || []).filter((search) => search?.status === "active").length;
+    const cap = Number.isFinite(Number(maxActive)) ? Number(maxActive) : Infinity;
+    return { active, cap, full: active >= cap };
+  }
+
+  /**
+   * Las búsquedas activas que el dueño puede elegir borrar para hacer lugar,
+   * la más vieja arriba. No se elige ninguna sola: decide él.
+   */
+  function radarRetirementCandidates(searches = []) {
+    return (searches || [])
+      .filter((search) => search?.status === "active")
+      .slice()
+      .sort(
+        (a, b) =>
+          String(a.createdAt || "").localeCompare(String(b.createdAt || "")) ||
+          String(a.name || "").localeCompare(String(b.name || ""))
+      );
+  }
+
   /** Lo que se le pide al radar para que salga a buscar esta pieza. */
   function radarSearchDraft(entry) {
     return {
@@ -366,6 +392,8 @@
     radarSearchName,
     findRadarSearch,
     radarSearchDraft,
+    radarCapacity,
+    radarRetirementCandidates,
     createWishId,
     buildWish,
     // con efectos

@@ -36,6 +36,10 @@
   let surprise = null;
   // Sin backend (modo local) no hay radar: la página sigue andando sin él.
   let radarSearches = null;
+  let radarMaxActive = Infinity;
+  // Al llegar al techo de búsquedas activas, el dueño elige cuáles borrar.
+  // `target` es lo que se quería hacer: crear la de una pieza o reanudar una.
+  let capPicker = null;
   const openOwned = new Set();
 
   const escapeHtml = (value = "") =>
@@ -54,7 +58,8 @@
   async function loadRadar() {
     if (!radar) return null;
     try {
-      await radar.load();
+      const [, preferences] = await Promise.all([radar.load(), radar.getPreferences().catch(() => null)]);
+      radarMaxActive = preferences?.maxActiveSearches ?? Infinity;
       return radar.getSearches();
     } catch {
       return null;
@@ -124,6 +129,72 @@
       <a href="${escapeHtml(result.listingUrl)}" target="_blank" rel="noreferrer noopener">${escapeHtml(result.title)}</a>
       <span class="muted">${escapeHtml([result.priceLabel, band].filter(Boolean).join(" · "))}</span>
     </li>`;
+  }
+
+  // --- Techo de búsquedas activas -------------------------------------------------
+
+  function openCapPicker(target) {
+    capPicker = { target, selected: new Set() };
+    setFeedback("");
+    render();
+    root.querySelector(".nw-cap")?.scrollIntoView({ block: "nearest" });
+  }
+
+  /** Si no hay lugar, abre la lista para elegir qué borrar y devuelve true. */
+  function blockedByCap(target) {
+    if (!wishlist.radarCapacity(radarSearches, radarMaxActive).full) return false;
+    openCapPicker(target);
+    return true;
+  }
+
+  function capPickerPanel() {
+    if (!capPicker || !radarSearches) return "";
+    const { active, cap } = wishlist.radarCapacity(radarSearches, radarMaxActive);
+    const needed = Math.max(1, active - cap + 1);
+    const chosen = capPicker.selected.size;
+    const candidates = wishlist.radarRetirementCandidates(radarSearches);
+    const day = (value) => String(value || "").slice(0, 10);
+    return `<section class="detail-block nw-cap" aria-label="Llegaste al límite de búsquedas">
+      <h2>Llegaste al límite de búsquedas</h2>
+      <p>El Radar tiene ${active} búsquedas activas y el límite es ${cap}. Para que busque
+        <strong>${escapeHtml(capPicker.target.label)}</strong>, elegí ${needed === 1 ? "cuál borrar" : `al menos ${needed} para borrar`}.
+        Las de más arriba son las más viejas.</p>
+      <ul class="nw-cap-list">${candidates
+        .map(
+          (search) => `<li><label class="nw-result${capPicker.selected.has(search.id) ? " is-chosen" : ""}">
+            <input type="checkbox" data-cap-pick="${escapeHtml(search.id)}"${capPicker.selected.has(search.id) ? " checked" : ""} />
+            <span><strong>${escapeHtml(search.name)}</strong><span class="muted"> · ${escapeHtml(
+              [search.platformLabel || search.platform, `${search.activeMatches || 0} publicaciones`, day(search.createdAt) && `creada ${day(search.createdAt)}`]
+                .filter(Boolean)
+                .join(" · ")
+            )}</span></span>
+          </label></li>`
+        )
+        .join("")}</ul>
+      <div class="card-actions">
+        <button class="btn-link btn-primary" type="button" data-action="cap-confirm"${chosen < needed || busy ? " disabled" : ""}>${
+          chosen ? `Borrar ${chosen} y buscar` : "Elegí qué borrar"
+        }</button>
+        <button class="btn-link" type="button" data-action="cap-cancel">Cancelar</button>
+      </div>
+    </section>`;
+  }
+
+  function confirmCapPicker() {
+    const ids = [...capPicker.selected];
+    const names = radarSearches.filter((search) => ids.includes(search.id)).map((search) => `• ${search.name}`);
+    if (!window.confirm(`¿Borrar ${ids.length === 1 ? "esta búsqueda" : `estas ${ids.length} búsquedas`}?\n\n${names.join("\n")}`)) return;
+    const { target } = capPicker;
+    perform(
+      `Borrando ${ids.length === 1 ? "1 búsqueda" : `${ids.length} búsquedas`}…`,
+      async () => {
+        for (const id of ids) await radar.deleteSearch(id);
+        capPicker = null;
+        if (target.entry) await startRadar(target.entry);
+        else await radar.setStatus(target.searchId, "active");
+      },
+      `Listo: ${ids.length === 1 ? "borré 1 búsqueda" : `borré ${ids.length} búsquedas`} y el Radar ya busca ${target.label}.`
+    );
   }
 
   /** Lo que encontró el Radar para esta pieza, debajo de ella. */
@@ -443,6 +514,7 @@
     }">← Volver a la colección</a></div>
       ${heroSection()}
       ${feedback ? `<p class="nw-feedback is-${escapeHtml(feedbackTone)}" role="status">${escapeHtml(feedback)}</p>` : ""}
+      ${capPickerPanel()}
       ${surpriseBlock()}
       ${editorPanel()}
       ${filterBar()}
@@ -563,7 +635,7 @@
     each("[data-radar-start]", (button) =>
       button.addEventListener("click", () => {
         const entry = findEntry(button.dataset.radarStart);
-        if (!entry) return;
+        if (!entry || blockedByCap({ entry, label: entry.title })) return;
         perform(
           `Poniendo al Radar a buscar ${entry.title}…`,
           async () => startRadar(entry),
@@ -574,13 +646,30 @@
     each("[data-radar-status]", (button) =>
       button.addEventListener("click", () => {
         const next = button.dataset.radarNext;
+        const searchId = button.dataset.radarStatus;
+        if (next === "active") {
+          const search = radarSearches?.find((item) => item.id === searchId);
+          if (blockedByCap({ searchId, label: search?.name || "esta búsqueda" })) return;
+        }
         perform(
           next === "active" ? "Reanudando el Radar…" : "Pausando el Radar…",
-          async () => radar.setStatus(button.dataset.radarStatus, next),
+          async () => radar.setStatus(searchId, next),
           next === "active" ? "El Radar volvió a buscar." : "Radar en pausa: la búsqueda queda guardada."
         );
       })
     );
+    each("[data-cap-pick]", (input) =>
+      input.addEventListener("change", () => {
+        if (input.checked) capPicker.selected.add(input.dataset.capPick);
+        else capPicker.selected.delete(input.dataset.capPick);
+        render();
+      })
+    );
+    root.querySelector('[data-action="cap-confirm"]')?.addEventListener("click", confirmCapPicker);
+    root.querySelector('[data-action="cap-cancel"]')?.addEventListener("click", () => {
+      capPicker = null;
+      render();
+    });
     each("[data-mark-owned]", (button) =>
       button.addEventListener("click", () => {
         const entry = findEntry(button.dataset.markOwned);
