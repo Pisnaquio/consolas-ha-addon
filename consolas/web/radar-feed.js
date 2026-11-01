@@ -33,6 +33,9 @@
   let feedback = "";
   let feedbackTone = "info";
   let busy = false;
+  // `consola/juego` → deseos de Nacho's Wishlist. Vacío si no se pudo leer:
+  // el feed sigue andando, sólo que sin agrupar.
+  let wishIndex = new Map();
 
   const escapeHtml = (value = "") =>
     String(value)
@@ -62,6 +65,43 @@
     feedbackTone = tone;
   }
 
+  async function loadWishIndex() {
+    const wishlist = window.PersonalWishlistRepository;
+    const collection = window.CollectionRepository;
+    if (!wishlist || !collection?.getPersonalWishes) return new Map();
+    try {
+      await Promise.resolve(window.DataStore?.ready);
+      const response = await fetch("./data/franchise-collections.json");
+      const franchises = response.ok ? (await response.json()).franchises || {} : {};
+      return wishlist.wishIndexByGame(collection.getPersonalWishes(), franchises);
+    } catch {
+      return new Map();
+    }
+  }
+
+  /**
+   * Primero lo que es de un deseo, agrupado bajo su nombre; después el resto.
+   * Así cada publicación dice por qué está acá sin leer la letra chica.
+   */
+  function feedSections(items) {
+    const { groups, rest } = window.PersonalWishlistRepository
+      ? window.PersonalWishlistRepository.groupFeedByWish(items, wishIndex)
+      : { groups: [], rest: items };
+    const wishSections = groups
+      .map(
+        (group) => `<h2 class="feed-section-title">Para «${escapeHtml(group.title)}»</h2>
+          <p class="muted">De tu <a href="./nachos-wishlist.html">Nacho's Wishlist</a>.</p>
+          <section class="feed-list">${group.items.map(card).join("")}</section>`
+      )
+      .join("");
+    const restSection = rest.length
+      ? `${groups.length ? `<h2 class="feed-section-title">Otras oportunidades</h2>
+          <p class="muted">De las búsquedas generales del Radar: consolas, lotes y recomendados.</p>` : ""}
+          <section class="feed-list">${rest.map(card).join("")}</section>`
+      : "";
+    return wishSections + restSection;
+  }
+
   async function reload() {
     const [nextFeed, nextBudget, nextShipment] = await Promise.all([
       repository.loadFeed(),
@@ -70,6 +110,7 @@
       repository.loadPurchases().catch(() => null),
     ]);
     feed = nextFeed;
+    if (!wishIndex.size) wishIndex = await loadWishIndex();
     budget = nextBudget;
     shipment = nextShipment;
     render();
@@ -470,15 +511,15 @@
       ${shipmentWidget()}
       ${purchasesSection()}
       ${feedback ? `<p class="chasing-feedback is-${escapeHtml(feedbackTone)}" role="status">${escapeHtml(feedback)}</p>` : ""}
-      <section class="feed-list">${
+      ${
         items.length
-          ? items.map(card).join("")
-          : `<article class="detail-block feed-empty">
+          ? feedSections(items)
+          : `<section class="feed-list"><article class="detail-block feed-empty">
               <h2>Nada accionable ahora</h2>
               <p>Sin novedades no hay aviso. Cuando una corrida traiga algo que encaje, aparece acá.</p>
               <a class="btn-link" href="./chasing-games.html">Ver búsquedas</a>
-            </article>`
-      }</section>
+            </article></section>`
+      }
       ${
         following.length
           ? `<h2 class="feed-section-title">Siguiendo</h2>

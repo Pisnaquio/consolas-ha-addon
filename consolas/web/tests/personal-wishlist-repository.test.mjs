@@ -286,3 +286,27 @@ test("retirement candidates are the active searches, oldest first, none preselec
   ];
   deepEqual(wishlist.radarRetirementCandidates(searches).map((search) => search.id), ["old", "new"]);
 });
+
+test("Para mí groups feed items under the wish whose game they found, in feed order", () => {
+  const { wishlist } = loadRepositories();
+  const index = wishlist.wishIndexByGame(
+    {
+      dk: { id: "dk", kind: "games", title: "Todos los Donkey Kong", items: [{ consoleId: "snes", gameId: "donkey-kong-country" }] },
+      gow: { id: "gow", kind: "franchise", title: "Colección God of War", franchiseId: "god-of-war" }
+    },
+    { "god-of-war": { name: "God of War", releases: [{ id: "gow-ps2", platformId: "ps2", catalogRef: { consoleId: "ps2", gameId: "god-of-war" } }] } }
+  );
+  const feed = [
+    { id: "lot", matches: [{ entityType: "", entityId: "" }] },
+    { id: "gow-cib", matches: [{ entityType: "game", entityId: "god-of-war", entityConsoleId: "ps2" }] },
+    { id: "dkc", matches: [{ entityType: "game", entityId: "donkey-kong-country", entityConsoleId: "snes" }] },
+    { id: "dkc-gba", matches: [{ entityType: "game", entityId: "donkey-kong-country", entityConsoleId: "gba" }] }
+  ];
+
+  const { groups, rest } = wishlist.groupFeedByWish(feed, index);
+  deepEqual(
+    groups.map((group) => [group.title, group.items.map((item) => item.id)]),
+    [["Colección God of War", ["gow-cib"]], ["Todos los Donkey Kong", ["dkc"]]]
+  );
+  deepEqual(rest.map((item) => item.id), ["lot", "dkc-gba"], "otra consola no es el mismo deseo");
+});

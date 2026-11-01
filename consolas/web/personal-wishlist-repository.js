@@ -258,6 +258,60 @@
       );
   }
 
+  // --- «Para mí» agrupado por deseo ------------------------------------------
+  //
+  // Cada match del feed ya dice qué juego encontró (`entityType: "game"`,
+  // `entityId`, `entityConsoleId`), incluso en una búsqueda de varios títulos.
+  // Con eso alcanza para saber a qué deseo pertenece, sin cargar el catálogo.
+
+  const gameRefKey = (consoleId, gameId) => `${consoleId}/${gameId}`;
+
+  /** `consola/juego` → los deseos que lo piden. Las colecciones usan su `catalogRef`. */
+  function wishIndexByGame(wishesById = {}, franchises = {}) {
+    const index = new Map();
+    const add = (consoleId, gameId, wish) => {
+      if (!consoleId || !gameId) return;
+      const key = gameRefKey(consoleId, gameId);
+      const list = index.get(key) || [];
+      if (!list.some((item) => item.id === wish.id)) list.push(wish);
+      index.set(key, list);
+    };
+    Object.values(wishesById || {}).forEach((raw) => {
+      const wish = normalizeWish(raw);
+      const ref = { id: wish.id, title: wish.title || franchises?.[wish.franchiseId]?.name || "Deseo" };
+      if (wish.kind === "franchise") {
+        (franchises?.[wish.franchiseId]?.releases || []).forEach((release) =>
+          add(release.catalogRef?.consoleId || release.platformId, release.catalogRef?.gameId || release.id, ref)
+        );
+      } else {
+        wish.items.forEach((item) => add(item.consoleId, item.gameId, ref));
+      }
+    });
+    return index;
+  }
+
+  /**
+   * Reparte el feed entre deseos, en el orden del feed. Una publicación va al
+   * primer deseo que la pide; lo que no es de ningún deseo queda en `rest`.
+   */
+  function groupFeedByWish(items = [], index = new Map()) {
+    const groups = new Map();
+    const rest = [];
+    (items || []).forEach((item) => {
+      const wish = (item.matches || [])
+        .filter((match) => match.entityType === "game")
+        .map((match) => (index.get(gameRefKey(match.entityConsoleId, match.entityId)) || [])[0])
+        .find(Boolean);
+      if (!wish) {
+        rest.push(item);
+        return;
+      }
+      if (!groups.has(wish.id)) groups.set(wish.id, { wishId: wish.id, title: wish.title, items: [] });
+      groups.get(wish.id).items.push(item);
+    });
+    return { groups: [...groups.values()], rest };
+  }
+
   /** Lo que se le pide al radar para que salga a buscar esta pieza. */
   function radarSearchDraft(entry) {
     return {
@@ -394,6 +448,8 @@
     radarSearchDraft,
     radarCapacity,
     radarRetirementCandidates,
+    wishIndexByGame,
+    groupFeedByWish,
     createWishId,
     buildWish,
     // con efectos

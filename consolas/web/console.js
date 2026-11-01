@@ -1466,7 +1466,7 @@ function renderGbaGamesSection(item) {
                   <span class="gba-variant-pill">
                     ${escapeHtml(variant.nombre || "Variante")}
                     ${variant.region ? ` • ${escapeHtml(variant.region)}` : ""}
-                    ${variant.loTengo ? " • Tengo" : variant.loQuiero ? " • Quiero" : ""}
+                    ${variant.loTengo ? " • Tengo" : variant.loQuiero ? " • Recomendado" : ""}
                   </span>
                 `
                   )
@@ -1516,11 +1516,11 @@ function renderGbaGamesSection(item) {
                     <span class="gba-badge ${priorityClass}">Prioridad: ${escapeHtml(priorityValue)}</span>
                     ${(game.franquicia || "").toLowerCase().includes("pokemon") ? '<span class="gba-badge pokemon">Pokemon</span>' : ""}
                     ${status ? `<span class="gba-badge status-${escapeHtml(status)}">Status: ${escapeHtml(status)}</span>` : ""}
-                    ${wantActive ? '<span class="gba-badge want">Lo quiero</span>' : ""}
+                    ${wantActive ? '<span class="gba-badge want">Recomendado</span>' : ""}
                     ${isStandby ? '<span class="gba-badge standby">Standby</span>' : ""}
                     ${isOwned && ownershipLabel ? `<span class="gba-badge ${getOwnershipBadgeClass(ownershipType)}">${escapeHtml(ownershipLabel)}</span>` : ""}
                     ${game.region ? `<span class="gba-badge">${escapeHtml(game.region)}</span>` : ""}
-                    ${showKeepBadge ? '<span class="gba-badge keep-wishlist">En deseados</span>' : ""}
+                    ${showKeepBadge ? '<span class="gba-badge keep-wishlist">En recomendados</span>' : ""}
                     ${showOwnedOutBadge ? '<span class="gba-badge keep-off">Solo registrado</span>' : ""}
                     ${sectionName === "registered" ? '<span class="gba-badge registered">Registrado</span>' : ""}
                     ${game.sourceType === "manual" ? '<span class="gba-badge manual">Manual</span>' : ""}
@@ -1530,7 +1530,7 @@ function renderGbaGamesSection(item) {
                 </div>
 
                 <div class="gba-game-controls">
-                  <button class="btn-link js-gba-toggle-want ${wantActive ? "active" : ""}" data-index="${originalIdx}" type="button">Quiero</button>
+                  <button class="btn-link js-gba-toggle-want ${wantActive ? "active" : ""}" data-index="${originalIdx}" type="button">Recomendado</button>
                   <button class="btn-link js-game-standby ${isStandby ? "active standby" : ""}" data-index="${originalIdx}" type="button">Standby</button>
 
                   ${ownershipControl}
@@ -1548,7 +1548,7 @@ function renderGbaGamesSection(item) {
 
                 <label class="keep-toggle">
                   <input class="js-game-keep-wishlist" data-index="${originalIdx}" type="checkbox" ${keepInWishlist ? "checked" : ""} />
-                  Mantener en deseados aunque ya lo tenga
+                  Mantener en recomendados aunque ya lo tenga
                 </label>
 
                 <div class="gba-game-price-grid">
@@ -1662,7 +1662,7 @@ function renderGbaGamesSection(item) {
                   <div class="gba-badges">
                     <span id="manualPreviewPriority" class="gba-badge priority-media">Prioridad: media</span>
                     <span id="manualPreviewOwnership" class="gba-badge ownership-none">No lo tengo</span>
-                    <span id="manualPreviewWish" class="gba-badge want">Lo quiero</span>
+                    <span id="manualPreviewWish" class="gba-badge want">Recomendado</span>
                     <span class="gba-badge manual">Manual</span>
                   </div>
                 </div>
@@ -1683,8 +1683,8 @@ function renderGbaGamesSection(item) {
           <label>
             Estado
             <select id="manualGameState">
-              <option value="want" selected>Quiero</option>
-              <option value="none">No quiero</option>
+              <option value="want" selected>Recomendado</option>
+              <option value="none">No recomendado</option>
               <option value="standby">Standby</option>
             </select>
           </label>
@@ -1699,7 +1699,7 @@ function renderGbaGamesSection(item) {
           </label>
           <label class="manual-check">
             <input id="manualGameKeepWishlist" type="checkbox" />
-            Mantener en deseados
+            Mantener en recomendados
           </label>
         </section>
 
@@ -1746,7 +1746,7 @@ function renderGbaGamesSection(item) {
     <article class="detail-block detail-block--games">
       <div class="section-head">
         <h2>Gestion de juegos</h2>
-        <p class="muted">Deseados y registrados con el mismo formato visual, filtros y acciones rápidas.</p>
+        <p class="muted">Registrados y recomendados con el mismo formato visual. Lo que de verdad querés va en <a href="./nachos-wishlist.html">Nacho's Wishlist</a>.</p>
       </div>
       <div class="games-filter-shell">
         <div class="games-filterbar">
@@ -1759,8 +1759,8 @@ function renderGbaGamesSection(item) {
           <label>
             Vista
             <select id="gameListFilter">
-              <option value="all" ${appState.gameFilters.list === "all" ? "selected" : ""}>Deseados + Registrados</option>
-              <option value="wishlist" ${appState.gameFilters.list === "wishlist" ? "selected" : ""}>Solo deseados</option>
+              <option value="all" ${appState.gameFilters.list === "all" ? "selected" : ""}>Recomendados + Registrados</option>
+              <option value="wishlist" ${appState.gameFilters.list === "wishlist" ? "selected" : ""}>Solo recomendados</option>
               <option value="registered" ${appState.gameFilters.list === "registered" ? "selected" : ""}>Solo registrados</option>
             </select>
           </label>
@@ -1768,8 +1768,8 @@ function renderGbaGamesSection(item) {
             Estado
             <select id="gameStatusFilter">
               <option value="all" ${appState.gameFilters.status === "all" ? "selected" : ""}>Todos</option>
-              <option value="to-buy" ${appState.gameFilters.status === "to-buy" ? "selected" : ""}>Quiero comprar</option>
-              <option value="want" ${appState.gameFilters.status === "want" ? "selected" : ""}>Lo quiero</option>
+              <option value="to-buy" ${appState.gameFilters.status === "to-buy" ? "selected" : ""}>Para comprar</option>
+              <option value="want" ${appState.gameFilters.status === "want" ? "selected" : ""}>Recomendados</option>
               <option value="standby" ${appState.gameFilters.status === "standby" ? "selected" : ""}>Standby</option>
               <option value="have" ${appState.gameFilters.status === "have" ? "selected" : ""}>Lo tengo</option>
             </select>
@@ -1885,24 +1885,24 @@ function renderGbaGamesSection(item) {
           ? `
         <details class="games-subsection games-subsection-collapsible" open>
           <summary class="games-subtitle-row">
-            <h3 class="games-subtitle">Deseados / recomendados</h3>
+            <h3 class="games-subtitle">Recomendados</h3>
             <span class="games-subtitle-count">${filteredWishlistMain.length}</span>
           </summary>
           ${
             filteredWishlistMain.length
               ? `<div class="gba-games-grid">${cardsWishlistMain}</div>`
-              : `<p class="muted">No hay juegos visibles en deseados con estos filtros.</p>`
+              : `<p class="muted">No hay juegos recomendados con estos filtros.</p>`
           }
         </details>
         <details class="games-subsection games-subsection-collapsible games-subsection-extras">
           <summary class="games-subtitle-row">
-            <h3 class="games-subtitle">Deseados • demos / extras / apps</h3>
+            <h3 class="games-subtitle">Recomendados • demos / extras / apps</h3>
             <span class="games-subtitle-count">${filteredWishlistExtras.length}</span>
           </summary>
           ${
             filteredWishlistExtras.length
               ? `<div class="gba-games-grid">${cardsWishlistExtras}</div>`
-              : `<p class="muted">No hay demos/extras en deseados con estos filtros.</p>`
+              : `<p class="muted">No hay demos/extras recomendados con estos filtros.</p>`
           }
         </details>
       `
@@ -1993,11 +1993,11 @@ function renderGamesPreview(item) {
     <article class="detail-block">
       <div class="section-head">
         <h2>Biblioteca</h2>
-        <p class="muted">Juegos registrados y deseados en una vista dedicada.</p>
+        <p class="muted">Juegos registrados y recomendados en una vista dedicada.</p>
       </div>
       <div class="preview-metrics">
         <article><small>Registrados</small><strong>${metrics.registered}</strong></article>
-        <article><small>Deseados</small><strong>${metrics.wanted}</strong></article>
+        <article><small>Recomendados</small><strong>${metrics.wanted}</strong></article>
         <article><small>Progreso</small><strong>${metrics.progress}%</strong></article>
       </div>
       <div class="info-pills">
@@ -2313,7 +2313,7 @@ function renderGamesPage(item) {
         <p class="subtitle">Gestión completa de juegos fuera del resumen principal de consola.</p>
         <div class="detail-status-line">
           <span>${gameMetrics.registered}/${gameMetrics.total} registrados</span>
-          <span>${gameMetrics.wanted} deseados</span>
+          <span>${gameMetrics.wanted} recomendados</span>
           <span>${gameMetrics.progress}% de cobertura</span>
         </div>
       </div>
@@ -2397,7 +2397,7 @@ function renderDetail(item) {
             <strong>${gameMetrics.registered}</strong>
           </article>
           <article>
-            <small>Deseados</small>
+            <small>Recomendados</small>
             <strong>${gameMetrics.wanted}</strong>
           </article>
           <article>
@@ -2818,7 +2818,7 @@ function bindGbaGameEvents() {
     previewPriority.className = `gba-badge priority-${currentPriority}`;
     previewOwnership.textContent = getOwnershipLabel(currentOwnership) || "No lo tengo";
     previewOwnership.className = `gba-badge ${getOwnershipBadgeClass(currentOwnership)}`;
-    previewWish.textContent = currentState === "want" ? "Lo quiero" : currentState === "standby" ? "Standby" : "No quiero";
+    previewWish.textContent = currentState === "want" ? "Recomendado" : currentState === "standby" ? "Standby" : "No recomendado";
     previewWish.className = `gba-badge ${currentState === "standby" ? "standby" : currentState === "want" ? "want" : "keep-off"}`;
   };
 

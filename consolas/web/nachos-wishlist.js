@@ -240,6 +240,25 @@
     </header>`;
   }
 
+  /**
+   * Las colecciones temáticas (God of War) siempre a mano, haya o no un deseo
+   * para ellas: antes el único camino era un link chico dentro de su deseo, el
+   * último de la lista, y el dueño no lo encontraba.
+   */
+  function collectionsBar() {
+    const options = model.franchiseOptions || [];
+    if (!options.length) return "";
+    return `<nav class="nw-collections" aria-label="Colecciones temáticas">
+      <span class="eyebrow">Colecciones</span>
+      ${options
+        .map(
+          (option) =>
+            `<a class="btn-link" href="./franchise-collection.html?id=${encodeURIComponent(option.id)}">${escapeHtml(option.name)} →</a>`
+        )
+        .join("")}
+    </nav>`;
+  }
+
   function surpriseBlock() {
     if (!surprise) return "";
     const { entry, wishTitle } = surprise;
@@ -463,6 +482,11 @@
           : ""
       }
       <footer class="nw-wish-actions">
+        ${
+          wish.kind === "franchise"
+            ? `<a class="btn-link btn-primary" href="./franchise-collection.html?id=${encodeURIComponent(wish.franchiseId)}">Abrir la colección</a>`
+            : ""
+        }
         <button class="btn-link" type="button" data-edit-wish="${escapeHtml(wish.id)}">Editar</button>
         <button class="btn-link" type="button" data-delete-wish="${escapeHtml(wish.id)}">Borrar deseo</button>
       </footer>
@@ -514,6 +538,7 @@
     }">← Volver a la colección</a></div>
       ${heroSection()}
       ${feedback ? `<p class="nw-feedback is-${escapeHtml(feedbackTone)}" role="status">${escapeHtml(feedback)}</p>` : ""}
+      ${collectionsBar()}
       ${capPickerPanel()}
       ${surpriseBlock()}
       ${editorPanel()}

@@ -148,6 +148,9 @@
 .nw-radar-results a { color: inherit; }
 .nw-radar-results .muted { margin-left: 6px; }
 
+.nw-collections { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 16px; }
+.nw-collections .eyebrow { margin: 0 4px 0 0; }
+
 .nw-cap { border-color: var(--warn); }
 .nw-cap h2 { margin-top: 0; }
 .nw-cap-list { list-style: none; margin: 12px 0; padding: 0; display: grid; gap: 6px; max-height: 420px; overflow-y: auto; }
