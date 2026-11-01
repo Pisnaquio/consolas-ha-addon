@@ -322,6 +322,47 @@ class AlertTests(NotificationTestCase):
         self.assertEqual(result["alerts"], 0)
         self.assertNotIn("alert", kinds)
 
+    def test_alerts_only_mode_mails_the_exceptional_and_nothing_else(self) -> None:
+        self.config.radar_email_mode = "alerts"
+        summaries = [ebay_summary(item_id=f"v1|{i}|0", price=str(200 + i)) for i in range(5)]
+        summaries[0] = ebay_summary(item_id="v1|0|0", price="20.00")
+        self.seed(summaries)
+
+        kinds = []
+        with patch("server.app.send_radar_email",
+                   side_effect=lambda c, d, t, h: (kinds.append(d["kind"]), ("sent", "ok"))[1]):
+            result = notify_radar_opportunities(self.config)
+
+        self.assertGreaterEqual(result["alerts"], 1)
+        self.assertEqual(result["digest"], 0)
+        self.assertNotIn("digest", kinds)
+
+    def test_alerts_only_mode_stays_silent_on_an_ordinary_run(self) -> None:
+        self.config.radar_email_mode = "alerts"
+        self.seed([ebay_summary(item_id=f"v1|{i}|0", price=str(200 + i)) for i in range(5)])
+
+        with patch("server.app.send_radar_email") as send:
+            result = notify_radar_opportunities(self.config)
+
+        self.assertEqual(result["queued"], 0)
+        send.assert_not_called()
+
+    def test_an_unmailed_listing_still_alerts_once_it_becomes_exceptional(self) -> None:
+        self.config.radar_email_mode = "alerts"
+        ordinary = [ebay_summary(item_id=f"v1|{i}|0", price=str(200 + i)) for i in range(5)]
+        self.seed(ordinary)
+        with patch("server.app.send_radar_email") as send:
+            notify_radar_opportunities(self.config)
+        send.assert_not_called()
+
+        ordinary[0] = ebay_summary(item_id="v1|0|0", price="20.00")
+        self.seed(ordinary)
+        kinds = []
+        with patch("server.app.send_radar_email",
+                   side_effect=lambda c, d, t, h: (kinds.append(d["kind"]), ("sent", "ok"))[1]):
+            notify_radar_opportunities(self.config)
+        self.assertEqual(kinds, ["alert"])
+
 
 if __name__ == "__main__":
     unittest.main()

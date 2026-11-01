@@ -73,7 +73,7 @@ from radar.sources import registry as radar_registry  # noqa: E402
 
 
 SERVICE_NAME = "consolas-server"
-SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.88")
+SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.89")
 DEFAULT_DATA_DIR = "/data"
 DEFAULT_STATIC_DIR = "/app/web"
 DATABASE_NAME = "consolas.sqlite"
@@ -178,7 +178,10 @@ RADAR_INVENTORY_SCAN_LIMIT = 1000
 RADAR_SECONDARY_SECTIONS = frozenset({"unconfirmed-quantity", "incomplete"})
 # Entregas propias del radar (PRD §16). Asunto y destinatarios separados de
 # Auction Watch; la infraestructura SMTP puede ser la misma.
-RADAR_EMAIL_MODES = ("disabled", "digest", "digest_and_alerts")
+# `alerts` es el que eligió el dueño (2026-11-01): *«el mail tiene que llegar
+# solo cuando hay una oferta que rompa los ojos, no en cada corrida»*. Sin
+# digest: lo que no es excepcional se ve en «Para mí» y no interrumpe.
+RADAR_EMAIL_MODES = ("disabled", "alerts", "digest", "digest_and_alerts")
 RADAR_OUTBOX_STATUSES = ("pending", "sending", "sent", "failed", "uncertain")
 RADAR_OUTBOX_KINDS = ("digest", "alert")
 # Una oportunidad excepcional no espera a la próxima corrida. Los umbrales son
@@ -6917,9 +6920,9 @@ def notify_radar_opportunities(config: AppConfig, run_id: str = "") -> dict[str,
         why = deserves_notification(item, notified.get(item["id"]))
         if not why:
             continue
-        if config.radar_email_mode == "digest_and_alerts" and is_exceptional(item):
+        if config.radar_email_mode in ("alerts", "digest_and_alerts") and is_exceptional(item):
             alerts.append(item)
-        else:
+        elif config.radar_email_mode != "alerts":
             fresh.append(item)
 
     queued = 0

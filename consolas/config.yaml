@@ -1,5 +1,5 @@
 name: "Consolas"
-version: "0.1.88"
+version: "0.1.89"
 slug: "consolas"
 description: "Coleccion de consolas y juegos como add-on de Home Assistant con SQLite server-side."
 arch:
@@ -60,7 +60,7 @@ schema:
   auction_watch_email_from: str?
   auction_watch_email_to: str?
   auction_watch_link_base_url: str?
-  radar_email_mode: list(disabled|digest|digest_and_alerts)
+  radar_email_mode: list(disabled|alerts|digest|digest_and_alerts)
   radar_email_from: str?
   radar_email_to: str?
   radar_smtp_host: str?
