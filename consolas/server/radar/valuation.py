@@ -81,6 +81,10 @@ COMPLETION_COSTS_USD = {
     "jumper-pak": 10.0,
     "battery-cover": 6.0,
     "charger": 10.0,
+    # Cuando la descripción separa qué cable falta: una fuente OEM usada no
+    # cuesta lo mismo que un cable AV.
+    "power-supply": 20.0,
+    "av-cable": 8.0,
 }
 COMPLETION_LABELS = {
     "controller": "control",
@@ -88,7 +92,66 @@ COMPLETION_LABELS = {
     "jumper-pak": "Jumper Pak",
     "battery-cover": "tapa de pilas",
     "charger": "cargador",
+    "power-supply": "fuente",
+    "av-cable": "cable AV",
 }
+# Piezas que el kit del título agrupa: si el título ya dice que faltan los
+# cables, que la descripción diga que falta la fuente no se cobra dos veces.
+COMPLETION_PARENT = {"power-supply": "cables", "av-cable": "cables"}
+
+# Defectos que no impiden jugar con la pieza principal pero sí con un
+# accesorio: un control con el stick flojo se cuesta como un control a reponer.
+DEFECT_REPLACEMENT_LABELS = {
+    "controller": "control nuevo (el que trae tiene el stick flojo)",
+}
+
+# Cómo se compra en cada mercado. `import`: eBay y cualquier fuente de Estados
+# Unidos, producto + envío a la dirección de Miami, impuestos sólo si la fuente
+# los informa, y el courier a Uruguay aparte. `local`: Mercado Libre Uruguay,
+# compra local, sin courier ni IVA de importación. `auction`: remate, con su
+# comisión, el impuesto sobre la comisión y la cantidad obligatoria.
+MARKET_BY_SOURCE = {
+    "ebay-us": "import",
+    "shopgoodwill": "import",
+    "mercari-us": "import",
+    "mercadolibre-uy": "local",
+}
+MARKETS = ("import", "local", "auction")
+
+
+def market_for_source(source_id: str) -> str:
+    return MARKET_BY_SOURCE.get(str(source_id or ""), "import")
+
+
+def auction_charges(
+    hammer: float | None,
+    *,
+    premium_rate: float = 0.0,
+    premium_tax_rate: float = 0.0,
+    other_charges: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """Los cargos de un remate sobre el martillo, cada uno con su nombre.
+
+    Comisión del comprador, el impuesto sobre esa comisión y cualquier otro
+    cargo publicado (manejo, retiro). Lo que la casa no publica no se inventa.
+    """
+
+    if hammer is None or hammer <= 0:
+        return []
+    charges: list[dict[str, Any]] = []
+    if premium_rate > 0:
+        premium = round(hammer * premium_rate, 2)
+        charges.append({"label": f"comisión {premium_rate * 100:g}%", "amount": premium})
+        if premium_tax_rate > 0:
+            charges.append({
+                "label": f"impuesto sobre la comisión {premium_tax_rate * 100:g}%",
+                "amount": round(premium * premium_tax_rate, 2),
+            })
+    for charge in other_charges or []:
+        amount = to_amount(charge.get("amount"))
+        if amount:
+            charges.append({"label": str(charge.get("label") or "otro cargo"), "amount": round(amount, 2)})
+    return charges
 
 # Un lote con mucho relleno —deportivos anuales, shovelware, duplicados— no
 # vale por pieza lo que vale uno de títulos útiles: cada pieza se mide contra
@@ -434,17 +497,41 @@ def lot_peer_benchmark(
     )
 
 
-def completion_cost(assessment: dict[str, Any] | None) -> dict[str, Any] | None:
-    """Lo que habría que comprar aparte para dejar lista una consola incompleta."""
+def completion_cost(
+    assessment: dict[str, Any] | None, evidence: dict[str, Any] | None = None
+) -> dict[str, Any] | None:
+    """Lo que habría que comprar aparte para dejar lista una consola incompleta.
+
+    Suma lo que el título declara que falta y, si se leyó la publicación
+    entera, lo que la descripción dice que falta y los accesorios que vienen
+    rotos (un control con el stick flojo se cuesta como un control a reponer).
+    """
     kit = (assessment or {}).get("kit") or {}
     missing = [piece for piece in kit.get("missing") or [] if piece in COMPLETION_COSTS_USD]
-    if not missing:
+    evidence = evidence or {}
+    for piece in evidence.get("missing") or []:
+        if piece not in COMPLETION_COSTS_USD or piece in missing:
+            continue
+        if COMPLETION_PARENT.get(piece) in missing:
+            continue
+        missing.append(piece)
+    replaced = [
+        str(defect.get("piece"))
+        for defect in evidence.get("defects") or []
+        if defect.get("severity") == "functional" and defect.get("piece") in COMPLETION_COSTS_USD
+        and defect.get("piece") not in missing
+    ]
+    replaced = list(dict.fromkeys(replaced))
+    if not missing and not replaced:
         return None
     detail = {piece: COMPLETION_COSTS_USD[piece] for piece in missing}
+    repairs = {piece: COMPLETION_COSTS_USD[piece] for piece in replaced}
     return {
         "pieces": missing,
         "detail": detail,
-        "total": round(sum(detail.values()), 2),
+        "replaced": replaced,
+        "repairs": repairs,
+        "total": round(sum(detail.values()) + sum(repairs.values()), 2),
         "estimated": True,
     }
 
@@ -489,6 +576,12 @@ class ScoreCard:
     # Por qué fue a revisión, con claves estables. Sólo `cib-unverified` se
     # puede despejar desde la app (comprobando caja y manual).
     review_keys: list[str] = field(default_factory=list)
+    # Lo que se leyó de la publicación entera (descripción, devoluciones,
+    # fotos), o vacío si sólo se tuvo el resumen de búsqueda.
+    evidence: dict[str, Any] = field(default_factory=dict)
+    # La cuenta en una frase, y los riesgos que no entran en la cuenta.
+    explanation: str = ""
+    risks: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -512,6 +605,9 @@ class ScoreCard:
             "objective": dict((self.assessment or {}).get("objective") or {}) or None,
             "gatedBand": self.gated_band,
             "reviewKeys": list(self.review_keys),
+            "evidence": dict(self.evidence),
+            "explanation": self.explanation,
+            "risks": list(self.risks),
         }
 
 
@@ -544,26 +640,37 @@ def sold_comparables_link(query: str) -> dict[str, Any] | None:
     }
 
 
-def evaluate_target(item_price: float | None, target: float | None) -> dict[str, Any] | None:
-    """Compara el precio del artículo contra el precio al que comprarías ya.
+def evaluate_target(
+    item_price: float | None,
+    target: float | None,
+    functional_cost: float | None = None,
+    cost_known: bool = True,
+) -> dict[str, Any] | None:
+    """Compara lo que de verdad cuesta la pieza contra el precio al que comprarías ya.
 
-    Se mide contra el precio publicado y no contra el costo puesto acá: es el
-    número sobre el que el owner decide, y el único que no depende de una
-    estimación nuestra. El courier se sigue mostrando en la card como contexto,
-    pero no decide a quién interrumpir — apoyar el aviso en un peso estimado
-    sería apoyarlo en la parte más floja del cálculo.
-
-    Un lote también tiene precio, así que a diferencia del costo puesto acá acá
-    siempre hay veredicto.
+    Hasta el 2026-11-01 se medía contra el precio publicado, y eso disparó una
+    alerta por una N64 de 59,99 contra un objetivo de 100: con el envío, la
+    fuente que no traía y el control a reponer costaba 115. Ahora se mide
+    contra el **costo funcional**: artículo, envío a Miami, impuestos y cargos
+    publicados, y lo que falta para dejarla lista. El courier a Uruguay sigue
+    afuera: depende de un peso estimado, y un aviso no se apoya en la parte más
+    floja del cálculo.
     """
 
     if target is None or target <= 0 or item_price is None:
         return None
+    cost = functional_cost if functional_cost is not None else item_price
+    # Sin envío a Miami, lo que se sabe es un piso: si ya el piso pasa el
+    # objetivo, no lo cumple; si no lo pasa, no se sabe. Nunca «cumple».
+    known = bool(cost_known and functional_cost is not None)
+    meets: bool | None = cost <= target if known else (False if cost > target else None)
     return {
         "value": target,
-        "meets": item_price <= target,
+        "meets": meets,
+        "costKnown": known,
         "itemPrice": item_price,
-        "gap": round(item_price - target, 2),
+        "functionalCost": round(cost, 2),
+        "gap": round(cost - target, 2),
     }
 
 
@@ -660,18 +767,33 @@ def cost_breakdown(
     courier_category: str = "general",
     weight_kg: float | None = None,
     include_import: bool = True,
+    market: str = "import",
+    taxes: float | None = None,
+    charges: list[dict[str, Any]] | None = None,
+    quantity: int | None = None,
 ) -> dict[str, Any]:
     """Artículo, envío interno y courier, cada uno declarando si es exacto.
 
     El subtotal en Estados Unidos es lo que se paga allá; el costo importado le
     suma el courier hasta Uruguay y **siempre** viaja marcado como estimado,
     porque su peso lo es.
+
+    `taxes` entra sólo cuando la fuente lo informa: no se estima el impuesto de
+    venta de Florida. `charges` son los cargos publicados de un remate. En el
+    mercado `local` (Mercado Libre Uruguay) y en un remate uruguayo no hay
+    courier ni importación: se paga y se retira acá.
     """
 
+    market = market if market in MARKETS else "import"
+    if market in {"local", "auction"}:
+        include_import = False
     known_shipping = shipping_amount is not None
+    visible_taxes = round(taxes, 2) if isinstance(taxes, (int, float)) and taxes > 0 else 0.0
+    charge_lines = [dict(item) for item in charges or [] if to_amount(item.get("amount"))]
+    charges_total = round(sum(float(item["amount"]) for item in charge_lines), 2)
     subtotal = None
     if price_amount is not None:
-        subtotal = round(price_amount + (shipping_amount or 0), 2)
+        subtotal = round(price_amount + (shipping_amount or 0) + visible_taxes + charges_total, 2)
 
     # Un peso declarado para esta consola en particular gana sobre la tabla
     # genérica: una PSP pesa 0,19 kg y una PS3 Fat 5 — un solo número para
@@ -703,6 +825,17 @@ def cost_breakdown(
         "importedTotal": imported,
         "importedEstimated": imported is not None,
         "exact": bool(price_amount is not None and known_shipping),
+        "market": market,
+        "taxes": visible_taxes,
+        "taxesKnown": isinstance(taxes, (int, float)),
+        "charges": charge_lines,
+        "chargesTotal": charges_total,
+        "quantity": quantity if quantity and quantity > 1 else None,
+        "unitPrice": round(subtotal / quantity, 2) if subtotal is not None and quantity and quantity > 1 else None,
+        # Lo mismo que el subtotal hasta que se le sume lo que falta: lo
+        # completa `score_listing`.
+        "extras": [],
+        "functionalTotal": subtotal,
     }
 
 
@@ -816,6 +949,11 @@ def score_listing(
     today: date | None = None,
     assessment: dict[str, Any] | None = None,
     availability_verified: bool = False,
+    evidence: dict[str, Any] | None = None,
+    details_expected: bool = False,
+    market: str = "import",
+    charges: list[dict[str, Any]] | None = None,
+    quantity: int | None = None,
 ) -> ScoreCard:
     """Puntúa una publicación que ya pasó los filtros obligatorios.
 
@@ -824,22 +962,46 @@ def score_listing(
     trae un lote). Sin ella el score es el de siempre; con ella el precio se
     compara contra lo que costaría dejar la pieza lista, y la banda pasa por
     las compuertas de `apply_verdict_gates`.
+
+    `evidence` es lo que se leyó de la publicación entera (ver
+    `classify.assess_listing_evidence`, más devoluciones, fotos e impuestos
+    que informe la fuente). Con `details_expected`, una fuente que sabe dar el
+    detalle y no lo dio no puede afirmar una ganga: falta un dato crítico.
     """
 
     card = ScoreCard()
     assessment = dict(assessment or {})
+    evidence = dict(evidence or {})
     card.assessment = assessment
-    card.completion = completion_cost(assessment)
+    card.evidence = evidence
+    card.completion = completion_cost(assessment, evidence)
     extra = card.completion["total"] if card.completion else 0.0
     card.cost = cost_breakdown(
         price_amount, shipping_amount, currency,
         entity_type=entity_type, completeness=completeness,
         courier_origin=courier_origin, courier_category=courier_category,
         weight_kg=weight_kg,
+        market=market,
+        taxes=to_amount(evidence.get("taxes")),
+        charges=charges,
+        quantity=quantity,
     )
+    card.cost["extras"] = completion_lines(card.completion)
+    if card.cost["subtotalUsa"] is not None:
+        card.cost["functionalTotal"] = round(card.cost["subtotalUsa"] + extra, 2)
+    if card.cost["importedTotal"] is not None and extra:
+        card.cost["importedTotal"] = round(card.cost["importedTotal"] + extra, 2)
     # El objetivo no puntúa ni bloquea: es tu umbral de "esto lo compro ya", y
-    # sirve para decidir a quién interrumpir.
-    card.target = evaluate_target(price_amount, target_item_price)
+    # sirve para decidir a quién interrumpir. Se mide contra lo que cuesta
+    # dejarla lista, no contra el precio de portada.
+    functional_for_target = (
+        card.cost["functionalTotal"]
+        if card.cost["shippingKnown"]
+        else (round(price_amount + extra, 2) if price_amount is not None else None)
+    )
+    card.target = evaluate_target(
+        price_amount, target_item_price, functional_for_target, cost_known=bool(card.cost["shippingKnown"])
+    )
     reasons = match_reasons or []
     unverified = match_unverified or []
 
@@ -856,7 +1018,10 @@ def score_listing(
         f"Coincide con la búsqueda al {round(match_confidence * 100)}%")
 
     # --- Precio frente al benchmark comparable -------------------------------
-    comparison_base = card.cost["subtotalUsa"] if card.cost["shippingKnown"] else price_amount
+    comparison_base = (
+        card.cost["subtotalUsa"] if card.cost["shippingKnown"]
+        else (round(price_amount + card.cost["taxes"] + card.cost["chargesTotal"], 2) if price_amount is not None else None)
+    )
     # Una consola a la que le falta algo se compara contra una lista para usar
     # sumando lo que costaría completarla: la consola sola y el bundle dejan de
     # medirse con la misma vara.
@@ -888,7 +1053,15 @@ def score_listing(
     # --- Condición y evidencia funcional -------------------------------------
     tested = any("probada" in reason.lower() for reason in reasons)
     risky = any("untested" in reason.lower() or "sin probar" in reason.lower() for reason in reasons)
-    if tested:
+    defects = list(evidence.get("defects") or [])
+    main_broken = [d for d in defects if d.get("severity") == "functional" and not d.get("piece")]
+    if any(d.get("key") == "untested" for d in main_broken):
+        risky = True
+    if main_broken:
+        add("condition", WEIGHTS["condition"] * 0.1, "Declara un defecto funcional")
+    elif tested and any(d.get("severity") in {"functional", "cosmetic"} for d in defects):
+        add("condition", WEIGHTS["condition"] * 0.6, "Probada, pero declara defectos")
+    elif tested:
         add("condition", WEIGHTS["condition"], "Declara estar probada")
     elif risky:
         add("condition", WEIGHTS["condition"] * 0.15, "Se declara sin probar")
@@ -907,8 +1080,15 @@ def score_listing(
             f"Completitud {'declarada' if declared else 'sin declarar'} ({completeness.upper()})")
 
     # --- Vendedor y devolución ------------------------------------------------
-    add("seller", WEIGHTS["seller"] * (0.7 if seller_known else 0.3),
-        "Reputación del vendedor conocida" if seller_known else "Vendedor sin reputación conocida")
+    returns = returns_refused(evidence)
+    share = 0.7 if seller_known else 0.3
+    if evidence.get("returnsAccepted") is True:
+        share += 0.3
+    elif returns:
+        share = max(0.0, share - 0.3)
+    add("seller", WEIGHTS["seller"] * share,
+        ("Reputación del vendedor conocida" if seller_known else "Vendedor sin reputación conocida")
+        + ("; no acepta devoluciones" if returns else "; acepta devoluciones" if evidence.get("returnsAccepted") else ""))
 
     # --- Logística ------------------------------------------------------------
     if card.cost["shippingKnown"]:
@@ -921,7 +1101,9 @@ def score_listing(
     else:
         add("logistics", WEIGHTS["logistics"] * 0.3, "Envío sin confirmar")
 
-    if card.cost["importedTotal"] is not None:
+    if card.cost["market"] == "local":
+        card.caveats.append("Compra local: sin courier ni IVA de importación.")
+    elif card.cost["importedTotal"] is not None:
         card.caveats.append(
             f"Costo importado estimado: {card.cost['importedTotal']:g} {card.cost['currency']} "
             f"({card.cost['billableWeightKg']:g} kg facturables de courier). El peso es una estimación."
@@ -940,11 +1122,103 @@ def score_listing(
         untested=risky,
         availability_verified=availability_verified,
         penalize=penalize,
+        details_expected=details_expected,
     )
+    card.explanation, card.risks = explain_cost(card)
 
     raw = sum(item["points"] for item in card.contributions) + sum(item["points"] for item in card.penalties)
     card.score = max(0, min(100, round(raw)))
     return card
+
+
+def completion_lines(completion: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """Lo que falta o hay que reponer, como renglones de la cuenta."""
+    if not completion:
+        return []
+    lines = [
+        {"key": piece, "label": f"{COMPLETION_LABELS.get(piece, piece)} faltante", "amount": amount, "estimated": True}
+        for piece, amount in (completion.get("detail") or {}).items()
+    ]
+    lines += [
+        {"key": piece, "label": DEFECT_REPLACEMENT_LABELS.get(piece, f"{COMPLETION_LABELS.get(piece, piece)} a reponer"),
+         "amount": amount, "estimated": True}
+        for piece, amount in (completion.get("repairs") or {}).items()
+    ]
+    return lines
+
+
+def returns_refused(evidence: dict[str, Any] | None) -> bool:
+    """Si no acepta devoluciones. La política que informa la fuente gana sobre el texto."""
+    evidence = evidence or {}
+    if evidence.get("returnsAccepted") is not None:
+        return evidence.get("returnsAccepted") is False
+    return bool(evidence.get("returnsRefused"))
+
+
+def _money(amount: float | None, currency: str = "USD") -> str:
+    if amount is None:
+        return "?"
+    return f"{currency} {amount:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def explain_cost(card: ScoreCard) -> tuple[str, list[str]]:
+    """La cuenta en una frase y los riesgos que no entran en ella.
+
+    «USD 59,99 + USD 15,85 de envío + fuente faltante estimada en USD 20,00 =
+    USD 95,84 antes del courier.» Es lo que el dueño necesita leer para no
+    tener que rehacerla: qué se sumó, qué es estimado y qué falta saber.
+    """
+
+    cost = card.cost or {}
+    currency = str(cost.get("currency") or "USD")
+    if cost.get("item") is None:
+        return "", []
+    parts = [_money(cost["item"], currency)]
+    if cost.get("shippingKnown"):
+        shipping = cost.get("shipping") or 0
+        if cost.get("market") == "local":
+            parts.append(f"{_money(shipping, currency)} de envío local" if shipping else "sin envío")
+        else:
+            parts.append(f"{_money(shipping, currency)} de envío" if shipping else "envío gratis")
+    for charge in cost.get("charges") or []:
+        parts.append(f"{_money(float(charge['amount']), currency)} de {charge['label']}")
+    if cost.get("taxes"):
+        parts.append(f"{_money(cost['taxes'], currency)} de impuestos informados")
+    for line in cost.get("extras") or []:
+        parts.append(f"{line['label']} estimado en {_money(line['amount'], currency)}")
+    total = cost.get("functionalTotal")
+    sentence = " + ".join(parts) + f" = {_money(total, currency)}"
+    if not cost.get("shippingKnown"):
+        sentence += ", con el envío todavía sin confirmar"
+    if cost.get("market") == "local":
+        sentence += ", compra local (sin courier ni IVA de importación)."
+    elif cost.get("market") == "auction":
+        sentence += " con los cargos del remate."
+    else:
+        sentence += " antes del courier"
+        if cost.get("courier") is not None:
+            sentence += f" (courier a Uruguay ≈ {_money(cost['courier'], currency)}, estimado por peso)."
+        else:
+            sentence += " (courier a Uruguay sin calcular: falta el peso)."
+        if not cost.get("taxesKnown"):
+            sentence += " Impuestos: la fuente no los informa."
+    if cost.get("unitPrice") is not None:
+        sentence += f" Por unidad: {_money(cost['unitPrice'], currency)} ({cost['quantity']} unidades obligatorias)."
+
+    evidence = card.evidence or {}
+    risks = [str(d.get("label")) for d in evidence.get("defects") or [] if d.get("label")]
+    if evidence.get("memory") == "jumper":
+        risks.append("Jumper Pak estándar, no Expansion Pak")
+    if returns_refused(evidence):
+        risks.append("sin devoluciones")
+    images = evidence.get("imageCount")
+    if isinstance(images, int) and images < MIN_REAL_PHOTOS:
+        risks.append(f"sólo {images} foto{'s' if images != 1 else ''}")
+    return sentence, risks
+
+
+# Menos fotos que esto no alcanza para ver el estado de una pieza usada.
+MIN_REAL_PHOTOS = 3
 
 
 # Cuánto del peso de completitud se lleva una consola según lo que trae.
@@ -972,6 +1246,7 @@ def apply_verdict_gates(
     untested: bool = False,
     availability_verified: bool = False,
     penalize: Any = None,
+    details_expected: bool = False,
 ) -> None:
     """Decide cuánto puede afirmar la banda, además de lo que dice el precio.
 
@@ -1006,6 +1281,15 @@ def apply_verdict_gates(
     # --- Identidad -----------------------------------------------------------
     if match_confidence < BARGAIN_MIN_CONFIDENCE or assessment.get("itemConfident") is False:
         block("identity", "la identidad de la pieza no está clara")
+    # Una consola entera a menos de un tercio de lo que valen sus pares casi
+    # nunca es una consola: es el cable, la funda o la caja vacía que el título
+    # describe con la palabra «console». Puede ser real, pero no se afirma.
+    if (
+        assessment.get("itemKind") == "console"
+        and card.ratio is not None
+        and 0 < card.ratio < IMPLAUSIBLE_CONSOLE_RATIO
+    ):
+        block("identity", "precio inverosímil para una consola entera: confirmá que no sea un accesorio")
 
     # --- Originalidad --------------------------------------------------------
     authenticity = assessment.get("authenticity") or {}
@@ -1072,6 +1356,52 @@ def apply_verdict_gates(
     if untested:
         block("condition", "sin probar")
 
+    # --- Lo que dice la publicación entera ------------------------------------
+    # El título no alcanza para afirmar una ganga: lo que falta, lo que está
+    # roto y si se puede devolver vive en la descripción.
+    evidence = card.evidence or {}
+    if details_expected and not evidence.get("read"):
+        block("details", "falta leer la descripción, las devoluciones y las fotos")
+    for defect in evidence.get("defects") or []:
+        label = str(defect.get("label") or "")
+        severity = defect.get("severity")
+        if severity == "functional" and defect.get("piece"):
+            block("condition", label)
+            penalize(4, f"Declara {label}")
+        elif severity == "functional":
+            block("condition", label)
+            penalize(12, f"Declara {label}")
+            needs_review = True
+            if "functional-defect" not in card.review_keys:
+                card.review_keys.append("functional-defect")
+            review.append(f"Declara {label}: no se juzga por precio hasta saber qué hay que arreglar.")
+        elif severity == "cosmetic":
+            block("cosmetic", label)
+            penalize(3, f"Defecto cosmético: {label}")
+        elif severity == "generic":
+            block("originality-accessory", label)
+            penalize(4, label[:1].upper() + label[1:])
+        elif severity == "notice":
+            block("notice", label)
+    if evidence.get("missing"):
+        pieces = _join([COMPLETION_LABELS.get(piece, piece) for piece in evidence["missing"]])
+        # Lo que falta ya está sumado al costo: impide la ganga, pero no es un
+        # riesgo. Que el título la muestre completa y la descripción no, sí.
+        block("missing-pieces", f"la descripción dice que falta {pieces}")
+        if kit_status in {"ready", "cib"}:
+            block("contradiction", "el título y la descripción no coinciden")
+            card.verdict_notes.append(
+                f"El título la muestra completa, pero la descripción dice que falta {pieces}."
+            )
+    if returns_refused(evidence):
+        block("returns", "no acepta devoluciones")
+        penalize(3, "No acepta devoluciones")
+    images = evidence.get("imageCount")
+    if isinstance(images, int) and images < MIN_REAL_PHOTOS:
+        block("photos", f"sólo {images} foto{'s' if images != 1 else ''}")
+    if evidence.get("memory") == "jumper":
+        card.verdict_notes.append("Trae Jumper Pak estándar, no Expansion Pak.")
+
     # --- CIB: lo que declara el vendedor no es lo que se comprobó ---------------
     # Un CIB vale por la caja y el manual. El radar no mira fotos: hasta que el
     # dueño los comprueba, un CIB declarado se mira antes de pagar como CIB y
@@ -1133,6 +1463,17 @@ def apply_verdict_gates(
     # dueño despeja lo que mandó a revisión. Después, la revisión.
     if card.section in {"unconfirmed-quantity", "incomplete"}:
         card.band, card.band_label = NO_REFERENCE_BAND
+    elif card.band in {"ganga", "buena"} and {item["key"] for item in blockers} & RISK_BLOCKERS:
+        # Faltantes ya costeados, defectos, accesorios genéricos o sin
+        # devoluciones: el ahorro que queda no alcanza para llamarla buena
+        # compra. Es un precio razonable con riesgos.
+        card.verdict_notes.append(
+            f"Por precio sería {BAND_NAMES.get(card.band, card.band)} "
+            f"({round((card.ratio or 0) * 100)}% de la referencia con lo que falta sumado), "
+            f"pero {_join([item['label'] for item in blockers if item['key'] in RISK_BLOCKERS])}: "
+            "precio razonable con riesgos, no ganga."
+        )
+        card.band, card.band_label = "razonable", BAND_NAMES["razonable"]
     elif card.band == "ganga" and blockers:
         card.band, card.band_label = "buena", BAND_NAMES["buena"]
         if not needs_review:
@@ -1154,7 +1495,89 @@ def apply_verdict_gates(
     card.verdict_notes[:0] = review
 
 
+IMPLAUSIBLE_CONSOLE_RATIO = 0.3
+
 BAND_NAMES = {key: label for key, _, label in DECISION_BANDS} | {EXPENSIVE_BAND[0]: EXPENSIVE_BAND[1]}
+
+# Bloqueos que dicen algo de esta unidad en particular —está rota, le falta
+# algo, no es original, no se puede devolver— y no sólo de cuánto sabemos. Con
+# uno de estos, el veredicto baja a «precio razonable»: el ahorro se lo come el
+# riesgo. Los demás (referencia débil, disponibilidad) sólo impiden la ganga.
+RISK_BLOCKERS = frozenset({"condition", "cosmetic", "originality-accessory", "returns", "contradiction", "notice", "photos"})
+# Referencias que pueden justificar una interrupción por descuento: ventas o
+# precios observados con procedencia. Lo que piden otras publicaciones activas
+# ordena el feed, pero no prueba que algo sea barato; un rango editorial o tu
+# techo por pieza tampoco son mercado.
+RELIABLE_BENCHMARK_SOURCES = frozenset({"ebay-sold", "pricecharting", "retail", "manual"})
+
+
+def benchmark_reliable(benchmark: dict[str, Any] | None) -> bool:
+    benchmark = benchmark or {}
+    return (
+        str(benchmark.get("source") or "") in RELIABLE_BENCHMARK_SOURCES
+        # Fuente y fecha visibles: sin fecha no se sabe si envejeció.
+        and bool(benchmark.get("observedAt"))
+        and benchmark.get("independent") is not False
+        and not benchmark.get("stale")
+        and benchmark.get("comparable") is not False
+    )
+
+
+def alert_clearance(
+    valuation: dict[str, Any] | None, band: str = "", *, price_drop: bool = False
+) -> list[str]:
+    """Por qué esta publicación no puede interrumpir con un mail; vacío si puede.
+
+    Fail-closed: cada cosa que no se sabe es una razón. El mail excepcional
+    exige que sea inequívocamente lo buscado, con envío a Miami conocido, la
+    publicación leída entera (faltantes y defectos ya sumados), sin ningún
+    bloqueo ni nada que revisar, disponible y medida contra una referencia de
+    mercado comparable. Lo que no llega queda en la app como «Candidato para
+    revisar», nunca como ganga en un mail.
+
+    `price_drop` es la baja de algo que el dueño ya sigue: se mide contra su
+    propio precio anterior, así que no necesita referencia de mercado. Todo lo
+    demás se exige igual.
+    """
+
+    valuation = valuation or {}
+    band = band or str(valuation.get("band") or "")
+    reasons: list[str] = []
+    if valuation.get("section", "primary") != "primary":
+        reasons.append("no está entre las que cumplen la búsqueda")
+    if band in {"revisar", "sin-referencia"}:
+        reasons.append("requiere revisión" if band == "revisar" else "no tiene referencia de precio")
+    if valuation.get("reviewKeys"):
+        reasons.append("hay algo que revisar antes de comprar")
+    for item in valuation.get("bargainBlockers") or []:
+        if price_drop and item.get("key") == "benchmark":
+            continue
+        label = str(item.get("label") or item.get("key") or "")
+        if label and label not in reasons:
+            reasons.append(label)
+    evidence = valuation.get("evidence") or {}
+    if not evidence.get("read"):
+        reasons.append("no se leyó la publicación entera")
+    if not (valuation.get("cost") or {}).get("shippingKnown"):
+        reasons.append("envío a Miami sin confirmar")
+    if not price_drop and not benchmark_reliable(valuation.get("benchmark")):
+        benchmark = valuation.get("benchmark") or {}
+        if benchmark.get("comparable") is False:
+            reasons.append("la referencia no es comparable (completitud o región distinta)")
+        else:
+            reasons.append("sin referencia de ventas o precio observado confiable")
+    return list(dict.fromkeys(reasons))
+
+
+def alert_worthy(valuation: dict[str, Any] | None, band: str = "", *, price_drop: bool = False) -> bool:
+    """Si esta valuación está limpia como para interrumpir con un mail.
+
+    No decide si el precio alcanza —eso lo dicen el objetivo y el descuento
+    profundo en `is_exceptional`—: decide si se sabe lo suficiente de esta
+    unidad. Ver `alert_clearance`.
+    """
+
+    return not alert_clearance(valuation, band, price_drop=price_drop)
 
 
 def effective_band(
@@ -1186,7 +1609,18 @@ def effective_band(
 
 
 __all__ = [
+    "RELIABLE_BENCHMARK_SOURCES",
+    "alert_clearance",
+    "benchmark_reliable",
     "BARGAIN_MIN_CONFIDENCE",
+    "MARKET_BY_SOURCE",
+    "RISK_BLOCKERS",
+    "alert_worthy",
+    "auction_charges",
+    "completion_lines",
+    "explain_cost",
+    "market_for_source",
+    "returns_refused",
     "COMPLETION_COSTS_USD",
     "LOT_FILLER_FACTOR",
     "REVIEW_BAND",

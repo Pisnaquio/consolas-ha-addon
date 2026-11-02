@@ -114,6 +114,9 @@ CONFIGURED_SOURCES: tuple[SourceSpec, ...] = (
             officialApi=True,
             fixedPrice=True,
             auction=True,
+            # `getItem`: descripción, devoluciones y fotos de una candidata.
+            itemDetail=True,
+            returnPolicy=True,
             contentTtlSeconds=86400,
             termsMode="official-api",
         ),

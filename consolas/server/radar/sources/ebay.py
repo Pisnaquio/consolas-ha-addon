@@ -14,7 +14,9 @@ Documentación: https://developer.ebay.com/api-docs/buy/api-browse.html
 from __future__ import annotations
 
 import base64
+import html
 import json
+import re
 import time
 import urllib.error
 import urllib.parse
@@ -217,6 +219,65 @@ def parse_item_summary(raw: Any) -> MarketplaceListing | None:
     )
 
 
+# La descripción de eBay es HTML del vendedor. Se le sacan etiquetas, scripts y
+# estilos, y se corta: sólo se lee para encontrar faltantes y defectos, nunca se
+# muestra ni se interpreta como instrucción.
+DESCRIPTION_MAX_CHARS = 6000
+_TAGS = re.compile(r"<(script|style)[^>]*>.*?</\1>|<[^>]+>", re.IGNORECASE | re.DOTALL)
+
+
+def strip_html(value: Any) -> str:
+    text = _TAGS.sub(" ", str(value or ""))
+    text = html.unescape(text)
+    return " ".join(text.split())[:DESCRIPTION_MAX_CHARS]
+
+
+def parse_item_detail(raw: Any) -> dict[str, Any]:
+    """Lo que el detalle de un ítem agrega al resumen de búsqueda.
+
+    Descripción y nota de condición (para leer faltantes y defectos), si acepta
+    devoluciones, cuántas fotos tiene y los impuestos **sólo si eBay los
+    informa con importe**: el impuesto de venta de Florida no se estima.
+    """
+
+    if not isinstance(raw, dict):
+        return {}
+    returns = raw.get("returnTerms") if isinstance(raw.get("returnTerms"), dict) else {}
+    accepted = returns.get("returnsAccepted")
+    images = 1 if isinstance(raw.get("image"), dict) and raw["image"].get("imageUrl") else 0
+    extra = raw.get("additionalImages")
+    if isinstance(extra, list):
+        images += sum(1 for item in extra if isinstance(item, dict) and item.get("imageUrl"))
+    taxes = None
+    for tax in raw.get("taxes") or []:
+        if not isinstance(tax, dict):
+            continue
+        amount = to_amount((tax.get("taxAmount") or {}).get("value") if isinstance(tax.get("taxAmount"), dict) else None)
+        if amount:
+            taxes = round((taxes or 0.0) + amount, 2)
+    shipping = None
+    options = raw.get("shippingOptions") if isinstance(raw.get("shippingOptions"), list) else []
+    if options and isinstance(options[0], dict) and isinstance(options[0].get("shippingCost"), dict):
+        shipping = to_amount(options[0]["shippingCost"].get("value"))
+    # eBay dice si se puede comprar: `estimatedAvailabilities` con IN_STOCK o
+    # LIMITED_STOCK. Cualquier otro estado, o ninguno, no confirma nada.
+    available = None
+    for entry in raw.get("estimatedAvailabilities") or []:
+        if isinstance(entry, dict) and entry.get("estimatedAvailabilityStatus"):
+            status = str(entry["estimatedAvailabilityStatus"]).upper()
+            available = status in {"IN_STOCK", "LIMITED_STOCK"}
+            break
+    return {
+        "available": available,
+        "description": strip_html(raw.get("description") or raw.get("shortDescription")),
+        "conditionNote": clean_text(raw.get("conditionDescription"))[:1000],
+        "returnsAccepted": accepted if isinstance(accepted, bool) else None,
+        "imageCount": images,
+        "taxes": taxes,
+        "shipping": shipping,
+    }
+
+
 class EbayBrowseSource:
     source_id = SOURCE_ID
     label = "eBay USA"
@@ -309,6 +370,38 @@ class EbayBrowseSource:
         summaries = payload.get("itemSummaries")
         return summaries if isinstance(summaries, list) else []
 
+    def item_detail(
+        self,
+        config: Any,
+        external_id: str,
+        destination: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
+        """`getItem` de la Browse API para una publicación ya encontrada.
+
+        Se pide sólo para las que el precio deja como candidatas: es la única
+        forma de saber qué dice la descripción, si acepta devoluciones y
+        cuántas fotos tiene. Una falla no tumba la corrida: devuelve vacío y la
+        valuación declara que falta leerla.
+        """
+
+        token = self.access_token(config)
+        headers = {"Authorization": f"Bearer {token}", "X-EBAY-C-MARKETPLACE-ID": MARKETPLACE_ID}
+        context = end_user_context(destination)
+        if context:
+            headers["X-EBAY-C-ENDUSERCTX"] = context
+        request = urllib.request.Request(
+            f"https://{self.api_host(config)}/buy/browse/v1/item/{urllib.parse.quote(str(external_id), safe='')}",
+            headers=headers,
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            raise EbayRequestFailed(f"El detalle de eBay falló (HTTP {exc.code})") from exc
+        except Exception as exc:
+            raise EbayRequestFailed("eBay no pudo devolver el detalle") from exc
+        return parse_item_detail(payload)
+
     def search(
         self,
         config: Any,
@@ -395,4 +488,6 @@ __all__ = [
     "build_browse_filters",
     "end_user_context",
     "parse_item_summary",
+    "parse_item_detail",
+    "strip_html",
 ]

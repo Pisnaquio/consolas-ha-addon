@@ -5,6 +5,7 @@ import {
   expandPlan,
   expandWishlist,
   queryText,
+  recommendedGames,
   titleCeiling,
   wishedGames,
 } from "../../scripts/lib/radar-portfolio.mjs";
@@ -15,7 +16,7 @@ import {
 // título que nunca pasa el general, y nada inventado cuando falta el precio.
 
 const catalog = [
-  { id: "a", nombre: "Juego A", priceRange: { low: 15, mid: 22, high: 30 } },
+  { id: "a", nombre: "Juego A", priceRange: { low: 15, mid: 22, high: 30 }, priceGuide: { cib: 55 } },
   { id: "b", nombre: "Juego B", priceRange: { low: 40, mid: 60, high: 80 } },
   { id: "c", nombre: "Juego C: Edición", priceRange: { low: 150, mid: 260, high: 400 } },
   { id: "d", nombre: "Juego D", priceRange: { low: 10, mid: 14, high: 20 } },
@@ -25,6 +26,15 @@ const catalog = [
 const state = {
   user: {
     detailEditsById: {
+      // Nacho's Wishlist: lo único que el dueño pidió.
+      "wishlist:personal": {
+        wishesById: {
+          "deseo-1": { id: "deseo-1", kind: "games", items: [{ consoleId: "zeta", gameId: "a" }, { consoleId: "zeta", gameId: "c" }] },
+          "deseo-2": { id: "deseo-2", kind: "games", items: [{ consoleId: "zeta", gameId: "manual-1" }, { consoleId: "zeta", gameId: "d" }] },
+          "deseo-3": { id: "deseo-3", kind: "games", items: [{ consoleId: "otra", gameId: "x" }] },
+          gow: { id: "gow", kind: "franchise", franchiseId: "god-of-war", items: [] },
+        },
+      },
       zeta: {
         gameEditsById: {
           a: { loQuiero: true },
@@ -42,12 +52,37 @@ const state = {
   },
 };
 
-test("Deseados es loQuiero o keepInWishlist, y nunca lo que ya se tiene", () => {
+test("los deseados salen sólo de Nacho's Wishlist, nunca de loQuiero/keepInWishlist", () => {
   const games = wishedGames(state, catalog, "zeta");
+  // b es keepInWishlist y no está en la wishlist: no entra. d ya se tiene.
+  assert.deepEqual(games.map((game) => game.id), ["a", "c", "manual-1"]);
+  assert.ok(games.every((game) => game.explicit));
+});
+
+test("una recomendación vieja no consume cupo de wishlist", () => {
+  const onlyOld = { user: { detailEditsById: { zeta: { gameEditsById: { b: { loQuiero: true, keepInWishlist: true } } } } } };
+  assert.deepEqual(wishedGames(onlyOld, catalog, "zeta"), []);
+  const { search } = expandWishlist({ name: "Deseados Zeta", consoleId: "zeta", querySuffix: "zeta", criteria: {} },
+    { state: onlyOld, gamesByConsole: { zeta: catalog } });
+  assert.equal(search, null);
+});
+
+test("las recomendaciones son loQuiero o keepInWishlist, y nunca lo que ya se tiene", () => {
+  const games = recommendedGames(state, catalog, "zeta");
   assert.deepEqual(
     games.map((game) => [game.id, game.explicit]),
     [["a", true], ["b", false], ["c", false], ["manual-1", true]]
   );
+});
+
+test("una plantilla de recomendaciones corre a la mañana y lo dice", () => {
+  const { search } = expandWishlist(
+    { name: "Recomendados Zeta", consoleId: "zeta", querySuffix: "zeta", source: "recommendations", criteria: { maxItemPrice: 100 } },
+    { state, gamesByConsole: { zeta: catalog } }
+  );
+  assert.deepEqual(search.slots, ["morning"]);
+  assert.match(search.notes, /nunca alertan/);
+  assert.equal(search.criteria.titleTargets.length, 3);
 });
 
 test("el explícito llega al precio alto; la recomendación, al típico", () => {
@@ -86,18 +121,28 @@ test("la plantilla se vuelve una búsqueda con un objetivo por título", () => {
   assert.equal(search.entityType, "game");
   assert.equal(search.entityConsoleId, "zeta");
   assert.equal(search.consoleId, undefined);
-  // Explícitos primero (el más barato adelante), después las recomendaciones.
+  assert.equal(search.slots, undefined, "un deseo corre en todos los slots");
+  // El más barato adelante; el manual sin precio, al techo general.
   assert.deepEqual(
     search.criteria.titleTargets.map((target) => [target.gameId, target.maxItemPrice]),
-    [["a", 30], ["manual-1", 100], ["b", 60]]
+    [["a", 30], ["manual-1", 100]]
   );
   assert.equal(search.searchQuery, "Juego A zeta");
-  // Una copia en caja llega hasta el techo general; uno sin precio ya está ahí.
-  assert.equal(search.criteria.titleTargets[0].maxBoxedPrice, 100);
+  // El techo CIB sale del precio CIB del título; sin uno defendible no hay techo.
+  assert.equal(search.criteria.titleTargets[0].maxBoxedPrice, 55);
   assert.equal(search.criteria.titleTargets[1].maxBoxedPrice, undefined);
-  assert.deepEqual(search.criteria.queries, ["Juego Manual zeta", "Juego B zeta"]);
+  assert.deepEqual(search.criteria.queries, ["Juego Manual zeta"]);
   assert.deepEqual(search.criteria.anyTerms, ["zeta"]);
   assert.deepEqual(skipped.map((item) => item.name), ["Juego C: Edición"]);
+});
+
+test("sin precio CIB del título, la caja no hereda el techo general", () => {
+  const { search } = expandWishlist(
+    { name: "Recomendados Zeta", consoleId: "zeta", querySuffix: "zeta", source: "recommendations", criteria: { maxItemPrice: 100 } },
+    { state, gamesByConsole: { zeta: catalog } }
+  );
+  const b = search.criteria.titleTargets.find((target) => target.gameId === "b");
+  assert.equal(b.maxBoxedPrice, undefined);
 });
 
 test("con más títulos que consultas posibles, quedan afuera los más caros y se informa", () => {
@@ -108,7 +153,7 @@ test("con más títulos que consultas posibles, quedan afuera los más caros y s
   }));
   const edits = Object.fromEntries(many.map((game) => [game.id, { keepInWishlist: true }]));
   const { search, dropped } = expandWishlist(
-    { name: "Muchos", consoleId: "zeta", querySuffix: "zeta", criteria: { maxItemPrice: 100 } },
+    { name: "Muchos", consoleId: "zeta", querySuffix: "zeta", source: "recommendations", criteria: { maxItemPrice: 100 } },
     { state: { user: { detailEditsById: { zeta: { gameEditsById: edits } } } }, gamesByConsole: { zeta: many } }
   );
   assert.equal(search.criteria.titleTargets.length, MAX_QUERIES_PER_SEARCH);

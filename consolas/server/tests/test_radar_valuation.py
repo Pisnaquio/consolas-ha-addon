@@ -533,15 +533,16 @@ class LotValuationTests(unittest.TestCase):
 
 
 class TargetItemPriceTests(unittest.TestCase):
-    """El objetivo se mide contra el precio publicado, no contra el puesto acá."""
+    """El objetivo se mide contra el costo funcional a Miami, nunca contra la portada."""
 
     def test_no_target_means_no_verdict_at_all(self) -> None:
         self.assertIsNone(evaluate_target(90.0, None))
         self.assertIsNone(evaluate_target(90.0, 0))
 
-    def test_it_compares_against_the_item_price(self) -> None:
-        result = evaluate_target(78.0, 80.0)
+    def test_it_compares_against_the_functional_cost(self) -> None:
+        result = evaluate_target(70.0, 80.0, 78.0)
         self.assertTrue(result["meets"])
+        self.assertTrue(result["costKnown"])
         self.assertEqual(result["gap"], -2.0)
 
     def test_above_the_target_reports_how_far(self) -> None:
@@ -549,11 +550,16 @@ class TargetItemPriceTests(unittest.TestCase):
         self.assertFalse(result["meets"])
         self.assertEqual(result["gap"], 15.5)
 
-    def test_a_lot_also_gets_a_verdict_because_it_has_a_price(self) -> None:
-        # A diferencia del costo puesto acá, que depende de un peso estimado,
-        # el precio publicado siempre está.
+    def test_without_the_functional_cost_the_item_price_never_meets(self) -> None:
+        # Sin envío ni faltantes, la portada es un piso: si no pasa el
+        # objetivo, no se sabe si lo cumple. Antes decía que sí.
         result = evaluate_target(60.0, 80.0)
-        self.assertTrue(result["meets"])
+        self.assertIsNone(result["meets"])
+        self.assertFalse(result["costKnown"])
+
+    def test_unknown_shipping_never_meets(self) -> None:
+        result = evaluate_target(60.0, 80.0, 60.0, cost_known=False)
+        self.assertIsNone(result["meets"])
 
     def test_without_a_price_there_is_nothing_to_compare(self) -> None:
         self.assertIsNone(evaluate_target(None, 80.0))

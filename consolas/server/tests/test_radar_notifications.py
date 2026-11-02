@@ -22,12 +22,51 @@ from server.app import (
     record_radar_decision,
     run_radar_search,
 )
+from radar.valuation import PriceReference  # noqa: E402  (server.app arma el path)
+
+
+# Una publicación leída entera y sin nada raro: probada, devoluciones, fotos.
+# Sin esto, ninguna publicación de eBay puede alertar (ver `alert_worthy`).
+CLEAN_DETAIL = {
+    "description": "Tested and working with OEM controller, power and AV cables.",
+    "conditionNote": "",
+    "returnsAccepted": True,
+    "imageCount": 8,
+    "taxes": None,
+    "shipping": None,
+    "available": True,
+}
+
+# Una referencia de mercado de verdad: sin ella, ningún descuento interrumpe
+# (lo que piden otras publicaciones activas no prueba que algo sea barato).
+RELIABLE_REFERENCE = PriceReference(
+    entity_id="ps2", source="pricecharting", value=200.0, completeness="loose",
+    observed_at=datetime.now(timezone.utc).date().isoformat(), confidence=0.8,
+)
+
+# Una valuación que pasa la compuerta entera: leída, sin bloqueos, con envío y
+# con referencia confiable. Cada test le saca una cosa.
+CLEAN_VALUATION = {
+    "section": "primary",
+    "band": "ganga",
+    "priceBand": "ganga",
+    "bargainBlockers": [],
+    "reviewKeys": [],
+    "evidence": {"read": True, "available": True},
+    "cost": {"shippingKnown": True},
+    "benchmark": {"source": "pricecharting", "independent": True, "stale": False, "comparable": True,
+                  "observedAt": "2026-10-20"},
+}
+
+
+def clean_item(**valuation: object) -> dict:
+    return {"band": "ganga", "intents": ["console"], "valuation": {**CLEAN_VALUATION, **valuation}}
 
 
 def ebay_summary(item_id: str = "v1|1|0", price: str = "50.00", title: str | None = None) -> dict:
     return {
         "itemId": item_id,
-        "title": title or "PlayStation 2 Slim tested with OEM controller",
+        "title": title or "PlayStation 2 Slim console reads CDs and DVDs with OEM controller, power and AV cables",
         "itemWebUrl": f"https://www.ebay.com/itm/{item_id}",
         "price": {"value": price, "currency": "USD"},
         "condition": "Pre-owned",
@@ -56,6 +95,7 @@ class TestConfig:
         self.radar_smtp_port = 587
         self.radar_smtp_username = "user"
         self.radar_smtp_password = "secret"
+        self.radar_item_details = True
         self.radar_smtp_starttls = True
 
 
@@ -67,10 +107,18 @@ class NotificationTestCase(unittest.TestCase):
         self.config.static_dir.mkdir(parents=True)
         init_db(self.config)
         delete_radar_search(self.config, "iss-deluxe-snes")
-        self.search = create_radar_search(self.config, {"name": "PS2"})["search"]
+        # Una consola que falta: de lo poco que puede interrumpir con un mail.
+        self.search = create_radar_search(
+            self.config,
+            {"name": "PS2", "platform": "PlayStation 2", "searchType": "console",
+             "entityType": "console", "entityId": "ps2"},
+        )["search"]
+        self.references = [RELIABLE_REFERENCE]
 
-    def seed(self, summaries: list[dict]) -> None:
-        with patch("radar.sources.ebay.EbayBrowseSource.fetch_item_summaries", return_value=summaries):
+    def seed(self, summaries: list[dict], detail: dict | None = None) -> None:
+        with patch("radar.sources.ebay.EbayBrowseSource.fetch_item_summaries", return_value=summaries), patch(
+            "radar.sources.ebay.EbayBrowseSource.item_detail", return_value=dict(detail or CLEAN_DETAIL)
+        ), patch("server.app.radar_entity_references", return_value=list(self.references)):
             run_radar_search(self.config, self.search["id"])
 
     def outbox(self) -> list[dict]:
@@ -124,7 +172,50 @@ class ExceptionalTests(unittest.TestCase):
     """
 
     def test_a_deep_discount_against_the_benchmark_interrupts(self) -> None:
-        self.assertTrue(is_exceptional({"valuation": {"ratio": 0.4}}))
+        self.assertTrue(is_exceptional(clean_item(ratio=0.4)))
+
+    def test_a_deep_discount_alone_does_not_interrupt(self) -> None:
+        # Sin leer la publicación, sin envío y sin referencia: fail-closed.
+        self.assertFalse(is_exceptional({"intents": ["console"], "valuation": {"ratio": 0.4}}))
+
+    def test_a_discount_against_active_listings_only_never_interrupts(self) -> None:
+        peers = {"source": "peer-listings", "independent": True, "stale": False}
+        self.assertFalse(is_exceptional(clean_item(ratio=0.4, benchmark=peers)))
+
+    def test_a_reference_without_a_date_never_interrupts(self) -> None:
+        undated = {**CLEAN_VALUATION["benchmark"], "observedAt": ""}
+        self.assertFalse(is_exceptional(clean_item(ratio=0.4, benchmark=undated)))
+
+    def test_a_non_comparable_reference_never_interrupts(self) -> None:
+        fallback = {**CLEAN_VALUATION["benchmark"], "comparable": False}
+        self.assertFalse(is_exceptional(clean_item(ratio=0.4, benchmark=fallback)))
+
+    def test_any_blocker_stops_the_email(self) -> None:
+        for key, label in (
+            ("identity", "la identidad de la pieza no está clara"),
+            ("shipping", "envío sin confirmar"),
+            ("availability", "disponibilidad sin verificar"),
+            ("condition", "stick flojo"),
+            ("missing-pieces", "falta la fuente"),
+            ("returns", "no acepta devoluciones"),
+            ("details", "falta leer la descripción"),
+            ("benchmark", "la referencia es sólo lo que piden otras publicaciones"),
+        ):
+            with self.subTest(key=key):
+                item = clean_item(ratio=0.4, bargainBlockers=[{"key": key, "label": label}])
+                self.assertFalse(is_exceptional(item))
+
+    def test_something_to_review_stops_the_email(self) -> None:
+        self.assertFalse(is_exceptional(clean_item(ratio=0.4, reviewKeys=["cib-unverified"])))
+
+    def test_unknown_shipping_or_unread_listing_stops_the_email(self) -> None:
+        self.assertFalse(is_exceptional(clean_item(ratio=0.4, cost={"shippingKnown": False})))
+        self.assertFalse(is_exceptional(clean_item(ratio=0.4, evidence={"read": False})))
+
+    def test_a_recommendation_never_interrupts(self) -> None:
+        item = clean_item(ratio=0.4)
+        item["intents"] = ["recommendation"]
+        self.assertFalse(is_exceptional(item))
 
     def test_a_merely_good_price_waits_for_the_digest(self) -> None:
         self.assertFalse(is_exceptional({"valuation": {"ratio": 0.8}}))
@@ -136,9 +227,17 @@ class ExceptionalTests(unittest.TestCase):
         self.assertFalse(is_exceptional({"band": "sin-referencia", "valuation": {"ratio": None}}))
 
     def test_a_steep_drop_on_something_followed_interrupts(self) -> None:
-        item = {"band": "razonable", "score": 50, "priceDrop": {"ratio": 0.3},
-                "decision": {"decision": "following"}}
+        item = clean_item(benchmark={"source": "peer-listings"})
+        item.update({"band": "razonable", "score": 50, "priceDrop": {"ratio": 0.3},
+                     "decision": {"decision": "following"}})
+        # Se mide contra su propio precio anterior: la referencia de pares no
+        # importa, pero todo lo demás sí.
         self.assertTrue(is_exceptional(item))
+
+    def test_a_steep_drop_on_something_followed_with_a_defect_does_not(self) -> None:
+        item = clean_item(bargainBlockers=[{"key": "condition", "label": "stick flojo"}])
+        item.update({"band": "razonable", "priceDrop": {"ratio": 0.3}, "decision": {"decision": "following"}})
+        self.assertFalse(is_exceptional(item))
 
     def test_the_same_drop_on_something_not_followed_does_not(self) -> None:
         self.assertFalse(is_exceptional({"band": "razonable", "score": 50, "priceDrop": {"ratio": 0.3}}))
@@ -172,6 +271,8 @@ class DeliveryTests(NotificationTestCase):
         self.assertEqual(send.call_count, 1)
 
     def test_a_material_drop_earns_a_new_email(self) -> None:
+        # Sin referencia de mercado nada interrumpe: todo va al digest.
+        self.references = []
         summaries = [ebay_summary(item_id=f"v1|{i}|0", price=str(100 + i)) for i in range(4)]
         self.seed(summaries)
         with patch("server.app.send_radar_email", return_value=("sent", "sent_via_smtp")):
@@ -293,7 +394,7 @@ class AlertTests(NotificationTestCase):
     def test_an_exceptional_opportunity_gets_its_own_email(self) -> None:
         # Precios muy por debajo de sus pares: el barato queda «ganga» con score alto.
         summaries = [ebay_summary(item_id=f"v1|{i}|0", price=str(200 + i)) for i in range(5)]
-        summaries[0] = ebay_summary(item_id="v1|0|0", price="20.00")
+        summaries[0] = ebay_summary(item_id="v1|0|0", price="100.00")
         self.seed(summaries)
 
         kinds = []
@@ -311,7 +412,7 @@ class AlertTests(NotificationTestCase):
     def test_digest_only_mode_never_interrupts(self) -> None:
         self.config.radar_email_mode = "digest"
         summaries = [ebay_summary(item_id=f"v1|{i}|0", price=str(200 + i)) for i in range(5)]
-        summaries[0] = ebay_summary(item_id="v1|0|0", price="20.00")
+        summaries[0] = ebay_summary(item_id="v1|0|0", price="100.00")
         self.seed(summaries)
 
         kinds = []
@@ -325,7 +426,7 @@ class AlertTests(NotificationTestCase):
     def test_alerts_only_mode_mails_the_exceptional_and_nothing_else(self) -> None:
         self.config.radar_email_mode = "alerts"
         summaries = [ebay_summary(item_id=f"v1|{i}|0", price=str(200 + i)) for i in range(5)]
-        summaries[0] = ebay_summary(item_id="v1|0|0", price="20.00")
+        summaries[0] = ebay_summary(item_id="v1|0|0", price="100.00")
         self.seed(summaries)
 
         kinds = []
@@ -355,7 +456,7 @@ class AlertTests(NotificationTestCase):
             notify_radar_opportunities(self.config)
         send.assert_not_called()
 
-        ordinary[0] = ebay_summary(item_id="v1|0|0", price="20.00")
+        ordinary[0] = ebay_summary(item_id="v1|0|0", price="100.00")
         self.seed(ordinary)
         kinds = []
         with patch("server.app.send_radar_email",
@@ -376,19 +477,32 @@ class TargetPriceAlertTests(unittest.TestCase):
     """
 
     def item(self, *, precio: float, target: float | None, **extra: object) -> dict:
-        valuation: dict = {}
+        valuation: dict = dict(CLEAN_VALUATION, band="buena", priceBand="buena")
         if target is not None:
             valuation["target"] = {
                 "value": target,
                 "meets": precio <= target,
+                "costKnown": True,
                 "itemPrice": precio,
+                "functionalCost": precio,
                 "gap": round(precio - target, 2),
             }
         valuation.update(extra.pop("valuation", {}))
-        return {"priceAmount": precio, "valuation": valuation, **extra}
+        return {"priceAmount": precio, "band": "buena", "intents": ["wishlist"], "valuation": valuation, **extra}
 
     def test_crossing_the_target_interrupts(self) -> None:
         self.assertTrue(is_exceptional(self.item(precio=78.0, target=80.0)))
+
+    def test_crossing_the_target_alone_does_not_interrupt(self) -> None:
+        # `target.meets` sin nada más —sin leer, sin referencia— no alcanza.
+        bare = {"priceAmount": 78.0, "intents": ["wishlist"], "valuation": {
+            "target": {"value": 80.0, "meets": True, "costKnown": True, "functionalCost": 78.0}}}
+        self.assertFalse(is_exceptional(bare))
+
+    def test_a_target_met_without_known_shipping_does_not_interrupt(self) -> None:
+        item = self.item(precio=78.0, target=80.0)
+        item["valuation"]["target"]["costKnown"] = False
+        self.assertFalse(is_exceptional(item))
 
     def test_being_above_the_target_does_not_interrupt(self) -> None:
         self.assertFalse(is_exceptional(self.item(precio=95.0, target=80.0)))
@@ -412,5 +526,5 @@ class TargetPriceAlertTests(unittest.TestCase):
         self.assertEqual(why, "")
 
     def test_without_a_target_the_old_rules_still_govern(self) -> None:
-        self.assertTrue(is_exceptional({"valuation": {"ratio": 0.4}}))
-        self.assertFalse(is_exceptional({"valuation": {"ratio": 0.9}}))
+        self.assertTrue(is_exceptional(clean_item(ratio=0.4)))
+        self.assertFalse(is_exceptional(clean_item(ratio=0.9)))

@@ -312,18 +312,61 @@
     return { groups: [...groups.values()], rest };
   }
 
-  /** Lo que se le pide al radar para que salga a buscar esta pieza. */
+  // Criterios seguros por tipo de plataforma. Antes una búsqueda creada desde
+  // la wishlist nacía sin techo, sin originalidad, sin región y aceptando
+  // cualquier completitud: todo lo que encontraba era «candidato».
+  const RETRO_CARTRIDGE_CONSOLES = new Set(["snes", "n64", "genesis", "nes-clonica", "atari", "gb-original", "gb-color", "gba-sp"]);
+  // Las de sobremesa con traba de región: un cartucho japonés o PAL no entra
+  // (o no corre) en la consola del dueño. Las portátiles de Nintendo no tienen.
+  const REGION_LOCKED_CARTRIDGE_CONSOLES = new Set(["snes", "n64", "genesis", "nes-clonica"]);
+  const DISC_CONSOLES = new Set(["ps1", "ps2", "ps3", "ps4", "ps5", "psp", "gamecube", "wii", "dreamcast", "xbox-360-e"]);
+  const ALWAYS_EXCLUDED = ["repro", "reproduction", "for parts", "broken", "empty case", "case only", "manual only", "art only"];
+
+  function safeRadarCriteria(consoleId) {
+    const criteria = { excludeTerms: [...ALWAYS_EXCLUDED] };
+    if (RETRO_CARTRIDGE_CONSOLES.has(consoleId)) {
+      // Cartucho retro: original obligatorio, loose aceptable.
+      criteria.originalParts = "required";
+      if (REGION_LOCKED_CARTRIDGE_CONSOLES.has(consoleId)) criteria.excludeRegions = ["ntsc-j", "pal"];
+    } else if (DISC_CONSOLES.has(consoleId)) {
+      // Disco o UMD: CIB preferido; un disco suelto se ve, pero no es la meta.
+      criteria.preferTerms = ["cib", "complete in box", "complete", "with manual"];
+      criteria.excludeTerms.push("disc only", "no case");
+    }
+    return criteria;
+  }
+
+  /** Techo de costo funcional a Miami: el precio alto del catálogo para ese título. */
+  function radarCostCeiling(entry) {
+    const high = Number(entry?.priceRange?.high);
+    return Number.isFinite(high) && high > 0 ? Math.round(high) : null;
+  }
+
+  /**
+   * Lo que se le pide al radar para que salga a buscar esta pieza.
+   *
+   * Nace con criterios seguros por plataforma y con el techo de costo del
+   * catálogo. Sin un precio de catálogo defendible queda en borrador: buscar
+   * sin techo es lo que llenaba la app de «candidatos» que nadie compraría.
+   */
   function radarSearchDraft(entry) {
+    const ceiling = radarCostCeiling(entry);
+    const criteria = safeRadarCriteria(entry.consoleId);
+    if (ceiling != null) criteria.maxTotalUsa = ceiling;
     return {
       name: radarSearchName(entry),
       platform: entry.platform,
       searchType: "chase",
       origin: "user",
-      status: "active",
+      status: ceiling != null ? "active" : "draft",
       entityType: "game",
       entityId: entry.gameId,
       entityConsoleId: entry.consoleId,
-      notes: "Creada desde Nacho's Wishlist."
+      criteria,
+      notes:
+        ceiling != null
+          ? `Creada desde Nacho's Wishlist. Techo de costo a Miami: USD ${ceiling} (precio alto del catálogo).`
+          : "Creada desde Nacho's Wishlist. En borrador: falta el techo de costo; configuralo y activala."
     };
   }
 

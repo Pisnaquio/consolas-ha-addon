@@ -110,3 +110,9 @@
 @media (max-width:720px) {
   .purchases-list li { flex-wrap:wrap; }
 }
+
+/* La cuenta del costo funcional: artículo + envío + lo que falta. */
+.feed-account { margin: 8px 0 0; font-size: 0.88rem; color: var(--muted); }
+.feed-account strong { color: var(--warn, #d9a441); font-weight: 600; }
+.feed-candidate { margin: 8px 0 0; font-size: 0.88rem; color: var(--muted); }
+.feed-candidate strong { color: var(--warn, #d9a441); font-weight: 600; }

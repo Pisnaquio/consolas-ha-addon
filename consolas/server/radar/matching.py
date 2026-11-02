@@ -35,7 +35,7 @@ from .classify import (
     without_negated_completeness,
 )
 from .model import MarketplaceListing
-from .platforms import PROFILES, RETRO_CARTRIDGE_KEYS, fuse_platform_numbers, resolve_platform
+from .platforms import PROFILES, RETRO_CARTRIDGE_KEYS, fuse_platform_numbers, platforms_in_text, resolve_platform
 from .taxonomy import assign_objective
 
 
@@ -241,6 +241,20 @@ def evaluate_match(
         )
         verdict.blockers.append(
             f"Es {label} y esta búsqueda pide {ITEM_KIND_LABELS.get(expected_kind, expected_kind)}"
+        )
+
+    # La consola es la que el título nombra primero. «Nintendo Wii Console
+    # Bundle Installed N64 SNES Games» es una Wii: los juegos instalados o
+    # incluidos no cambian qué hardware se vende, y una Wii de 69 dólares
+    # cruzaba el objetivo de la búsqueda de Super Nintendo.
+    named = platforms_in_text(listing.title)
+    verdict.assessment["namedPlatforms"] = named
+    if console_search and platform_key and named and named[0] != platform_key:
+        primary = PROFILES[named[0]].label if named[0] in PROFILES else named[0]
+        wanted = profile.label if profile else platform_key
+        verdict.blockers.append(
+            f"Es una consola {primary}, no {wanted}"
+            + (f": {wanted} aparece como juegos o extras que trae" if platform_key in named else "")
         )
 
     # Una búsqueda de lotes acepta cosas mezcladas, pero no un lote de fundas o

@@ -444,6 +444,30 @@
       : "";
   }
 
+  /**
+   * La cuenta del costo funcional y los riesgos, igual que en el mail: qué se
+   * sumó para dejarla lista y qué no entra en la cuenta pero importa.
+   */
+  function accountLine(item) {
+    const valuation = item.valuation || {};
+    if (!valuation.explanation) return "";
+    const risks = (valuation.risks || []).filter(Boolean);
+    return `<p class="feed-account">${escapeHtml(valuation.explanation)}${
+      risks.length ? ` <strong>Riesgos:</strong> ${escapeHtml(risks.join(" · "))}.` : ""
+    }</p>`;
+  }
+
+  // Lo que el precio presenta como oportunidad pero no pasa la compuerta del
+  // mail: se ve acá con sus razones y nunca llega como «ganga».
+  function candidateLine(item) {
+    const review = item.alertReview || {};
+    if (!review.candidate) return "";
+    const why = (review.reasons || []).slice(0, 3);
+    return `<p class="feed-candidate"><strong>${escapeHtml(review.label || "Candidato para revisar")}</strong>${
+      why.length ? `: ${escapeHtml(why.join(" · "))}.` : ""
+    }</p>`;
+  }
+
   function card(item) {
     const reasons = (item.matches?.[0]?.reasons || []).slice(0, 3).map((r) => `<li>${escapeHtml(r)}</li>`).join("");
     const unverified = (item.matches?.[0]?.unverified || []).slice(0, 2).map((u) => `<li class="u">${escapeHtml(u)}</li>`).join("");
@@ -469,6 +493,8 @@
           ${imported != null ? `<span>≈ ${escapeHtml(money(imported, item.priceCurrency))} puesto acá</span>` : ""}
         </div>
       </div>
+      ${candidateLine(item)}
+      ${accountLine(item)}
       ${verificationNote(item)}
       ${contentsNote(item)}
       ${targetBadge(item)}

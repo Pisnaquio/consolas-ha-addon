@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from typing import Any
 
 from .platforms import PROFILES, RETRO_CARTRIDGE_KEYS, normalize_platform, platforms_in_text
 
@@ -228,6 +229,12 @@ ACCESSORY_ITEM_MARKERS = (
     r"\bcleaning\s+(?:kits?|cartridges?|cards?)\b",
     r"\bdemo\s+discs?\b",
     r"\bdust\s+(?:covers?|cases?|sleeves?)\b",
+    # «PS Vita 1000's OLED Console Charger Cable» es un cable de 17 dólares,
+    # aunque diga «console»: el título nombra para qué consola es. Va el
+    # compuesto y no «charger» solo, que en «PCH-2000 Genuine Charger» es lo
+    # que trae la consola. Lo que la acompaña lo dice con «w/», «with» o «+».
+    r"(?<!\band\s)(?<!&\s)\b(?:chargers?|charging|power|usb|ac|data|sync)\s+(?:cables?|cords?|leads?)\b"
+    r"(?!\s+(?:included|incl)\b)",
 )
 
 # (categoría, marcadores). El orden es el de precedencia.
@@ -945,6 +952,156 @@ def assess_console_kit(title: str, platform: str = "") -> ConsoleKit:
     )
 
 
+# --- Lo que dice la publicación además del título ------------------------------
+#
+# El título lo escribe el vendedor para vender; la descripción y la nota de
+# condición, para cubrirse. Medido el 2026-11-01: una N64 titulada «Console
+# Bundle … OEM Controller Power AV Jumper Pak Tested» salió alerta de ganga, y
+# la descripción decía que no traía la fuente y que el stick del control estaba
+# flojo. Acá se lee ese texto, pero **sólo para restar**: lo que falta, lo que
+# está roto, lo que no es original. Nunca para sumar piezas, porque las
+# descripciones traen plantillas («we test everything», «comes with all you
+# need») que no describen esta unidad.
+
+# Lo que la descripción dice que no viene. Cada clave es una pieza que se cuesta
+# por separado en `valuation`: la fuente y el cable de video no valen lo mismo.
+_EVIDENCE_MISSING = {
+    "power-supply": r"(?:power\s+(?:supply|supplies|adapter|brick|cord|cable)|ac\s+adapters?|psu|power)",
+    "av-cable": r"(?:av|a\s+v|composite|video|hdmi)\s+(?:cables?|cords?)",
+    "controller": r"(?:controllers?|game\s*pads?|joy\s*pads?)",
+    "jumper-pak": r"(?:jumper|expansion)\s*pa(?:k|ck)s?",
+    "charger": r"(?:chargers?|charging\s+(?:cables?|cords?))",
+}
+_EVIDENCE_MISSING_BEFORE = (
+    r"\b(?:no|without|missing|minus|lacks?|lacking|w\s+o|needs?\s+(?:a\s+|an\s+)?(?:new\s+)?|"
+    r"(?:does|do|did)\s*(?:not|n\s*t)\s+(?:include|come\s+with|have)|not\s+(?:include|including|come\s+with)|"
+    r"doesn\s+t\s+(?:include|come\s+with|have)|don\s+t\s+have|you\s+will\s+need)\s+"
+    r"(?:(?:the|a|an|any|its|original|oem|official)\s+)*"
+)
+_EVIDENCE_MISSING_AFTER = (
+    r"\s+(?:(?:is|are)\s+)?(?:not\s+included|missing|sold\s+separately|not\s+incl|excluded|not\s+pictured)\b"
+)
+
+# Defectos declarados. `functional` impide usar algo tal como viene; si es de un
+# accesorio, se cuesta reponerlo; si es de la pieza principal, va a revisión.
+# `cosmetic` no impide jugar pero se come el ahorro de una ganga. `notice` es
+# una advertencia del vendedor que pide leer antes de comprar.
+_LOOSE_STICK = (
+    r"\b(?:joy\s*)?sticks?\s+(?:(?:is|are|a\s+bit|bit|slightly|very|little|kind\s+of)\s+)*"
+    r"(?:loose|worn|wobbly|floppy|drifts?|drifting|sloppy)\b"
+)
+_EVIDENCE_DEFECTS = (
+    # (patrón, clave, etiqueta, severidad, pieza afectada)
+    (_LOOSE_STICK, "loose-stick", "stick del control flojo", "functional", "controller"),
+    (r"\b(?:loose|worn|wobbly|floppy|sloppy)\s+(?:joy\s*)?sticks?\b", "loose-stick", "stick del control flojo", "functional", "controller"),
+    (r"\b(?:joy\s*)?sticks?\b(?:\s+[a-z]+){0,4}?\s+(?:is|are|feels?|seems?)\s+(?:a\s+bit\s+|slightly\s+|very\s+|kind\s+of\s+|a\s+little\s+)?"
+     r"(?:loose|worn|wobbly|floppy|sloppy)\b", "loose-stick", "stick del control flojo", "functional", "controller"),
+    (r"\bstick\s+drift\b|\bdrift(?:s|ing)?\b", "loose-stick", "stick del control con drift", "functional", "controller"),
+    (r"\bfor\s+parts\b|\bparts\s+only\b|\bparts\s+or\s+repair\b", "for-parts", "se vende para repuestos", "functional", ""),
+    (r"\bas\s+is\b", "as-is", "se vende «as is»", "functional", ""),
+    (r"\buntested\b|\bnot\s+tested\b|\bunable\s+to\s+test\b|\bcan\s+t\s+test\b|\bcould\s+not\s+test\b",
+     "untested", "sin probar", "functional", ""),
+    (r"\b(?:not|doesn\s+t|does\s+not|won\s+t|will\s+not|isn\s+t)\s+(?:work(?:ing)?|turn\s+on|power\s+on|read|load|boot)\b",
+     "not-working", "no funciona del todo", "functional", ""),
+    (r"\bno\s+(?:video|picture|display|sound|audio)\b", "not-working", "no funciona del todo", "functional", ""),
+    (r"\bneeds?\s+(?:repair|fixing|work|cleaning\s+to\s+work)\b", "needs-repair", "necesita reparación", "functional", ""),
+    (r"\b(?:broken|cracked|snapped|missing)\s+(?:tabs?|hinges?|pins?|buttons?|shell|case|housing|port|clips?)\b|"
+     r"\b(?:tabs?|hinges?|pins?|buttons?|shell|case|housing|port|clips?)\s+(?:is\s+|are\s+)?(?:broken|cracked|snapped)\b",
+     "broken-part", "pieza rota", "functional", ""),
+    (r"\bscratch(?:es|ed|y)?\b|\bscuff(?:s|ed)?\b|\bscrapes?\b", "scratches", "rayas o raspones", "cosmetic", ""),
+    (r"\byellow(?:ed|ing)\b|\bdiscolou?r(?:ed|ation)\b|\bsun\s+faded\b", "discoloration", "plástico decolorado", "cosmetic", ""),
+    (r"\b(?:sticker|label)\s+(?:residue|damage|torn|peeling)\b|\btorn\s+label\b", "label-wear", "etiqueta dañada", "cosmetic", ""),
+    (r"\bplease\s+read\b|\bread\s+(?:the\s+)?(?:full\s+)?description\b|\bsee\s+(?:the\s+)?description\b|\bread\s+before\b",
+     "read-description", "el vendedor pide leer la descripción", "notice", ""),
+)
+# «No scratches», «no issues», «works perfectly no drift»: negar un defecto no
+# es declararlo.
+_NEGATED_DEFECT = (
+    r"\b(?:no|zero|without|never|not\s+any|free\s+of)\s+(?:(?:major|visible|noticeable|real|known|significant|"
+    r"obvious|deep|stick|any)\s+)*(?:scratch(?:es)?|scuffs?|scrapes?|drift|issues?|problems?|damage|cracks?|yellowing|"
+    r"discolou?ration)\b"
+)
+_GENERIC_ACCESSORY = (
+    r"\b(?:aftermarket|after\s+market|third\s+party|3rd\s+party|generic|non\s+oem|not\s+oem|off\s+brand|"
+    r"compatible|replacement|repro(?:duction)?)\s+(?:(?:n64|nintendo|ps\d?|sega|snes|nes)\s+)?"
+    r"(?:controllers?|power\s+(?:supply|adapter)|ac\s+adapters?|av\s+cables?|cables?|chargers?|memory\s+cards?)\b"
+)
+# La N64 necesita un Jumper Pak o un Expansion Pak para arrancar. Son cosas
+# distintas: el Expansion Pak suma 4 MB y vale aparte, el Jumper Pak no.
+# Sin devoluciones: dicho en el texto. La política de la fuente, cuando la
+# informa, viaja aparte y gana sobre esto.
+_NO_RETURNS = r"\bno\s+returns?\b|\breturns?\s+(?:are\s+)?not\s+accepted\b|\ball\s+sales\s+(?:are\s+)?final\b|\bno\s+refunds?\b"
+_EXPANSION_PAK = r"\bexpansion\s*pa(?:k|ck)s?\b"
+_JUMPER_PAK = r"\bjumper\s*pa(?:k|ck)s?\b"
+
+
+def _strip_negated_defects(text: str) -> str:
+    return re.sub(_NEGATED_DEFECT, " ", text)
+
+
+def assess_listing_evidence(
+    title: str,
+    description: str = "",
+    condition_note: str = "",
+    platform: str = "",
+) -> dict[str, Any]:
+    """Faltantes, defectos y originalidad que declara el texto de la publicación.
+
+    `missing` y `defects` salen de la descripción y la nota de condición (y de
+    los defectos del título, que el kit no mira); `memory` dice si la N64 trae
+    Jumper Pak o Expansion Pak. Ninguna de estas lecturas agrega piezas.
+    """
+
+    body = _norm(" ".join(part for part in (description, condition_note) if part))
+    title_text = _norm(title)
+    everything = f"{title_text} {body}"
+
+    missing: list[str] = []
+    for piece, stem in _EVIDENCE_MISSING.items():
+        if re.search(_EVIDENCE_MISSING_BEFORE + stem + r"\b", body) or re.search(
+            r"\b" + stem + _EVIDENCE_MISSING_AFTER, body
+        ):
+            missing.append(piece)
+    # «No power» suelto en una consola es que no enciende, no que no trae la
+    # fuente: sólo cuenta si nombra el cable o el adaptador.
+    if "power-supply" in missing and not re.search(
+        r"\bpower\s+(?:supply|supplies|adapter|brick|cord|cable)|\bac\s+adapters?|\bpsu\b", body
+    ):
+        missing.remove("power-supply")
+
+    defects: list[dict[str, str]] = []
+    seen: set[str] = set()
+    clean = _strip_negated_defects(everything)
+    for pattern, key, label, severity, piece in _EVIDENCE_DEFECTS:
+        if key in seen or not re.search(pattern, clean):
+            continue
+        seen.add(key)
+        defects.append({"key": key, "label": label, "severity": severity, "piece": piece})
+    generic = re.search(_GENERIC_ACCESSORY, everything)
+    if generic:
+        defects.append({
+            "key": "generic-accessory",
+            "label": f"accesorio no original («{generic.group(0).strip()}»)",
+            "severity": "generic",
+            "piece": "",
+        })
+
+    memory = ""
+    if platform == "n64" or re.search(r"\bn64\b|\bnintendo\s+64\b", title_text):
+        if re.search(_EXPANSION_PAK, everything):
+            memory = "expansion"
+        elif re.search(_JUMPER_PAK, everything):
+            memory = "jumper"
+
+    return {
+        "missing": missing,
+        "defects": defects,
+        "memory": memory,
+        "returnsRefused": bool(re.search(_NO_RETURNS, everything)),
+        "read": bool(body.strip()),
+    }
+
+
 # --- Lotes --------------------------------------------------------------------
 #
 # Un lote se busca por lo que cuesta cada juego. Eso sólo vale cuando se sabe
@@ -1089,6 +1246,7 @@ __all__ = [
     "analyze_lot",
     "assess_authenticity",
     "assess_console_kit",
+    "assess_listing_evidence",
     "detect_hardware_origin",
     "not_the_product_category",
     "MAX_DECLARED_LOT_SIZE",

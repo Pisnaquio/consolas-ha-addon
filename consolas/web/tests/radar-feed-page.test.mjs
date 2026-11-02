@@ -162,6 +162,29 @@ test("an opportunity leads with why it fits and what it really costs", async () 
   assert.match(html, /data-dismiss="ebay-us-1"/);
 });
 
+test("a listing priced like an opportunity but not cleared says it is a candidate to review", async () => {
+  const { html } = await renderFeed({
+    items: [
+      item({
+        alertReview: {
+          eligible: false,
+          candidate: true,
+          label: "Candidato para revisar",
+          reasons: ["envío a Miami sin confirmar", "sin referencia de ventas o precio observado confiable"],
+        },
+      }),
+    ],
+  });
+
+  assert.match(html, /Candidato para revisar/);
+  assert.match(html, /envío a Miami sin confirmar/);
+});
+
+test("a cleared listing does not carry the candidate label", async () => {
+  const { html } = await renderFeed({ items: [item({ alertReview: { eligible: true, candidate: false, reasons: [] } })] });
+  assert.doesNotMatch(html, /Candidato para revisar/);
+});
+
 test("a price drop is what leads the card, marked as the news it is", async () => {
   const { html } = await renderFeed({
     items: [item({ priceDrop: { previous: 200, current: 150, amount: 50, ratio: 0.25, material: true } })],

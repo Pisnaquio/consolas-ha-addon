@@ -45,12 +45,14 @@ if str(_SERVER_DIR) not in sys.path:
 from radar.master import propose_master_searches, rank_game, wanted_games  # noqa: E402
 from radar.valuation import (  # noqa: E402
     LotPiece,
+    alert_clearance,
     bundle_adjusted_benchmark,
     completion_cost,
     effective_band,
     lot_ceiling_benchmark,
     lot_peer_benchmark,
     lot_valuation,
+    market_for_source,
     peer_listing_benchmark,
     pick_benchmark,
     reference_from_price_range,
@@ -58,7 +60,12 @@ from radar.valuation import (  # noqa: E402
     score_listing,
     sold_comparables_link,
 )
-from radar.classify import classify_listing_item, detect_console_variant, detect_lot_size  # noqa: E402
+from radar.classify import (  # noqa: E402
+    assess_listing_evidence,
+    classify_listing_item,
+    detect_console_variant,
+    detect_lot_size,
+)
 from radar.matching import (  # noqa: E402
     best_title_target,
     detect_completeness,
@@ -69,11 +76,19 @@ from radar.matching import (  # noqa: E402
 from radar.model import MarketplaceListing  # noqa: E402
 from radar.platforms import platform_key, platform_payload  # noqa: E402
 from radar.taxonomy import assign_objective, taxonomy_payload  # noqa: E402
+from radar.wishlist import (  # noqa: E402
+    ALERTING_INTENTS,
+    INTENT_PRIORITY,
+    search_intent,
+    search_row_intent,
+    wished_keys,
+    wishlist_coverage,
+)
 from radar.sources import registry as radar_registry  # noqa: E402
 
 
 SERVICE_NAME = "consolas-server"
-SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.89")
+SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.90")
 DEFAULT_DATA_DIR = "/data"
 DEFAULT_STATIC_DIR = "/app/web"
 DATABASE_NAME = "consolas.sqlite"
@@ -144,6 +159,14 @@ RADAR_SLOTS: tuple[tuple[str, int, int], ...] = (
     ("night", 22, 30),
 )
 RADAR_SLOT_KEYS = tuple(slot[0] for slot in RADAR_SLOTS)
+# Presupuesto de consultas por corrida. La auditoría del 2026-11-01 contó 294
+# consultas en 28 búsquedas activas, 201 de sus 213 títulos recomendaciones
+# viejas. Se reparte primero a la wishlist, después a las consolas que faltan
+# y a los lotes elegidos; las recomendaciones van últimas.
+RADAR_QUERY_BUDGET = 150
+# Las recomendaciones corren una vez por día, no tres: no alertan, así que
+# verlas a la mañana alcanza.
+RADAR_RECOMMENDATION_SLOTS = frozenset({"morning"})
 RADAR_SLOT_LABELS = {"morning": "09:00", "afternoon": "16:00", "night": "22:30"}
 RADAR_SCHEDULER_INTERVAL_SECONDS = max(5, int(os.getenv("CONSOLAS_RADAR_SCHEDULER_INTERVAL_SECONDS", "60")))
 # Una corrida manual reciente y exitosa satisface el slot siguiente, igual que en
@@ -228,6 +251,18 @@ class AppConfig:
         )
         self.db_path = self.data_dir / DATABASE_NAME
         self.max_body_size = int(os.getenv("CONSOLAS_MAX_BODY_SIZE", str(DEFAULT_BODY_LIMIT)))
+        # Leer el detalle de las candidatas (`getItem`). Se puede apagar, pero
+        # apagado ninguna publicación de eBay llega a ganga ni a alerta: sin
+        # descripción no se sabe qué falta ni qué está roto.
+        self.radar_item_details = os.getenv("CONSOLAS_RADAR_ITEM_DETAILS", "1").strip().lower() not in {
+            "0", "false", "no", "off"
+        }
+        # Cuántas consultas a eBay puede hacer una corrida. Una búsqueda de
+        # varios títulos hace hasta 49, así que contar búsquedas no alcanza.
+        try:
+            self.radar_query_budget = max(1, int(os.getenv("CONSOLAS_RADAR_QUERY_BUDGET", str(RADAR_QUERY_BUDGET))))
+        except ValueError:
+            self.radar_query_budget = RADAR_QUERY_BUDGET
         self.ebay_client_id = os.getenv("EBAY_CLIENT_ID", "").strip()
         self.ebay_client_secret = os.getenv("EBAY_CLIENT_SECRET", "").strip()
         requested_ebay_environment = os.getenv("EBAY_ENVIRONMENT", "sandbox").strip().lower()
@@ -517,6 +552,19 @@ def init_db(config: AppConfig) -> None:
               PRIMARY KEY (search_id, listing_id),
               FOREIGN KEY(search_id) REFERENCES radar_searches(id) ON DELETE CASCADE,
               FOREIGN KEY(listing_id) REFERENCES radar_listings(id) ON DELETE CASCADE
+            );
+
+            -- Lo que dice una publicación además de su resumen (descripción,
+            -- devoluciones, fotos, impuestos informados). Es caché de la
+            -- fuente, no estado del usuario: se vuelve a pedir si cambia el
+            -- precio o pasa el plazo.
+            CREATE TABLE IF NOT EXISTS radar_listing_details (
+              source_id TEXT NOT NULL,
+              external_id TEXT NOT NULL,
+              price_amount REAL,
+              fetched_at TEXT NOT NULL,
+              detail_json TEXT NOT NULL DEFAULT '{}',
+              PRIMARY KEY (source_id, external_id)
             );
 
             CREATE TABLE IF NOT EXISTS radar_decisions (
@@ -4316,8 +4364,13 @@ def valuate_radar_match(
     entity_type: str = "", console_weight: Any = None, sold_query: str = "",
     bundle_game_value: dict[str, Any] | None = None,
     search_type: str = "", lot_peer_per_piece: list[float] | None = None,
+    evidence: dict[str, Any] | None = None, details_expected: bool = False,
 ) -> Any:
-    """Puntúa una coincidencia que ya pasó los filtros obligatorios."""
+    """Puntúa una coincidencia que ya pasó los filtros obligatorios.
+
+    `evidence` es lo leído de la publicación entera (ver
+    `radar_listing_evidence`); `details_expected`, si la fuente sabe darlo.
+    """
     assessment = dict(getattr(verdict, "assessment", None) or {})
     completeness = str(criteria.get("completeness") or "any")
     # Qué es la pieza lo dice su propio título, no la entidad de la búsqueda que
@@ -4420,11 +4473,23 @@ def valuate_radar_match(
             criteria.get("targetItemPrice") if target_applies_to(item_kind, entity_type) else None
         ),
         assessment=assessment,
-        # Ninguna fuente confirma hoy que la publicación siga comprable
-        # (`availabilityCheck`). Lo confirma el dueño al verificarla, y eso se
-        # lee al mostrarla, no al puntuarla.
-        availability_verified=False,
+        # Sólo el detalle oficial leído hace menos de un día confirma que siga
+        # comprable. Sin él, lo confirma el dueño al verificarla, y eso se lee
+        # al mostrarla, no al puntuarla.
+        availability_verified=(evidence or {}).get("available") is True,
+        evidence=evidence,
+        details_expected=details_expected,
+        market=market_for_source(listing.source_id),
     )
+    # Comparable de verdad: misma completitud y región que la referencia, y no
+    # una estimación armada (consola más juegos supuestos). Lo que no lo es
+    # puede ordenar el feed, pero no justificar un mail.
+    if card.benchmark:
+        listing_region = detect_region(normalize(listing.title).replace("made in japan", " "))
+        reference_region = str(card.benchmark.get("region") or "")
+        adjusted = "Ajustada por bundle" in str(card.benchmark.get("notes") or "")
+        foreign = listing_region in {"pal", "ntsc-j"} and reference_region != listing_region
+        card.benchmark["comparable"] = not (loose_fallback or foreign or adjusted)
     if loose_fallback:
         card.caveats.append(
             f"Declara {completeness.upper()}, pero la única referencia es de copia suelta: "
@@ -4443,6 +4508,7 @@ def score_radar_pages(
     sources: list[str],
     pages: list[Any],
     now: str,
+    detail_lookup: Callable[[MarketplaceListing], dict[str, Any] | None] | None = None,
 ) -> tuple[list[tuple[MarketplaceListing, Any, Any, dict[str, Any] | None]], int]:
     """Evalúa y valúa lo que trajeron las fuentes, sin tocar la base.
 
@@ -4557,24 +4623,123 @@ def score_radar_pages(
         references_by_group[key] = [*base, peers] if peers is not None else list(base)
         return references_by_group[key]
 
-    scored = [
-        (
-            listing,
-            verdict,
-            valuate_radar_match(
-                listing, verdict, page_criteria, group_references(target, verdict), expected_kind, console_weight,
-                # Ventas cerradas de lo que encontró esta publicación: en una
-                # búsqueda de varios títulos, ese título y no la consulta principal.
-                sold_query=query or str(row["search_query"] or ""),
-                bundle_game_value=bundle_value,
-                search_type=str(row["search_type"] or ""),
-                lot_peer_per_piece=lot_peer_per_piece,
-            ),
-            radar_target_payload(target, entity_console_id),
+    def valuate(listing: Any, verdict: Any, target: Any, page_criteria: Any, query: str,
+                evidence: dict[str, Any] | None = None) -> Any:
+        return valuate_radar_match(
+            listing, verdict, page_criteria, group_references(target, verdict), expected_kind, console_weight,
+            # Ventas cerradas de lo que encontró esta publicación: en una
+            # búsqueda de varios títulos, ese título y no la consulta principal.
+            sold_query=query or str(row["search_query"] or ""),
+            bundle_game_value=bundle_value,
+            search_type=str(row["search_type"] or ""),
+            lot_peer_per_piece=lot_peer_per_piece,
+            evidence=evidence,
+            details_expected=bool(capabilities_by_source.get(listing.source_id, {}).get("itemDetail")),
         )
-        for listing, verdict, target, page_criteria, query in matched
+
+    cards = [valuate(*entry) for entry in matched]
+
+    # Segunda pasada: las que el precio deja como candidatas se leen enteras.
+    # El resumen de búsqueda sólo trae el título, y el título lo escribe el
+    # vendedor para vender: lo que falta, lo que está roto y si se puede
+    # devolver está en la descripción. Se piden pocas por corrida, las más
+    # baratas primero; las demás quedan sin poder afirmar una ganga.
+    if detail_lookup is not None:
+        candidates = [
+            index for index, card in enumerate(cards)
+            if capabilities_by_source.get(matched[index][0].source_id, {}).get("itemDetail")
+            and (card.price_band in {"ganga", "buena"} or (card.target or {}).get("meets"))
+        ]
+        candidates.sort(key=lambda index: cards[index].ratio if cards[index].ratio is not None else 9.0)
+        for index in candidates[:RADAR_DETAIL_FETCH_LIMIT]:
+            listing, verdict = matched[index][0], matched[index][1]
+            detail = detail_lookup(listing)
+            if not detail:
+                continue
+            evidence = radar_listing_evidence(listing, detail, str(row["platform"] or ""))
+            cards[index] = valuate(*matched[index], evidence=evidence)
+
+    scored = [
+        (listing, verdict, card, radar_target_payload(target, entity_console_id))
+        for (listing, verdict, target, _, _), card in zip(matched, cards)
     ]
     return scored, rejected
+
+
+# Cuántas publicaciones por corrida de una búsqueda se leen enteras. La Browse
+# API da 5000 llamadas por día; treinta búsquedas, tres veces por día, con doce
+# candidatas cada una, quedan bien por debajo aun sin caché.
+RADAR_DETAIL_FETCH_LIMIT = 12
+# Cuánto vale lo leído de una publicación si el precio no cambió.
+RADAR_DETAIL_TTL_HOURS = 24
+
+
+def radar_listing_evidence(listing: Any, detail: dict[str, Any], platform: str = "") -> dict[str, Any]:
+    """Lo leído de la publicación entera, en la forma que espera la valuación."""
+    evidence = assess_listing_evidence(
+        listing.title,
+        str(detail.get("description") or ""),
+        " ".join(part for part in (str(detail.get("conditionNote") or ""), listing.condition_label or "") if part),
+        platform_key(platform) or platform,
+    )
+    evidence["read"] = True
+    evidence["returnsAccepted"] = detail.get("returnsAccepted")
+    evidence["imageCount"] = detail.get("imageCount")
+    evidence["taxes"] = detail.get("taxes")
+    # Leída en las últimas `RADAR_DETAIL_TTL_HOURS` horas: si eBay dijo que se
+    # puede comprar, la disponibilidad está verificada recientemente.
+    evidence["available"] = detail.get("available")
+    return evidence
+
+
+def radar_listing_detail_lookup(
+    config: AppConfig, *, store: bool = True
+) -> Callable[[MarketplaceListing], dict[str, Any] | None]:
+    """Lee el detalle de una publicación, de la caché o de la fuente.
+
+    Una previsualización no escribe nada: usa lo que ya hay en caché y pide lo
+    que falta sin guardarlo.
+    """
+
+    destination = radar_destination(config)
+    enabled = getattr(config, "radar_item_details", False) is True
+
+    def lookup(listing: MarketplaceListing) -> dict[str, Any] | None:
+        if not enabled:
+            return None
+        with _RADAR_LOCK, connect_db(config) as conn:
+            cached = conn.execute(
+                "SELECT * FROM radar_listing_details WHERE source_id = ? AND external_id = ?",
+                (listing.source_id, listing.external_id),
+            ).fetchone()
+        if cached is not None:
+            fetched = parse_iso_datetime(cached["fetched_at"])
+            fresh = fetched is not None and datetime.now(timezone.utc) - fetched < timedelta(hours=RADAR_DETAIL_TTL_HOURS)
+            if fresh and cached["price_amount"] == listing.price_amount:
+                return radar_json_field(cached["detail_json"], {}) or None
+        spec = radar_registry.get_source(listing.source_id)
+        try:
+            adapter = spec.load() if spec else None
+            detail = adapter.item_detail(config, listing.external_id, destination) if adapter else None
+        except Exception as error:  # una falla de detalle nunca tumba la corrida
+            print(f"[consolas] Collection Radar: sin detalle de {listing.external_id}: {error}", flush=True)
+            return None
+        if not detail:
+            return None
+        if store:
+            with _RADAR_LOCK, connect_db(config) as conn:
+                conn.execute(
+                    """INSERT INTO radar_listing_details (source_id, external_id, price_amount, fetched_at, detail_json)
+                       VALUES (?, ?, ?, ?, ?)
+                       ON CONFLICT(source_id, external_id) DO UPDATE SET
+                         price_amount = excluded.price_amount, fetched_at = excluded.fetched_at,
+                         detail_json = excluded.detail_json""",
+                    (listing.source_id, listing.external_id, listing.price_amount, utc_now(),
+                     json.dumps(detail, ensure_ascii=False, separators=(",", ":"))),
+                )
+        return detail
+
+    return lookup
 
 
 def radar_target_payload(target: dict[str, Any] | None, console_id: str) -> dict[str, Any] | None:
@@ -4623,7 +4788,10 @@ def preview_radar_search(config: AppConfig, search_id: Any) -> dict[str, Any]:
                 error for receipt in failures for error in (receipt.get("errors") or ["Falla de la fuente"])
             )
             raise ApiError(HTTPStatus.BAD_GATEWAY, message, {"id": target_id, "receipts": receipts})
-        scored, rejected = score_radar_pages(config, row, criteria, sources, pages, now)
+        scored, rejected = score_radar_pages(
+            config, row, criteria, sources, pages, now,
+            detail_lookup=radar_listing_detail_lookup(config, store=False),
+        )
 
     limit = max(1, min(int(criteria.get("resultLimit") or RADAR_DEFAULT_RESULT_LIMIT), RADAR_MAX_RESULT_LIMIT))
     ranked = sorted(
@@ -4738,7 +4906,9 @@ def execute_radar_search(config: AppConfig, target_id: str, run_id: str = "") ->
         record_radar_receipts(config, run_id, target_id, receipts, 0, 0)
         raise ApiError(HTTPStatus.BAD_GATEWAY, message, {"id": target_id, "receipts": receipts})
 
-    scored, rejected = score_radar_pages(config, row, criteria, sources, pages, now)
+    scored, rejected = score_radar_pages(
+        config, row, criteria, sources, pages, now, detail_lookup=radar_listing_detail_lookup(config)
+    )
     matched_ids: list[str] = []
 
     with _RADAR_LOCK, connect_db(config) as conn:
@@ -5115,6 +5285,11 @@ def start_radar_run(config: AppConfig, kind: str, slot_key: str = "", schedule_d
 
 
 def finish_radar_run(config: AppConfig, run_id: str, totals: dict[str, Any], detail: str = "") -> dict[str, Any]:
+    deferred = totals.get("deferred") or []
+    if deferred and not detail:
+        detail = f"{len(deferred)} búsqueda(s) esperan a otra corrida: " + "; ".join(
+            f"{item['name']} ({item['reason']})" for item in deferred[:8]
+        )
     failed = int(totals.get("searchesFailed") or 0)
     total = int(totals.get("searchesTotal") or 0)
     if total and failed == total:
@@ -5209,11 +5384,62 @@ def manual_run_satisfies_slot(config: AppConfig, slot_time: datetime) -> sqlite3
     return row if window_start <= finished_local <= slot_time else None
 
 
+def radar_row_queries(row: Any) -> int:
+    criteria = radar_json_field(row["criteria_json"], {}) if "criteria_json" in row.keys() else {}
+    return max(1, len(radar_search_queries(row["search_query"], criteria)))
+
+
+def radar_query_plan(
+    rows: list[Any], wished: set[tuple[str, str]], slot_key: str, budget: int
+) -> tuple[list[tuple[Any, str]], list[dict[str, Any]]]:
+    """Qué búsquedas corren en esta corrida y cuáles esperan, con su motivo.
+
+    Primero la wishlist, después consolas, lotes, recomendaciones y
+    descubrimiento; dentro de cada grupo, las más baratas en consultas primero
+    para que entren más. Una búsqueda corre entera o no corre: cortarla a la
+    mitad la dejaría con resultados de unos títulos y no de otros.
+    """
+
+    ranked = []
+    for row in rows:
+        criteria = radar_json_field(row["criteria_json"], {}) if "criteria_json" in row.keys() else {}
+        search = {"searchType": row["search_type"], "entityType": row["entity_type"], "entityId": row["entity_id"],
+                  "entityConsoleId": row["entity_console_id"], "criteria": criteria}
+        intent = search_row_intent(search, wished, strict=True)
+        rank = float(INTENT_PRIORITY.get(intent, len(INTENT_PRIORITY)))
+        # «Deseados SNES» con dos deseos entre 47 recomendaciones: va después de
+        # los lotes y antes de las recomendaciones puras, y puede correr en
+        # cualquier slot porque adentro hay deseos reales.
+        if intent == "recommendation" and search_row_intent(search, wished) == "wishlist":
+            intent, rank = "mixed", INTENT_PRIORITY["lot"] + 0.5
+        last = str(row["last_checked_at"] or "") if "last_checked_at" in row.keys() else ""
+        ranked.append((rank, last, radar_row_queries(row), row, intent))
+    # Dentro de cada grupo, la que hace más que no corre: lo que no entró hoy
+    # entra primero mañana, y ninguna queda postergada para siempre.
+    ranked.sort(key=lambda entry: (entry[0], entry[1], entry[2]))
+    planned: list[tuple[Any, str]] = []
+    deferred: list[dict[str, Any]] = []
+    remaining = budget
+    for _, _, queries, row, intent in ranked:
+        if intent in {"recommendation", "discovery"} and slot_key and slot_key not in RADAR_RECOMMENDATION_SLOTS:
+            deferred.append({"searchId": str(row["id"]), "name": str(row["name"]), "intent": intent,
+                             "queries": queries, "reason": "las recomendaciones corren sólo a la mañana"})
+            continue
+        if queries > remaining:
+            deferred.append({"searchId": str(row["id"]), "name": str(row["name"]), "intent": intent,
+                             "queries": queries, "reason": "sin presupuesto de consultas en esta corrida"})
+            continue
+        remaining -= queries
+        planned.append((row, intent))
+    return planned, deferred
+
+
 def run_radar_searches(config: AppConfig, run_id: str, slot_key: str = "") -> dict[str, Any]:
     """Ejecuta las búsquedas activas que corresponden a esta corrida.
 
     Una búsqueda que falla no detiene a las demás: su falla queda en el recibo y
-    en `last_error`, y el resto de la corrida sigue.
+    en `last_error`, y el resto de la corrida sigue. Lo que no entra en el
+    presupuesto de consultas espera a la próxima y queda dicho en el detalle.
     """
 
     with _RADAR_LOCK, connect_db(config) as conn:
@@ -5222,14 +5448,17 @@ def run_radar_searches(config: AppConfig, run_id: str, slot_key: str = "") -> di
         ).fetchall()
 
     selected = [row for row in rows if not slot_key or slot_key in radar_search_slots(row)]
+    budget = int(getattr(config, "radar_query_budget", RADAR_QUERY_BUDGET) or RADAR_QUERY_BUDGET)
+    planned, deferred = radar_query_plan(selected, radar_wished_keys(config), slot_key, budget)
     totals = {
-        "searchesTotal": len(selected),
+        "searchesTotal": len(planned),
         "searchesOk": 0,
         "searchesFailed": 0,
         "listingsMatched": 0,
         "listingsRejected": 0,
+        "deferred": deferred,
     }
-    for row in selected:
+    for row, _intent in planned:
         search_id = str(row["id"])
         try:
             result = run_radar_search(config, search_id, run_id=run_id)
@@ -5415,6 +5644,28 @@ def load_console_catalog(config: AppConfig) -> list[dict[str, Any]]:
         return []
     entries = payload.get("consolas") if isinstance(payload, dict) else None
     return [entry for entry in entries or [] if isinstance(entry, dict)]
+
+
+def load_franchise_collections(config: AppConfig) -> dict[str, Any]:
+    """Colecciones temáticas del catálogo versionado, por id."""
+    path = config.static_dir / "data" / "franchise-collections.json"
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    franchises = payload.get("franchises") if isinstance(payload, dict) else None
+    return franchises if isinstance(franchises, dict) else {}
+
+
+def radar_wished_keys(config: AppConfig) -> set[tuple[str, str]]:
+    """Qué cuenta como deseo real: sólo Nacho's Wishlist (ver radar/wishlist.py)."""
+    return wished_keys(read_state(config), load_franchise_collections(config))
+
+
+def radar_wishlist_coverage(config: AppConfig) -> dict[str, Any]:
+    """Cuántos juegos de Nacho's Wishlist tienen una búsqueda activa, y cuáles no."""
+    searches = list_radar_searches(config)["items"]
+    return wishlist_coverage(read_state(config), searches, load_game_names_by_console(config))
 
 
 def load_game_names_by_console(config: AppConfig) -> dict[str, dict[str, str]]:
@@ -6440,7 +6691,7 @@ RADAR_FEED_SELECT = """
 def radar_match_reasons(conn: sqlite3.Connection, listing_id: str) -> list[dict[str, Any]]:
     rows = conn.execute(
         """SELECT m.search_id, m.confidence, m.reasons_json, m.unverified_json, m.target_json,
-                  s.name AS search_name, s.entity_type, s.entity_id, s.entity_console_id
+                  s.name AS search_name, s.entity_type, s.entity_id, s.entity_console_id, s.search_type
              FROM radar_search_matches m
              JOIN radar_searches s ON s.id = m.search_id AND s.deleted_at IS NULL
             WHERE m.listing_id = ? AND m.is_active = 1
@@ -6467,6 +6718,7 @@ def radar_match_reason_row(row: sqlite3.Row) -> dict[str, Any]:
     return {
         "searchId": row["search_id"],
         "searchName": row["search_name"],
+        "searchType": (row["search_type"] or "") if "search_type" in row.keys() else "",
         "confidence": row["confidence"],
         "reasons": radar_json_field(row["reasons_json"], []),
         "unverified": radar_json_field(row["unverified_json"], []),
@@ -6499,6 +6751,7 @@ def list_radar_feed(config: AppConfig, limit: int = RADAR_FEED_LIMIT) -> dict[st
 
     capped = max(1, min(int(limit or RADAR_FEED_LIMIT), 50))
     now = datetime.now(timezone.utc)
+    wished = radar_wished_keys(config)
     with _RADAR_LOCK, connect_db(config) as conn:
         decisions = read_radar_decisions(conn)
         rows = conn.execute(f"{RADAR_FEED_SELECT} ORDER BY best_score DESC, l.last_seen_at DESC").fetchall()
@@ -6536,7 +6789,7 @@ def list_radar_feed(config: AppConfig, limit: int = RADAR_FEED_LIMIT) -> dict[st
             ):
                 continue
 
-            item = radar_feed_item(row, decision, radar_cluster_matches(conn, cluster))
+            item = radar_annotate_alert(radar_feed_item(row, decision, radar_cluster_matches(conn, cluster)), wished)
             if decision and decision["decision"] == "following":
                 following.append(item)
             if len(feed) < capped:
@@ -6652,43 +6905,95 @@ def deserves_notification(item: dict[str, Any], previous: dict[str, Any] | None)
     return ""
 
 
-def is_exceptional(item: dict[str, Any]) -> bool:
-    """Una excepcional interrumpe; el resto espera al digest.
+def radar_item_intents(item: dict[str, Any], wished: set[tuple[str, str]]) -> list[str]:
+    """Qué persiguen las búsquedas que encontraron esta publicación."""
+    intents = {
+        search_intent(
+            str(match.get("searchType") or ""),
+            str(match.get("entityType") or ""),
+            str(match.get("entityConsoleId") or ""),
+            str(match.get("entityId") or ""),
+            wished,
+            match.get("titleTarget") if isinstance(match.get("titleTarget"), dict) else None,
+        )
+        for match in item.get("matches") or []
+    }
+    return sorted(intents)
 
-    La regla descansa en hechos medibles y no en el score. La calibración del
-    2026-09 mostró que el score casi no discrimina —50%, 62% y 59% de compra en
-    sus tres tramos— así que apoyar una interrupción en él sería construir sobre
-    la parte más floja del sistema. Interrumpir de más es peor que no
-    interrumpir: entrena a ignorar los avisos.
 
-    Tres hechos bastan:
+def radar_alert_review(item: dict[str, Any]) -> dict[str, Any]:
+    """Si puede interrumpir con un mail y, si no, por qué.
 
-    1. cruzó el precio objetivo que el propio usuario fijó para esa búsqueda;
-    2. un descuento profundo contra el benchmark comparable;
-    3. una baja fuerte sobre algo que el usuario ya venía siguiendo, que es el
-       cambio exacto que estaba esperando.
-
-    El objetivo va primero porque es el único de los tres que el usuario
-    escribió con la mano: cuando dijo "a 80 puestos acá lo compro", cruzar los
-    80 es exactamente el aviso que pidió, y no depende de ninguna heurística
-    nuestra.
+    Lo que el precio presenta como oportunidad —banda de ganga o buena compra,
+    o el objetivo cumplido— pero no pasa la compuerta queda como «Candidato
+    para revisar»: se ve en la app con sus razones y nunca llega como ganga.
     """
 
     valuation = item.get("valuation") or {}
-    # Lo que no cumple la búsqueda o hay que revisar antes no interrumpe: un
-    # cartucho sin originalidad declarada a mitad de precio es justo el tipo de
-    # «oportunidad» que entrenaba a ignorar los avisos.
+    band = str(item.get("band") or "")
+    reasons = alert_clearance(valuation, band)
+    intents = set(item.get("intents") or [])
+    if not intents & ALERTING_INTENTS:
+        reasons.append(
+            "es una recomendación, no un deseo de Nacho's Wishlist"
+            if "recommendation" in intents
+            else "la búsqueda no apunta a un deseo, una consola que falta ni un lote elegido"
+        )
+    target = valuation.get("target") or {}
+    priced_like_opportunity = (
+        str(valuation.get("priceBand") or "") in {"ganga", "buena"} or target.get("meets") is True
+    )
+    return {
+        "eligible": not reasons,
+        "reasons": reasons,
+        "candidate": bool(reasons) and priced_like_opportunity,
+        "label": "Candidato para revisar" if reasons and priced_like_opportunity else "",
+    }
+
+
+def radar_annotate_alert(item: dict[str, Any], wished: set[tuple[str, str]]) -> dict[str, Any]:
+    item["intents"] = radar_item_intents(item, wished)
+    item["alertReview"] = radar_alert_review(item)
+    return item
+
+
+def is_exceptional(item: dict[str, Any]) -> bool:
+    """Una excepcional interrumpe; el resto espera al digest o a la app.
+
+    Fail-closed desde el 2026-11-01. Interrumpir de más entrena a ignorar los
+    avisos, y la auditoría de ese día encontró 107 publicaciones que cumplían
+    el objetivo, todas con bloqueos pendientes, y una N64 sin fuente que llegó
+    como alerta. Un mail exige, además del precio:
+
+    - que la búsqueda persiga un deseo de Nacho's Wishlist, una consola que
+      falta o un lote elegido (nunca una recomendación vieja);
+    - todo lo de `alert_clearance`: identidad inequívoca, envío a Miami
+      conocido, publicación leída entera con faltantes y defectos sumados,
+      ningún bloqueo ni revisión, disponible, y referencia de mercado
+      comparable y confiable.
+
+    Con eso, cualquiera de tres hechos alcanza: el costo funcional cruzó el
+    objetivo que fijó el dueño, un descuento profundo contra esa referencia, o
+    una baja fuerte de algo que ya venía siguiendo. Ninguno alcanza solo.
+    """
+
+    valuation = item.get("valuation") or {}
     if valuation.get("section") in RADAR_SECONDARY_SECTIONS:
         return False
-    target = valuation.get("target") or {}
-    if target.get("meets") is True and item.get("band") != "revisar":
-        return True
-    ratio = valuation.get("ratio")
-    if isinstance(ratio, (int, float)) and 0 < ratio <= RADAR_ALERT_RATIO and item.get("band") != "revisar":
-        return True
+    if not set(item.get("intents") or []) & ALERTING_INTENTS:
+        return False
+    band = str(item.get("band") or "")
     drop = item.get("priceDrop") or {}
     following = (item.get("decision") or {}).get("decision") == "following"
-    return bool(following and drop.get("ratio", 0) >= RADAR_ALERT_DROP)
+    if following and drop.get("ratio", 0) >= RADAR_ALERT_DROP:
+        return not alert_clearance(valuation, band, price_drop=True)
+    if alert_clearance(valuation, band):
+        return False
+    target = valuation.get("target") or {}
+    if target.get("meets") is True and target.get("costKnown") is True:
+        return True
+    ratio = valuation.get("ratio")
+    return isinstance(ratio, (int, float)) and 0 < ratio <= RADAR_ALERT_RATIO
 
 
 def radar_email_subject(kind: str, items: list[dict[str, Any]]) -> str:
@@ -6725,9 +7030,13 @@ def radar_email_bodies(config: AppConfig, kind: str, items: list[dict[str, Any]]
             detail.append("sin verificar: abrila y confirmá Buy It Now o Add to Cart")
         reasons = (item.get("matches") or [{}])[0].get("reasons") or []
         why = reasons[0] if reasons else ""
+        valuation = item.get("valuation") or {}
+        account = radar_email_account(item)
 
         lines.append(f"· {item['title']}")
         lines.append(f"  {' · '.join(part for part in detail if part)}")
+        if account:
+            lines.append(f"  {account}")
         if why:
             lines.append(f"  {why}")
         lines.append(f"  {item.get('listingUrl', '')}")
@@ -6738,6 +7047,7 @@ def radar_email_bodies(config: AppConfig, kind: str, items: list[dict[str, Any]]
             f"<a href='{html_escape(item.get('listingUrl', ''))}' style='color:#0c8fb0;font-weight:600;text-decoration:none'>"
             f"{html_escape(item['title'])}</a><br>"
             f"<span style='color:#3d536c;font-size:13px'>{html_escape(' · '.join(p for p in detail if p))}</span>"
+            + (f"<br><span style='color:#0b1a2c;font-size:13px'>{html_escape(account)}</span>" if account else "")
             + (f"<br><span style='color:#3d536c;font-size:13px'>{html_escape(why)}</span>" if why else "")
             + "</td></tr>"
         )
@@ -6752,6 +7062,41 @@ def radar_email_bodies(config: AppConfig, kind: str, items: list[dict[str, Any]]
         "</div>"
     )
     return "\n".join(lines), html
+
+
+RADAR_BAND_LABELS = {
+    "ganga": "Ganga real",
+    "buena": "Buena compra",
+    "razonable": "Precio razonable",
+    "premium": "Premium justificable",
+    "caro": "Caro",
+    "revisar": "Requiere revisión",
+    "sin-referencia": "Sin referencia",
+}
+
+
+def radar_band_label(band: str) -> str:
+    return RADAR_BAND_LABELS.get(str(band or ""), str(band or ""))
+
+
+def radar_email_account(item: dict[str, Any]) -> str:
+    """La cuenta, los riesgos y la clasificación, para que el mail se lea solo.
+
+    «USD 59,99 + USD 15,85 de envío + fuente faltante estimado en USD 20,00 =
+    USD 95,84 antes del courier. Stick del control flojo, Jumper Pak estándar
+    y sin devoluciones. Clasificación: Precio razonable, no ganga.»
+    """
+    valuation = item.get("valuation") or {}
+    parts = [str(valuation.get("explanation") or "")]
+    risks = [str(risk) for risk in valuation.get("risks") or [] if risk]
+    if risks:
+        text = ", ".join(risks[:-1]) + (" y " if len(risks) > 1 else "") + risks[-1]
+        parts.append(text[:1].upper() + text[1:] + ".")
+    band = str(item.get("band") or valuation.get("band") or "")
+    if band:
+        label = radar_band_label(band)
+        parts.append(f"Clasificación: {label}{'' if band == 'ganga' else ', no ganga'}.")
+    return " ".join(part for part in parts if part)
 
 
 def html_escape(value: Any) -> str:
@@ -7261,6 +7606,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/radar/master":
             self.send_json({"ok": True, "proposals": radar_master_proposals(config)})
+            return
+        if path == "/api/radar/wishlist-coverage":
+            self.send_json({"ok": True, **radar_wishlist_coverage(config)})
             return
         if path == "/api/radar/runs":
             query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)

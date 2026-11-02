@@ -435,7 +435,12 @@ class VerificationTests(RadarRunTestCase):
 
     def test_verifying_lifts_a_bargain_and_the_verification_expires(self) -> None:
         search = self.wishlist()
-        self.run_with(search, [summary("v1|ff7|0", "Final Fantasy VII PS1 Video Game Disc Tested", "20.00")])
+        # Leída entera y limpia: lo único que le falta para ganga es que el
+        # dueño confirme que sigue comprable.
+        self.config.radar_item_details = True
+        clean = {"description": "Disc tested, plays great.", "returnsAccepted": True, "imageCount": 6}
+        with patch("radar.sources.ebay.EbayBrowseSource.item_detail", return_value=clean):
+            self.run_with(search, [summary("v1|ff7|0", "Final Fantasy VII PS1 Video Game Disc Tested", "20.00")])
         before = self.find(search["id"])["results"][0]
         self.assertEqual(before["valuation"]["priceBand"], "ganga")
         self.assertEqual(before["band"], "buena")

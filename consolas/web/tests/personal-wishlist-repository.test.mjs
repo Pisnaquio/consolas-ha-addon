@@ -256,17 +256,48 @@ test("a search created by the old «Buscar con Radar» button is still found by 
 
 test("the radar draft points at the real game so the link survives renames", () => {
   const { wishlist } = loadRepositories();
-  deepEqual(wishlist.radarSearchDraft(dkcEntry), {
-    name: "Donkey Kong Country (Super Nintendo)",
-    platform: "Super Nintendo",
-    searchType: "chase",
-    origin: "user",
-    status: "active",
-    entityType: "game",
-    entityId: "donkey-kong-country",
-    entityConsoleId: "snes",
-    notes: "Creada desde Nacho's Wishlist."
-  });
+  const draft = wishlist.radarSearchDraft({ ...dkcEntry, priceRange: { low: 15, mid: 22, high: 30 } });
+  deepEqual(
+    { ...draft, criteria: undefined },
+    {
+      name: "Donkey Kong Country (Super Nintendo)",
+      platform: "Super Nintendo",
+      searchType: "chase",
+      origin: "user",
+      status: "active",
+      entityType: "game",
+      entityId: "donkey-kong-country",
+      entityConsoleId: "snes",
+      notes: "Creada desde Nacho's Wishlist. Techo de costo a Miami: USD 30 (precio alto del catálogo)."
+    }
+  );
+});
+
+test("a retro cartridge search is born original-only, region-safe and with a cost ceiling", () => {
+  const { wishlist } = loadRepositories();
+  const { criteria } = wishlist.radarSearchDraft({ ...dkcEntry, priceRange: { low: 15, mid: 22, high: 30 } });
+  assert.equal(criteria.originalParts, "required");
+  deepEqual(criteria.excludeRegions, ["ntsc-j", "pal"]);
+  assert.equal(criteria.maxTotalUsa, 30);
+  assert.ok(criteria.excludeTerms.includes("repro"));
+  assert.equal(criteria.completeness, undefined, "loose es aceptable en un cartucho");
+});
+
+test("a disc search prefers CIB and leaves loose discs out", () => {
+  const { wishlist } = loadRepositories();
+  const entry = { consoleId: "psp", gameId: "chains-of-olympus", title: "God of War: Chains of Olympus", platform: "PSP", priceRange: { high: 25 } };
+  const { criteria } = wishlist.radarSearchDraft(entry);
+  assert.ok(criteria.preferTerms.includes("cib"));
+  assert.ok(criteria.excludeTerms.includes("disc only"));
+  assert.equal(criteria.originalParts, undefined);
+});
+
+test("without a catalog price the search stays in draft until a ceiling is set", () => {
+  const { wishlist } = loadRepositories();
+  const draft = wishlist.radarSearchDraft(dkcEntry);
+  assert.equal(draft.status, "draft");
+  assert.equal(draft.criteria.maxTotalUsa, undefined);
+  assert.match(draft.notes, /borrador/);
 });
 
 test("radar capacity says when the active ceiling is reached", () => {
