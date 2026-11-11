@@ -393,6 +393,16 @@ body.studio-variant .mini-card h4 {
   color: var(--ink);
 }
 
+body.studio-variant .opportunity-summary-grid .mini-card {
+  background: var(--surface-2);
+}
+
+body.studio-variant .opportunity-summary-grid .mini-card h4 {
+  color: var(--muted);
+  font-family: var(--font-body);
+  font-weight: 500;
+}
+
 body.studio-variant .card-media,
 body.studio-variant .db-card-media,
 body.studio-variant .gba-game-cover,

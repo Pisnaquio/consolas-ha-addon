@@ -644,8 +644,43 @@ h2 {
   flex-wrap: wrap;
 }
 
+/* Resumen de Oportunidades: una sola franja de cifras. El número manda, el
+   rótulo va debajo y la aclaración queda sólo para lectores de pantalla. */
 .opportunity-summary-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.opportunity-summary-grid .mini-card {
+  padding: 10px 12px;
+  gap: 2px;
+  align-content: start;
+}
+
+.opportunity-summary-grid .mini-card strong {
+  order: -1;
+  font-size: 1.5rem;
+  line-height: 1.1;
+}
+
+.opportunity-summary-grid .mini-card h4 {
+  margin: 0;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.opportunity-summary-grid .mini-card .muted {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .opportunity-sync-status {
@@ -1770,7 +1805,7 @@ h2 {
 
 @media (max-width: 1000px) {
   .opportunity-summary-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
@@ -1882,7 +1917,7 @@ h2 {
   }
 
   .opportunity-summary-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .opportunity-view-switch,
