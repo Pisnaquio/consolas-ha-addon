@@ -59,6 +59,23 @@ test("los deseados salen sólo de Nacho's Wishlist, nunca de loQuiero/keepInWish
   assert.ok(games.every((game) => game.explicit));
 });
 
+test("una reproducción que se tiene no cumple el deseo del original", () => {
+  const withRepro = {
+    user: {
+      detailEditsById: {
+        "wishlist:personal": { wishesById: { w: { id: "w", kind: "games", items: [{ consoleId: "zeta", gameId: "a" }, { consoleId: "zeta", gameId: "d" }] } } },
+        zeta: {
+          gameEditsById: {
+            a: { ownershipType: "physical", authenticityStatus: "reproduction" },
+            d: { ownershipType: "physical", authenticityStatus: "original" },
+          },
+        },
+      },
+    },
+  };
+  assert.deepEqual(wishedGames(withRepro, catalog, "zeta").map((game) => game.id), ["a"]);
+});
+
 test("una recomendación vieja no consume cupo de wishlist", () => {
   const onlyOld = { user: { detailEditsById: { zeta: { gameEditsById: { b: { loQuiero: true, keepInWishlist: true } } } } } };
   assert.deepEqual(wishedGames(onlyOld, catalog, "zeta"), []);

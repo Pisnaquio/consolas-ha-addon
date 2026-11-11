@@ -3,11 +3,11 @@
 }
 
 .games-filter-shell {
-  border: 2px solid rgba(95, 184, 232, 0.45);
-  border-radius: 18px;
-  background: linear-gradient(180deg, rgba(252, 254, 255, 0.98), rgba(241, 249, 255, 0.96));
+  border: 2px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
   padding: 13px;
-  box-shadow: 0 12px 24px rgba(21, 92, 143, 0.1);
+  box-shadow: none;
 }
 
 .games-filterbar {
@@ -20,8 +20,8 @@
   display: grid;
   gap: 6px;
   font-size: 0.76rem;
-  color: #586673;
-  font-family: "IBM Plex Mono", monospace;
+  color: var(--muted);
+  font-family: "Inter", sans-serif;
 }
 
 .games-filterbar .filter-search {
@@ -31,33 +31,33 @@
 .games-filterbar input,
 .games-filterbar select {
   min-height: 38px;
-  border: 1px solid #b7cce7;
-  border-radius: 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
   background: #fff;
   padding: 8px 11px;
   font: inherit;
-  color: #1f2b36;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  color: var(--muted);
+  box-shadow: none;
   transition: border-color 140ms ease, box-shadow 140ms ease, background-color 140ms ease;
 }
 
 .games-filterbar input:hover,
 .games-filterbar select:hover {
-  border-color: #94a6bd;
+  border-color: var(--line-strong);
 }
 
 .games-filterbar input:focus,
 .games-filterbar select:focus {
   outline: none;
-  border-color: #1565c0;
-  box-shadow: 0 0 0 3px rgba(21, 101, 192, 0.16);
+  border-color: var(--line);
+  box-shadow: none;
 }
 
 .games-count {
   margin: 10px 0 0;
-  color: #586673;
+  color: var(--muted);
   font-size: 0.84rem;
-  font-family: "IBM Plex Mono", monospace;
+  font-family: "Inter", sans-serif;
 }
 
 .games-stats-strip {
@@ -68,22 +68,22 @@
 }
 
 .games-stat-item {
-  border: 1px solid #bdd2ec;
-  border-radius: 12px;
-  background: linear-gradient(180deg, #ffffff, #f4faff);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
   padding: 9px 11px;
   display: grid;
   gap: 4px;
 }
 
 .games-stat-item small {
-  color: #61707d;
+  color: var(--muted);
   font-size: 0.72rem;
-  font-family: "IBM Plex Mono", monospace;
+  font-family: "Inter", sans-serif;
 }
 
 .games-stat-item strong {
-  color: #1f2b36;
+  color: var(--muted);
   font-size: 1.1rem;
   line-height: 1;
 }
@@ -95,14 +95,14 @@
 }
 
 .games-subsection-collapsible {
-  border: 2px solid rgba(95, 184, 232, 0.36);
-  border-radius: 16px;
-  background: linear-gradient(180deg, #ffffff, #f5faff);
+  border: 2px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
   padding: 10px 12px 12px;
 }
 
 .games-subsection-collapsible[open] {
-  background: #f8fbff;
+  background: var(--surface-3);
 }
 
 .games-subtitle-row {
@@ -119,48 +119,48 @@
 }
 
 .games-subtitle-count {
-  border: 1px solid #c8d3e2;
+  border: 1px solid var(--line-strong);
   border-radius: 999px;
   padding: 2px 9px;
   font-size: 0.75rem;
-  color: #5b6975;
-  font-family: "IBM Plex Mono", monospace;
+  color: var(--muted);
+  font-family: "Inter", sans-serif;
   background: #fff;
 }
 
 .games-subsection-extras .games-subtitle {
-  color: #4f6170;
+  color: var(--muted);
 }
 
 .games-subtitle {
   margin: 0;
   font-size: 1rem;
-  color: #1f2b36;
+  color: var(--muted);
 }
 
 .games-register-form {
   display: grid;
   grid-template-columns: 1.5fr 1fr auto;
   gap: 10px;
-  border: 1px solid #bed2ec;
-  border-radius: 14px;
-  background: linear-gradient(180deg, #ffffff, #f5faff);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
   padding: 12px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+  box-shadow: none;
 }
 
 .games-register-form label {
   display: grid;
   gap: 6px;
   font-size: 0.74rem;
-  color: #56646f;
-  font-family: "IBM Plex Mono", monospace;
+  color: var(--muted);
+  font-family: "Inter", sans-serif;
 }
 
 .games-register-form input,
 .games-register-form select {
   min-height: 36px;
-  border: 1px solid #c8d3e2;
+  border: 1px solid var(--line-strong);
   border-radius: 9px;
   background: #fff;
   padding: 8px;
@@ -177,17 +177,17 @@
 }
 
 .manual-game-dialog {
-  border: 2px solid rgba(95, 184, 232, 0.45);
-  border-radius: 20px;
+  border: 2px solid var(--line);
+  border-radius: var(--radius);
   padding: 0;
   width: min(920px, 94vw);
   max-height: 88vh;
-  background: linear-gradient(180deg, #ffffff, #f5faff);
-  box-shadow: 0 24px 44px rgba(20, 27, 33, 0.28);
+  background: var(--surface);
+  box-shadow: none;
 }
 
 .manual-game-dialog::backdrop {
-  background: rgba(14, 22, 28, 0.45);
+  background: var(--surface-3);
   backdrop-filter: blur(2px);
 }
 
@@ -216,7 +216,7 @@
 
 .manual-game-dialog-head p {
   margin: 4px 0 0;
-  color: #5a6874;
+  color: var(--muted);
   font-size: 0.78rem;
 }
 
@@ -230,8 +230,8 @@
   display: grid;
   gap: 6px;
   font-size: 0.75rem;
-  color: #586673;
-  font-family: "IBM Plex Mono", monospace;
+  color: var(--muted);
+  font-family: "Inter", sans-serif;
 }
 
 .manual-step-field input {
@@ -246,9 +246,9 @@
 .manual-detect-hint {
   margin: 0;
   grid-column: 1 / -1;
-  color: #516171;
+  color: var(--muted);
   font-size: 0.72rem;
-  font-family: "IBM Plex Mono", monospace;
+  font-family: "Inter", sans-serif;
 }
 
 .manual-inline-error {
@@ -256,13 +256,13 @@
   grid-column: 1 / -1;
   color: #8c2f2f;
   font-size: 0.72rem;
-  font-family: "IBM Plex Mono", monospace;
+  font-family: "Inter", sans-serif;
 }
 
 .manual-preview-panel {
-  border: 1px solid #d6deea;
-  border-radius: 12px;
-  background: #fbfdff;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
   padding: 8px;
 }
 
@@ -280,13 +280,13 @@
   display: grid;
   gap: 6px;
   font-size: 0.74rem;
-  color: #56646f;
-  font-family: "IBM Plex Mono", monospace;
+  color: var(--muted);
+  font-family: "Inter", sans-serif;
 }
 
 .manual-quick-fields select {
   min-height: 36px;
-  border: 1px solid #c8d3e2;
+  border: 1px solid var(--line-strong);
   border-radius: 9px;
   background: #fff;
   padding: 8px;
@@ -294,17 +294,17 @@
 }
 
 .manual-advanced {
-  border: 1px solid #d6deea;
-  border-radius: 12px;
-  background: #fbfdff;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
   padding: 8px 10px;
 }
 
 .manual-advanced summary {
   cursor: pointer;
   font-size: 0.76rem;
-  color: #516171;
-  font-family: "IBM Plex Mono", monospace;
+  color: var(--muted);
+  font-family: "Inter", sans-serif;
 }
 
 .manual-dialog-actions {
@@ -329,7 +329,7 @@
 
 .manual-form-subtitle {
   margin: 0;
-  color: #5a6874;
+  color: var(--muted);
   font-size: 0.76rem;
 }
 
@@ -344,8 +344,8 @@
   display: grid;
   gap: 6px;
   font-size: 0.74rem;
-  color: #56646f;
-  font-family: "IBM Plex Mono", monospace;
+  color: var(--muted);
+  font-family: "Inter", sans-serif;
 }
 
 .manual-form-grid input,
@@ -354,7 +354,7 @@
 .manual-price-grid input,
 .manual-price-grid textarea {
   min-height: 36px;
-  border: 1px solid #c8d3e2;
+  border: 1px solid var(--line-strong);
   border-radius: 9px;
   background: #fff;
   padding: 8px;
@@ -373,9 +373,9 @@
 }
 
 .manual-cover-preview-wrap {
-  border: 1px solid #d6deea;
-  border-radius: 10px;
-  background: #fbfdff;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
   padding: 4px;
   min-height: 110px;
 }
@@ -404,9 +404,9 @@
 }
 
 .gba-game-card {
-  border: 2px solid rgba(95, 184, 232, 0.52);
-  border-radius: 22px;
-  background: linear-gradient(180deg, #ffffff, #eff8ff);
+  border: 2px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
   padding: 10px;
   display: grid;
   gap: 7px;
@@ -415,17 +415,17 @@
 
 .gba-game-card:hover {
   transform: translateY(-3px);
-  box-shadow: 0 18px 30px rgba(16, 54, 89, 0.16);
-  border-color: rgba(15, 142, 168, 0.62);
+  box-shadow: none;
+  border-color: var(--line);
 }
 
 .gba-game-card.is-owned {
-  border-color: rgba(15, 142, 168, 0.5);
-  background: linear-gradient(180deg, #f5fbff, #e8f6ff);
+  border-color: var(--line);
+  background: var(--surface);
 }
 
 .gba-game-card.is-pokemon {
-  box-shadow: inset 0 0 0 1px rgba(49, 107, 183, 0.35);
+  box-shadow: none;
 }
 
 .gba-game-layout {
@@ -436,9 +436,9 @@
 }
 
 .gba-game-cover {
-  border: 2px solid #bed6ef;
-  border-radius: 16px;
-  background: linear-gradient(180deg, #edf6ff, #f7fcff);
+  border: 2px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
   overflow: hidden;
   aspect-ratio: 3 / 4;
   height: auto;
@@ -471,7 +471,7 @@
 
 .gba-game-meta {
   margin: 0;
-  color: #586673;
+  color: var(--muted);
   font-size: 0.79rem;
 }
 
@@ -482,23 +482,23 @@
 }
 
 .gba-badge {
-  border: 1px solid #c0cee0;
+  border: 1px solid var(--line-strong);
   border-radius: 999px;
-  background: #f1f7ff;
+  background: var(--surface-3);
   padding: 3px 8px;
   font-size: 0.68rem;
-  font-family: "IBM Plex Mono", monospace;
+  font-family: "Inter", sans-serif;
 }
 
 .gba-badge.want {
-  background: linear-gradient(90deg, #0f8ea8, #3f9dd6);
-  border-color: #258ec2;
-  color: #ffffff;
+  background: var(--surface);
+  border-color: var(--line);
+  color: var(--ink);
 }
 
 .gba-badge.standby {
-  background: #eef2f8;
-  border-color: #c9d4e5;
+  background: var(--surface-3);
+  border-color: var(--line-strong);
 }
 
 .gba-badge.ownership-physical {
@@ -507,23 +507,23 @@
 }
 
 .gba-badge.ownership-digital {
-  background: #eef3fa;
-  border-color: #c9d6e7;
+  background: var(--surface-3);
+  border-color: var(--line-strong);
 }
 
 .gba-badge.ownership-both {
-  background: #ede9ff;
-  border-color: #cbc0f2;
+  background: var(--surface-3);
+  border-color: var(--line-strong);
 }
 
 .gba-badge.keep-wishlist {
-  background: #dbecff;
-  border-color: #9fc3e6;
+  background: var(--surface-3);
+  border-color: var(--line-strong);
 }
 
 .gba-badge.keep-off {
-  background: #f2f4f6;
-  border-color: #d4d9de;
+  background: var(--surface-3);
+  border-color: var(--line-strong);
 }
 
 .gba-badge.registered {
@@ -532,13 +532,13 @@
 }
 
 .gba-badge.pokemon {
-  background: #e7f2ff;
-  border-color: #b8cde8;
+  background: var(--surface-3);
+  border-color: var(--line-strong);
 }
 
 .gba-badge.manual {
-  background: #f1f5f9;
-  border-color: #cbd5e1;
+  background: var(--surface-3);
+  border-color: var(--line-strong);
 }
 
 .gba-badge.priority-alta {
@@ -552,13 +552,13 @@
 }
 
 .gba-badge.priority-media {
-  background: #f1f4f8;
-  border-color: #d0d8e2;
+  background: var(--surface-3);
+  border-color: var(--line-strong);
 }
 
 .gba-badge.priority-baja {
-  background: #ececec;
-  border-color: #cfcfcf;
+  background: var(--surface-3);
+  border-color: var(--line-strong);
 }
 
 .gba-badge.status-confirmed {
@@ -572,8 +572,8 @@
 }
 
 .gba-badge.status-wishlist {
-  background: #eef3fa;
-  border-color: #c9d6e7;
+  background: var(--surface-3);
+  border-color: var(--line-strong);
 }
 
 .gba-game-controls {
@@ -591,16 +591,16 @@
 }
 
 .gba-game-controls .btn-link.active {
-  background: linear-gradient(90deg, #0f8ea8, #3f9dd6);
-  border-color: #258ec2;
-  color: #f8fbff;
-  box-shadow: 0 10px 16px rgba(15, 142, 168, 0.24);
+  background: var(--surface);
+  border-color: var(--line);
+  color: var(--ink);
+  box-shadow: none;
 }
 
 .gba-game-controls .btn-link.unwant {
   background: #f6f3ef;
   border-color: #d8cfc1;
-  color: #5d6a76;
+  color: var(--muted);
 }
 
 .gba-game-controls .btn-link.unwant.active {
@@ -610,22 +610,22 @@
 }
 
 .gba-game-controls .btn-link.standby.active {
-  background: #4d5f76;
-  border-color: #4d5f76;
-  color: #f5f8ff;
+  background: var(--surface-2);
+  border-color: var(--line);
+  color: var(--ink);
 }
 
 .mini-field {
   display: grid;
   gap: 4px;
   font-size: 0.68rem;
-  color: #586673;
-  font-family: "IBM Plex Mono", monospace;
+  color: var(--muted);
+  font-family: "Inter", sans-serif;
 }
 
 .mini-field select {
   min-height: 36px;
-  border: 1px solid #c8d3e2;
+  border: 1px solid var(--line-strong);
   border-radius: 9px;
   background: #fff;
   padding: 7px 8px;
@@ -637,8 +637,8 @@
   align-items: center;
   gap: 8px;
   font-size: 0.72rem;
-  color: #586673;
-  font-family: "IBM Plex Mono", monospace;
+  color: var(--muted);
+  font-family: "Inter", sans-serif;
 }
 
 .keep-toggle input {
@@ -653,20 +653,20 @@
 }
 
 .gba-price-item {
-  border: 1px solid #c3d4e8;
-  border-radius: 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
   background: #fff;
   padding: 5px 8px;
 }
 
 .gba-price-item.low {
-  background: #edf7ff;
-  border-color: #b8d0ee;
+  background: var(--surface-3);
+  border-color: var(--line-strong);
 }
 
 .gba-price-item.mid {
-  background: #f3f7ff;
-  border-color: #d1dceb;
+  background: var(--surface-3);
+  border-color: var(--line-strong);
 }
 
 .gba-price-item.high {
@@ -676,9 +676,9 @@
 
 .gba-price-item small {
   display: block;
-  color: #61707d;
+  color: var(--muted);
   font-size: 0.62rem;
-  font-family: "IBM Plex Mono", monospace;
+  font-family: "Inter", sans-serif;
 }
 
 .gba-price-item strong {
@@ -688,7 +688,7 @@
 
 .gba-game-note {
   margin: 0;
-  color: #657381;
+  color: var(--muted);
   font-size: 0.73rem;
 }
 
@@ -711,9 +711,9 @@
 
 .gba-variants-title {
   margin: 0;
-  color: #5f6d79;
+  color: var(--muted);
   font-size: 0.67rem;
-  font-family: "IBM Plex Mono", monospace;
+  font-family: "Inter", sans-serif;
 }
 
 .gba-variants-list {
@@ -726,25 +726,25 @@
   border: 1px solid #d8cfbf;
   border-radius: 999px;
   background: #fff8ea;
-  color: #4f5f6f;
+  color: var(--muted);
   padding: 2px 7px;
   font-size: 0.66rem;
-  font-family: "IBM Plex Mono", monospace;
+  font-family: "Inter", sans-serif;
 }
 
 .game-edit-panel {
-  border: 1px solid #c4d6eb;
-  border-radius: 12px;
-  background: linear-gradient(180deg, #ffffff, #f4faff);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
   padding: 7px 9px 9px;
 }
 
 .game-edit-panel summary {
   cursor: pointer;
   font-size: 0.72rem;
-  color: #526272;
+  color: var(--muted);
   list-style: none;
-  font-family: "IBM Plex Mono", monospace;
+  font-family: "Inter", sans-serif;
   display: inline-flex;
   align-items: center;
   border: 1px solid #d8cfbf;
@@ -767,8 +767,8 @@
   display: grid;
   gap: 5px;
   font-size: 0.72rem;
-  color: #56646f;
-  font-family: "IBM Plex Mono", monospace;
+  color: var(--muted);
+  font-family: "Inter", sans-serif;
 }
 
 .gba-game-fields input,

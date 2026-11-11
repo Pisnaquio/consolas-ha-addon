@@ -92,7 +92,7 @@ a {
 .eyebrow {
   margin: 0 0 0.35rem;
   color: #8ec6ff;
-  font: 500 0.72rem/1 "IBM Plex Mono", monospace;
+  font: 500 0.72rem/1 "Inter", sans-serif;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -100,7 +100,7 @@ a {
 .hero h1 {
   margin: 0;
   max-width: 720px;
-  font-family: "Fraunces", serif;
+  font-family: "Space Grotesk", sans-serif;
   font-size: clamp(2.3rem, 5vw, 4.65rem);
   line-height: 0.96;
   letter-spacing: 0;
@@ -127,7 +127,7 @@ a {
   padding: 0.45rem 0.66rem;
   color: #dbeeff;
   background: rgba(4, 19, 36, 0.46);
-  font: 500 0.74rem/1 "IBM Plex Mono", monospace;
+  font: 500 0.74rem/1 "Inter", sans-serif;
 }
 
 .hero-actions {
@@ -148,7 +148,7 @@ a {
   color: #f3fbff;
   text-decoration: none;
   background: linear-gradient(135deg, rgba(35, 118, 185, 0.92), rgba(47, 194, 255, 0.78));
-  font: 700 0.78rem/1 "IBM Plex Mono", monospace;
+  font: 700 0.78rem/1 "Inter", sans-serif;
 }
 
 .btn-soft {
@@ -197,7 +197,7 @@ a {
 .collection-meta,
 .wanted-meta,
 .action-topline {
-  font-family: "IBM Plex Mono", monospace;
+  font-family: "Inter", sans-serif;
 }
 
 .status-metric small {
@@ -256,7 +256,7 @@ a {
 
 .section-head h2 {
   margin: 0;
-  font-family: "Fraunces", serif;
+  font-family: "Space Grotesk", sans-serif;
   font-size: clamp(1.25rem, 2vw, 1.65rem);
   letter-spacing: 0;
 }
@@ -366,7 +366,7 @@ a {
   padding: 0.35rem 0.5rem;
   color: #d9f2ff;
   background: rgba(50, 199, 255, 0.1);
-  font: 700 0.66rem/1 "IBM Plex Mono", monospace;
+  font: 700 0.66rem/1 "Inter", sans-serif;
 }
 
 .status-pill.ready {
@@ -438,7 +438,7 @@ a {
   justify-self: start;
   color: #a9dcff;
   text-decoration: none;
-  font: 700 0.74rem/1 "IBM Plex Mono", monospace;
+  font: 700 0.74rem/1 "Inter", sans-serif;
 }
 
 .action-list,

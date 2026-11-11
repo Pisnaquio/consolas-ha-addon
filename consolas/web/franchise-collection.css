@@ -29,8 +29,8 @@
   position: relative;
   padding: 18px 20px 16px;
   border: 1px solid var(--line);
-  border-radius: 16px;
-  background: linear-gradient(180deg, var(--surface-2), rgba(5, 19, 36, 0.7));
+  border-radius: var(--radius);
+  background: var(--surface);
   display: grid;
   gap: 6px;
   align-content: start;
@@ -40,7 +40,7 @@
   position: absolute;
   inset: 0 auto 0 0;
   width: 3px;
-  border-radius: 16px 0 0 16px;
+  border-radius: var(--radius) 0 0 var(--radius);
   background: var(--tone);
 }
 .tc-metric.is-play { --tone: var(--accent-2, #63d8aa); }
@@ -49,7 +49,7 @@
 
 .tc-metric-value {
   margin: 0;
-  font: 500 2.3rem/1 "IBM Plex Mono", monospace;
+  font: 500 2.3rem/1 "Inter", sans-serif;
   font-variant-numeric: tabular-nums;
   color: var(--tone);
 }
@@ -57,7 +57,7 @@
 .tc-metric-track {
   height: 5px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.09);
+  background: var(--surface-3);
   overflow: hidden;
   margin: 2px 0 4px;
 }
@@ -70,7 +70,7 @@
   margin-top: 14px;
   padding: 16px 20px;
   border: 1px solid rgba(99, 216, 170, 0.36);
-  border-radius: 16px;
+  border-radius: var(--radius);
   background: rgba(99, 216, 170, 0.07);
 }
 .tc-next.is-done { border-color: var(--line); background: transparent; }
@@ -84,9 +84,9 @@
 .tc-filters select,
 .tc-filters input[type="search"] {
   border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--surface-3);
   color: var(--ink);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   padding: 7px 11px;
   font: 400 0.84rem inherit;
 }
@@ -102,7 +102,7 @@
   font: 500 0.8rem inherit;
   cursor: pointer;
 }
-.pill.is-active { border-color: var(--accent); color: var(--accent); background: rgba(50, 199, 255, 0.1); }
+.pill.is-active { border-color: var(--accent); color: var(--accent); background: var(--surface-3); }
 
 /* --- Secciones ------------------------------------------------------------ */
 
@@ -123,12 +123,12 @@
 }
 .tc-era-head h3 {
   margin: 0;
-  font: 500 0.74rem/1 "IBM Plex Mono", monospace;
+  font: 500 0.74rem/1 "Inter", sans-serif;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--muted);
 }
-.tc-era-head span { font: 500 0.78rem "IBM Plex Mono", monospace; font-variant-numeric: tabular-nums; color: var(--muted); }
+.tc-era-head span { font: 500 0.78rem "Inter", sans-serif; font-variant-numeric: tabular-nums; color: var(--muted); }
 
 /* --- La obra: una fila que se lee sin abrirse ------------------------------
    La obra es la unidad narrativa y la unidad de decisión. El lanzamiento es
@@ -138,12 +138,12 @@
 
 .tc-work {
   border: 1px solid var(--line);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.018);
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
   overflow: hidden;
 }
 .tc-work.is-covered { border-left: 3px solid var(--accent-2, #63d8aa); }
-.tc-work.is-open { background: var(--surface-3, rgba(4, 18, 35, 0.48)); border-color: var(--line-strong, var(--line)); }
+.tc-work.is-open { background: var(--surface-3, var(--surface-3)); border-color: var(--line-strong, var(--line)); }
 
 .tc-work-head {
   display: grid;
@@ -159,24 +159,24 @@
   text-align: left;
   cursor: pointer;
 }
-.tc-work-head:hover { background: rgba(255, 255, 255, 0.03); }
+.tc-work-head:hover { background: var(--surface-3); }
 .tc-work-head.is-static { cursor: default; }
 .tc-work-head:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
 .tc-work-year {
-  font: 500 0.86rem "IBM Plex Mono", monospace;
+  font: 500 0.86rem "Inter", sans-serif;
   font-variant-numeric: tabular-nums;
   color: var(--muted);
 }
 .tc-work-id { min-width: 0; display: grid; gap: 2px; }
-.tc-work-title { font-family: "Fraunces", "Space Grotesk", serif; font-size: 1.04rem; font-weight: 500; }
+.tc-work-title { font-family: "Space Grotesk", sans-serif; font-size: 1.04rem; font-weight: 500; }
 .tc-work-coverage { display: block; margin: 0; font-size: 0.79rem; line-height: 1.4; color: var(--muted); overflow-wrap: anywhere; }
 .tc-work-coverage.is-covered { color: var(--accent-2, #63d8aa); }
 .tc-work-coverage.is-future { font-style: italic; }
 
 .tc-work-flags { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .tc-work-toggle {
-  font: 400 0.73rem "IBM Plex Mono", monospace;
+  font: 400 0.73rem "Inter", sans-serif;
   color: var(--muted);
   white-space: nowrap;
 }
@@ -190,8 +190,8 @@
 .tc-release {
   padding: 12px 14px;
   border: 1px solid var(--line);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.025);
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
   display: grid;
   gap: 8px;
 }
@@ -201,11 +201,11 @@
 .tc-release-id { min-width: 0; flex: 1 1 auto; }
 .tc-release-flags { display: flex; flex-direction: column; align-items: end; gap: 5px; flex-shrink: 0; }
 .tc-release-title { margin: 0; font-weight: 600; font-size: 0.93rem; overflow-wrap: anywhere; }
-.tc-release-meta { margin: 3px 0 0; font: 400 0.75rem "IBM Plex Mono", monospace; color: var(--muted); }
-.tc-release-price { margin: 4px 0 0; font: 500 0.75rem "IBM Plex Mono", monospace; color: var(--accent-2, #63d8aa); }
+.tc-release-meta { margin: 3px 0 0; font: 400 0.75rem "Inter", sans-serif; color: var(--muted); }
+.tc-release-price { margin: 4px 0 0; font: 500 0.75rem "Inter", sans-serif; color: var(--accent-2, #63d8aa); }
 .tc-release-note { margin: 0; font-size: 0.8rem; line-height: 1.45; color: var(--muted); }
 .tc-release-note.is-warning { color: var(--warn, #f1bd64); }
-.tc-release-note.is-pending { color: #8fb8dc; font-style: italic; }
+.tc-release-note.is-pending { color: var(--muted); font-style: italic; }
 /* La caja de un juego es vertical, no cuadrada: recortarla a 44x44 le comía
    el título y la mitad del arte. Va con la proporción de una caja real y con
    sombra, porque acá la portada es la pieza que se colecciona, no un ícono. */
@@ -216,9 +216,9 @@
   object-fit: cover;
   border-radius: 5px;
   border: 1px solid var(--line-strong, var(--line));
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+  box-shadow: none;
   flex-shrink: 0;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--surface-3);
 }
 .tc-release.is-owned .tc-release-cover { border-color: rgba(99, 216, 170, 0.55); }
 /* No todo lo que ilustra un lanzamiento es una caja. Un juego que todavía no
@@ -229,7 +229,7 @@
 .tc-release-actions { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
 .tc-ownership { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
 .tc-ownership .btn-link { padding: 5px 10px; font-size: 0.76rem; min-height: 0; }
-.tc-ownership .btn-link.is-on { border-color: var(--accent); color: var(--accent); background: rgba(50, 199, 255, 0.1); }
+.tc-ownership .btn-link.is-on { border-color: var(--accent); color: var(--accent); background: var(--surface-3); }
 .tc-radar-cta { font-size: 0.76rem; }
 
 .chip.is-owned { border-color: var(--accent-2, #63d8aa); color: var(--accent-2, #63d8aa); }
@@ -237,7 +237,7 @@
 .chip.is-announced { border-color: var(--warn, #f1bd64); color: var(--warn, #f1bd64); }
 /* Cyan porque es el color de la estantería: este chip marca justamente el
    lanzamiento que cuenta para ese número y no para los otros dos. */
-.chip.is-shelf { border-color: rgba(50, 199, 255, 0.5); color: var(--accent, #32c7ff); }
+.chip.is-shelf { border-color: var(--line); color: var(--accent, var(--muted)); }
 
 /* --- Una compra, varias obras ---------------------------------------------
    Lo que distingue a una compilación de un lanzamiento suelto es cuántas
@@ -247,8 +247,8 @@
 .tc-leverage {
   padding: 15px 16px;
   border: 1px solid var(--line);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.025);
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
   display: flex;
   flex-direction: column;
   gap: 9px;
@@ -262,11 +262,11 @@
   height: 38px;
   display: grid;
   place-items: center;
-  border-radius: 11px;
+  border-radius: var(--radius-sm);
   border: 1px solid rgba(99, 216, 170, 0.42);
   background: rgba(99, 216, 170, 0.1);
   color: var(--accent-2, #63d8aa);
-  font: 500 1.15rem "IBM Plex Mono", monospace;
+  font: 500 1.15rem "Inter", sans-serif;
   font-variant-numeric: tabular-nums;
 }
 .tc-leverage-works { margin: 0; font-size: 0.8rem; line-height: 1.45; color: var(--muted); }
@@ -282,8 +282,8 @@
 .tc-crown {
   padding: 14px 15px;
   border: 1px solid var(--line);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.025);
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -301,13 +301,13 @@
 
 /* --- Históricos: contexto, plegado --------------------------------------- */
 
-.tc-historical { border: 1px solid var(--line); border-radius: 14px; padding: 13px 16px; }
+.tc-historical { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 13px 16px; }
 .tc-historical summary { cursor: pointer; display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; }
-.tc-historical summary > span { font-family: "Fraunces", "Space Grotesk", serif; font-size: 1.02rem; }
-.tc-historical summary small { font: 400 0.76rem "IBM Plex Mono", monospace; color: var(--muted); }
+.tc-historical summary > span { font-family: "Space Grotesk", sans-serif; font-size: 1.02rem; }
+.tc-historical summary small { font: 400 0.76rem "Inter", sans-serif; color: var(--muted); }
 .tc-historical ul { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 12px; }
 .tc-historical li { display: grid; gap: 3px; }
-.tc-historical li span { font: 400 0.75rem "IBM Plex Mono", monospace; color: var(--muted); }
+.tc-historical li span { font: 400 0.75rem "Inter", sans-serif; color: var(--muted); }
 .tc-historical li p { margin: 2px 0 0; font-size: 0.8rem; color: var(--muted); line-height: 1.45; }
 
 .tc-empty { padding: 28px; text-align: center; }
