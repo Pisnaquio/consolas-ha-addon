@@ -1,12 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 960 540" role="img" aria-label="Sin imagen de consola">
-  <rect width="960" height="540" fill="#f3f4f6"/>
-  <g fill="none" stroke="#5f6b76" stroke-width="10" opacity="0.6">
-    <rect x="285" y="180" width="390" height="180" rx="24"/>
-    <circle cx="355" cy="270" r="18"/>
-    <circle cx="605" cy="270" r="18"/>
-    <path d="M420 250h120m-60-45v90"/>
+  <g fill="none" stroke="#565c68" stroke-width="12" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="270" y="170" width="420" height="200" rx="100"/>
+    <path d="M370 240v60m-30-30h60"/>
+    <circle cx="570" cy="250" r="8"/>
+    <circle cx="610" cy="290" r="8"/>
   </g>
-  <text x="480" y="430" text-anchor="middle" font-family="Space Grotesk, Arial, sans-serif" font-size="34" fill="#4a5561" opacity="0.92">
-    Imagen pendiente
-  </text>
 </svg>

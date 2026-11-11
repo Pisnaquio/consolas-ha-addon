@@ -12,28 +12,22 @@
     />
     <link rel="stylesheet" href="./styles.css?v=20261110a" />
     <link rel="stylesheet" href="./studio-theme.css?v=20261110a" />
+    <link rel="stylesheet" href="./estante-shell.css?v=20261111b" />
   </head>
   <body class="studio-variant">
     <div class="bg-pattern" aria-hidden="true"></div>
     <main class="container">
       <header class="hero">
-        <p class="eyebrow">Catálogo Personal</p>
-        <h1>Mi colección de consolas</h1>
+        <h1>Mi colección</h1>
         <p class="subtitle">
-          Inventario real de consolas y juegos, con foco en disponibilidad y estado.
+          Consolas y juegos que tengo y que busco, con su estado y su precio de referencia.
+          <a href="./collection-control.html">Ver tengo / quiero por generación</a>
         </p>
-        <div class="card-actions">
-          <a class="btn-link btn-primary" href="./opportunities.html">Oportunidades</a>
-          <a class="btn-link" href="./nachos-wishlist.html">Nacho's Wishlist</a>
-          <a class="btn-link" href="./radar.html">Radar</a>
-          <a class="btn-link" href="./database.html">Base de consolas</a>
-          <a class="btn-link" href="./collection-control.html">Tengo / quiero</a>
-        </div>
       </header>
 
-      <section class="summary" id="summary"></section>
+      <section class="summary shelf-summary" id="summary" aria-label="Resumen de la colección"></section>
 
-      <section class="controls">
+      <section class="controls shelf-controls">
         <div class="search-wrap">
           <label for="search">Buscar</label>
           <input id="search" type="search" placeholder="Nombre, notas, accesorios o juegos..." />
@@ -101,7 +95,7 @@
           <h2>Registrados / ya tengo</h2>
           <span id="registeredCount" class="count"></span>
         </div>
-        <div id="registeredGrid" class="grid"></div>
+        <div id="registeredGrid" class="grid shelf-grid"></div>
       </section>
 
       <section>
@@ -109,7 +103,7 @@
           <h2>Deseados / recomendados</h2>
           <span id="wishlistCount" class="count"></span>
         </div>
-        <div id="wishlistGrid" class="grid"></div>
+        <div id="wishlistGrid" class="grid shelf-grid"></div>
       </section>
     </main>
 
@@ -125,10 +119,15 @@
           </div>
           <p class="meta"></p>
           <p class="state"></p>
+          <p class="card-status"></p>
           <div class="chips"></div>
           <p class="notes"></p>
           <div class="price-reference"></div>
           <div class="price-row"></div>
+          <div class="card-foot">
+            <span class="card-games"></span>
+            <span class="card-price"></span>
+          </div>
           <div class="card-actions">
             <a class="btn-link detail-link">Ver detalle</a>
           </div>
@@ -139,7 +138,8 @@
     <script src="./ha-deep-link.js?v=20260930a"></script>
     <script src="./data-store.js?v=20260710b" defer></script>
     <script src="./collection-repository.js?v=20261016b" defer></script>
-    <script src="./app.js?v=20261016c" defer></script>
+    <script src="./app.js?v=20261111b" defer></script>
     <script src="./studio-bridge.js?v=20260522a" defer></script>
+    <script src="./site-nav.js?v=20261111b"></script>
   </body>
 </html>

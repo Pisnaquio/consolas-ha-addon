@@ -138,7 +138,7 @@ function renderSummary(items) {
     <article class="stat"><small>Total</small><strong>${items.length}</strong></article>
     <article class="stat"><small>En colección</small><strong>${collection.length}</strong></article>
     <article class="stat"><small>En wishlist</small><strong>${wishlist.length}</strong></article>
-    <article class="stat"><small>Funcionando</small><strong>${funcionando}</strong></article>
+    <article class="stat"><small>Funcionan</small><strong>${funcionando}</strong></article>
   `;
 }
 
@@ -174,6 +174,35 @@ function updateSelectOptions(items) {
   fillSelect(statusFilter, unique(items.map((i) => i.estado)));
 }
 
+// One-line status and footer used by the shelf layout; templates without
+// those slots (the studio variant) are left untouched.
+function getShelfStatus(item) {
+  if (!item.tengo) return { text: "En wishlist", tone: "muted" };
+  if (item.funcionando === true) return { text: "Lista para jugar", tone: "ok" };
+  if (item.funcionando === false) return { text: "No funciona", tone: "attention" };
+  return { text: "Falta confirmar si funciona", tone: "attention" };
+}
+
+function renderShelfSummary(node, item, gameCount) {
+  const status = node.querySelector(".card-status");
+  if (status) {
+    const { text, tone } = getShelfStatus(item);
+    status.textContent = text;
+    status.dataset.tone = tone;
+  }
+  const games = node.querySelector(".card-games");
+  if (games) games.textContent = gameCount === 1 ? "1 juego" : `${gameCount} juegos`;
+  const price = node.querySelector(".card-price");
+  if (price) {
+    const prices = getPriceModel(item);
+    const reference = item.tengo
+      ? prices.ebaySold || prices.priceChart
+      : prices.target || prices.ebaySold || prices.priceChart;
+    price.textContent = formatPrice(reference);
+    price.title = item.tengo ? "Precio de mercado de referencia" : "Precio objetivo o de mercado";
+  }
+}
+
 function cardMarkup(item) {
   const template = document.getElementById("consoleCardTemplate");
   const node = template.content.firstElementChild.cloneNode(true);
@@ -191,7 +220,7 @@ function cardMarkup(item) {
   node.querySelector("h3").textContent = item.nombre;
   node.querySelector(".badge").textContent = item.fabricante;
 
-  const meta = `${item.generacion || "Gen. N/D"} • ${item.anioLanzamiento || "Año N/D"}`;
+  const meta = [item.fabricante, item.generacion || "Gen. N/D", item.anioLanzamiento || "Año N/D"].filter(Boolean).join(" · ");
   node.querySelector(".meta").textContent = meta;
 
   node.querySelector(".state").textContent = `Estado: ${item.estado || "N/D"} • Funcionando: ${yesNo(item.funcionando)}`;
@@ -217,6 +246,8 @@ function cardMarkup(item) {
 
   const priceRow = node.querySelector(".price-row");
   priceRow.innerHTML = item.tengo ? `<span>Pagado: ${formatPrice(item.precioPagado, item.monedaPago)}</span>` : "";
+
+  renderShelfSummary(node, item, gameCount);
 
   const detailLink = node.querySelector(".detail-link");
   detailLink.href = window.CollectionRepository.getConsoleDetailHref(item.id);

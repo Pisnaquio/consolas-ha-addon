@@ -1,0 +1,562 @@
+/* Estante layout: shared navigation, the home shelf and compact auction rows.
+   Loaded after studio-theme.css; colours come from its tokens. */
+
+body.studio-variant {
+  --attention: #ff9b7a;
+  --nav-height: 60px;
+  --tabbar-height: 64px;
+}
+
+/* ---------- Navigation ---------- */
+
+.site-nav {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  height: var(--nav-height);
+  display: flex;
+  align-items: center;
+  gap: 36px;
+  padding: 0 max(16px, calc((100vw - 1260px) / 2 + 16px));
+  background: rgba(14, 15, 18, 0.92);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
+}
+
+body.studio-variant .site-nav__brand {
+  color: var(--ink);
+  font: 700 1.19rem/1 var(--font-display);
+  letter-spacing: -0.01em;
+  text-decoration: none;
+}
+
+.site-nav__links {
+  display: flex;
+  gap: 26px;
+  align-self: stretch;
+}
+
+body.studio-variant .site-nav__links a {
+  display: flex;
+  align-items: center;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+body.studio-variant .site-nav__links a:hover {
+  color: var(--ink);
+}
+
+body.studio-variant .site-nav__links a[aria-current="page"] {
+  border-bottom-color: var(--accent);
+  color: var(--ink);
+}
+
+.site-tabbar {
+  display: none;
+}
+
+body.studio-variant .site-nav a:focus-visible,
+body.studio-variant .site-tabbar a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* The bar already links to every section's landing page. */
+body[data-nav-root] .back-link {
+  display: none;
+}
+
+/* ---------- Home: header and summary ---------- */
+
+body.studio-variant .summary.shelf-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+body.studio-variant .shelf-summary .stat {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 2px;
+  min-height: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+}
+
+body.studio-variant .shelf-summary .stat::before {
+  display: none;
+}
+
+body.studio-variant .shelf-summary .stat strong {
+  order: -1;
+  font-size: 1.5rem;
+  line-height: 1.1;
+}
+
+body.studio-variant .shelf-summary .stat small {
+  color: var(--muted);
+  font: 500 0.8rem/1.3 var(--font-body);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* Search and the quick view share one row; the rest stays folded. */
+body.studio-variant .shelf-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 220px;
+  align-items: end;
+  gap: 10px 12px;
+  padding: 12px;
+}
+
+body.studio-variant .shelf-controls > .filters {
+  display: block;
+  margin: 0;
+}
+
+body.studio-variant .shelf-controls > .advanced-filters {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+/* ---------- Home: the shelf ---------- */
+
+body.studio-variant .shelf-grid,
+body.studio-variant .shelf-grid .generation-list {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 20px;
+}
+
+/* Grouped view: the groups stack, each one holds its own shelf. */
+body.studio-variant .shelf-grid:has(> .generation-group) {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+body.studio-variant .shelf-grid > .empty {
+  grid-column: 1 / -1;
+}
+
+body.studio-variant .shelf-grid .card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  transition: background-color 140ms ease;
+}
+
+body.studio-variant .shelf-grid .card:hover {
+  transform: none;
+  background: var(--surface-2);
+}
+
+body.studio-variant .shelf-grid .card:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+body.studio-variant .shelf-grid .card-media {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 150px;
+  min-height: 0;
+  border: 0;
+  background: var(--surface-2);
+}
+
+body.studio-variant .shelf-grid .card-media img {
+  width: 78%;
+  height: 118px;
+  padding: 0;
+  object-fit: contain;
+}
+
+body.studio-variant .shelf-grid .card-body {
+  flex: 1;
+  gap: 6px;
+  padding: 14px 16px 16px;
+  background: transparent;
+}
+
+body.studio-variant .shelf-grid .card h3 {
+  font-size: 1.06rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+body.studio-variant .shelf-grid .meta {
+  font-size: 0.82rem;
+}
+
+body.studio-variant .shelf-grid .badge,
+body.studio-variant .shelf-grid .state,
+body.studio-variant .shelf-grid .chips,
+body.studio-variant .shelf-grid .notes,
+body.studio-variant .shelf-grid .price-reference,
+body.studio-variant .shelf-grid .price-row {
+  display: none;
+}
+
+.card-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.card-status::before {
+  content: "";
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.card-status[data-tone="ok"] {
+  color: var(--ok);
+}
+
+.card-status[data-tone="attention"] {
+  color: var(--attention);
+}
+
+.card-foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.card-games {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.card-price {
+  font-size: 0.94rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* The whole card opens the detail page; the link keeps its accessible name. */
+body.studio-variant .shelf-grid .card-actions {
+  margin: 0;
+}
+
+body.studio-variant .shelf-grid .detail-link {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: transparent;
+  font-size: 0;
+}
+
+body.studio-variant .shelf-grid .detail-link:focus-visible {
+  outline: none;
+}
+
+body.studio-variant .shelf-grid .js-remove-wishlist-console {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  min-height: 0;
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(14, 15, 18, 0.78);
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+
+body.studio-variant .shelf-grid .card:hover .js-remove-wishlist-console,
+body.studio-variant .shelf-grid .js-remove-wishlist-console:focus-visible {
+  opacity: 1;
+}
+
+body.studio-variant .shelf-grid .js-remove-wishlist-console:hover {
+  color: var(--ink);
+}
+
+@media (hover: none) {
+  body.studio-variant .shelf-grid .js-remove-wishlist-console {
+    opacity: 1;
+  }
+}
+
+/* ---------- Auctions: one row per lot ---------- */
+
+body.studio-variant .opportunity-list {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+
+body.studio-variant .opportunity-card {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 20px;
+  padding: 10px 16px 10px 10px;
+}
+
+body.studio-variant .opportunity-card-content {
+  grid-template-columns: 72px minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+}
+
+body.studio-variant .opportunity-card-media {
+  width: 72px;
+  height: 60px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+body.studio-variant .opportunity-card-image {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  object-fit: cover;
+}
+
+body.studio-variant .opportunity-card-placeholder {
+  padding: 0;
+  color: var(--muted);
+  font-size: 0.69rem;
+}
+
+body.studio-variant .opportunity-card-media:not(:has(img)) .opportunity-card-placeholder {
+  display: block;
+}
+
+body.studio-variant .opportunity-card-body {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+body.studio-variant .opportunity-card-head {
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+
+body.studio-variant .opportunity-card-head > div {
+  min-width: 0;
+}
+
+body.studio-variant .opportunity-card-head h4 {
+  margin: 0;
+  overflow: hidden;
+  font: 600 0.94rem/1.3 var(--font-body);
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.studio-variant .opportunity-kicker {
+  margin: 0 0 2px;
+}
+
+body.studio-variant .opportunity-timer {
+  flex: none;
+  white-space: nowrap;
+}
+
+body.studio-variant .opportunity-copy {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  font-size: 0.82rem;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+}
+
+body.studio-variant .opportunity-badges,
+body.studio-variant .opportunity-meta {
+  gap: 4px 6px;
+}
+
+body.studio-variant .opportunity-card .opportunity-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  max-width: 330px;
+}
+
+body.studio-variant .opportunity-card .opportunity-card-actions .btn-link {
+  width: auto;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+}
+
+/* ---------- Narrower screens ---------- */
+
+@media (max-width: 1100px) {
+  body.studio-variant .shelf-grid,
+  body.studio-variant .shelf-grid .generation-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+  }
+
+  body.studio-variant .opportunity-card {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    padding: 10px;
+  }
+
+  body.studio-variant .opportunity-card .opportunity-card-actions {
+    justify-content: flex-start;
+    max-width: none;
+  }
+}
+
+@media (max-width: 720px) {
+  body.has-site-nav {
+    padding-bottom: calc(var(--tabbar-height) + env(safe-area-inset-bottom, 0px));
+  }
+
+  .site-nav {
+    height: 52px;
+  }
+
+  .site-nav__links {
+    display: none;
+  }
+
+  body.studio-variant .shelf-controls {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.studio-variant .shelf-summary .stat {
+    padding: 8px 10px;
+  }
+
+  body.studio-variant .shelf-summary .stat small {
+    font-size: 0.72rem;
+  }
+
+  .site-tabbar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 40;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    height: calc(var(--tabbar-height) + env(safe-area-inset-bottom, 0px));
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    background: var(--surface);
+    border-top: 1px solid var(--line);
+  }
+
+  body.studio-variant .site-tabbar a {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    min-width: 0;
+    color: var(--muted);
+    font-size: 0.72rem;
+    font-weight: 500;
+    text-decoration: none;
+  }
+
+  body.studio-variant .site-tabbar a[aria-current="page"] {
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  body.studio-variant .shelf-grid,
+  body.studio-variant .shelf-grid .generation-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  body.studio-variant .shelf-grid .card-media {
+    height: 104px;
+  }
+
+  body.studio-variant .shelf-grid .card-media img {
+    width: 76%;
+    height: 80px;
+  }
+
+  body.studio-variant .shelf-grid .card-body {
+    gap: 4px;
+    padding: 10px 12px 12px;
+  }
+
+  body.studio-variant .shelf-grid .card h3 {
+    font-size: 0.94rem;
+  }
+
+  body.studio-variant .shelf-grid .meta,
+  body.studio-variant .shelf-grid .card-status,
+  body.studio-variant .shelf-grid .card-games {
+    font-size: 0.75rem;
+  }
+
+  body.studio-variant .shelf-grid .card-foot {
+    flex-wrap: wrap;
+    gap: 2px 8px;
+    padding-top: 8px;
+  }
+
+  body.studio-variant .shelf-grid .card-price {
+    font-size: 0.82rem;
+  }
+
+  body.studio-variant .opportunity-card-content {
+    grid-template-columns: 72px minmax(0, 1fr);
+    align-items: start;
+    gap: 12px;
+  }
+
+  body.studio-variant .opportunity-card-media,
+  body.studio-variant .opportunity-card-image {
+    height: 60px;
+    min-height: 0;
+  }
+
+  body.studio-variant .opportunity-card-head h4 {
+    white-space: normal;
+  }
+
+  body.studio-variant .opportunity-card .opportunity-card-actions .btn-link {
+    flex: 1 1 calc(50% - 6px);
+    min-height: 44px;
+  }
+}
