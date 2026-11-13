@@ -478,6 +478,20 @@
       .filter(Boolean);
     const imported = item.valuation?.cost?.importedTotal;
 
+    // What decides at a glance stays on the row; the reasoning folds away.
+    const signals = [
+      targetBadge(item),
+      item.priceDrop ? dropBadge(item.priceDrop) : "",
+      verificationNote(item),
+      contentsNote(item)
+    ].join("").trim();
+    const detail = [
+      candidateLine(item),
+      accountLine(item),
+      benchmarkLine(item),
+      reasons || unverified ? `<ul class="feed-why">${reasons}${unverified}</ul>` : ""
+    ].join("").trim();
+
     return `<article class="detail-block chase-card feed-card${item.priceDrop ? " has-drop" : ""}">
       <div class="feed-card-head">
         <div>
@@ -493,14 +507,8 @@
           ${imported != null ? `<span>≈ ${escapeHtml(money(imported, item.priceCurrency))} puesto acá</span>` : ""}
         </div>
       </div>
-      ${candidateLine(item)}
-      ${accountLine(item)}
-      ${verificationNote(item)}
-      ${contentsNote(item)}
-      ${targetBadge(item)}
-      ${benchmarkLine(item)}
-      ${item.priceDrop ? dropBadge(item.priceDrop) : ""}
-      ${reasons || unverified ? `<ul class="feed-why">${reasons}${unverified}</ul>` : ""}
+      ${signals ? `<div class="feed-signals">${signals}</div>` : ""}
+      ${detail ? `<details class="feed-more"><summary>La cuenta y por qué aparece</summary>${detail}</details>` : ""}
       ${decisionLine(item)}
       ${actions(item)}
       ${dismissForm(item)}

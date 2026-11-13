@@ -421,6 +421,84 @@ body.studio-variant .opportunity-card .opportunity-card-actions .btn-link {
   font-size: 0.82rem;
 }
 
+/* ---------- Radar: one compact row per listing ---------- */
+
+body.studio-variant .feed-list {
+  gap: 8px;
+  margin-top: 14px;
+}
+
+body.studio-variant .feed-card {
+  gap: 8px;
+  padding: 12px 16px;
+}
+
+body.studio-variant .feed-card h2 {
+  margin: 2px 0 0;
+  font: 600 0.94rem/1.3 var(--font-body);
+  letter-spacing: 0;
+}
+
+body.studio-variant .feed-match {
+  margin: 2px 0 0;
+}
+
+body.studio-variant .feed-price strong {
+  font-size: 1rem;
+}
+
+.feed-signals {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+body.studio-variant .feed-signals > * {
+  margin: 0;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+body.studio-variant .feed-signals .feed-target:not(.is-met) {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.feed-more > summary {
+  width: fit-content;
+  color: var(--muted);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.feed-more > summary:hover {
+  color: var(--ink);
+}
+
+.feed-more[open] > summary {
+  margin-bottom: 8px;
+}
+
+body.studio-variant .feed-more > :not(summary) {
+  margin: 0 0 6px;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+body.studio-variant .feed-actions {
+  gap: 6px;
+}
+
+body.studio-variant .feed-actions .btn-link {
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+}
+
 /* ---------- Narrower screens ---------- */
 
 @media (max-width: 1100px) {
@@ -558,5 +636,21 @@ body.studio-variant .opportunity-card .opportunity-card-actions .btn-link {
   body.studio-variant .opportunity-card .opportunity-card-actions .btn-link {
     flex: 1 1 calc(50% - 6px);
     min-height: 44px;
+  }
+
+  body.studio-variant .feed-card {
+    padding: 12px;
+  }
+
+  body.studio-variant .feed-actions .btn-link {
+    flex: 1 1 calc(50% - 6px);
+    width: auto;
+    min-height: 44px;
+  }
+
+  /* The three snooze options share one line. */
+  body.studio-variant .feed-actions .btn-link[data-snooze] {
+    flex-basis: calc(33.333% - 6px);
+    padding: 0 6px;
   }
 }
