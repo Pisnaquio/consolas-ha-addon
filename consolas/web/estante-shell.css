@@ -322,14 +322,14 @@ body.studio-variant .opportunity-card {
 }
 
 body.studio-variant .opportunity-card-content {
-  grid-template-columns: 72px minmax(0, 1fr);
+  grid-template-columns: 128px minmax(0, 1fr);
   align-items: center;
   gap: 16px;
 }
 
 body.studio-variant .opportunity-card-media {
-  width: 72px;
-  height: 60px;
+  width: 128px;
+  height: 96px;
   min-height: 0;
   margin: 0;
   padding: 0;
@@ -407,10 +407,9 @@ body.studio-variant .opportunity-meta {
 
 body.studio-variant .opportunity-card .opportunity-card-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: flex-end;
   gap: 6px;
-  max-width: 330px;
 }
 
 body.studio-variant .opportunity-card .opportunity-card-actions .btn-link {
@@ -515,8 +514,8 @@ body.studio-variant .feed-actions .btn-link {
   }
 
   body.studio-variant .opportunity-card .opportunity-card-actions {
+    flex-wrap: wrap;
     justify-content: flex-start;
-    max-width: none;
   }
 }
 
@@ -618,14 +617,18 @@ body.studio-variant .feed-actions .btn-link {
   }
 
   body.studio-variant .opportunity-card-content {
-    grid-template-columns: 72px minmax(0, 1fr);
+    grid-template-columns: 96px minmax(0, 1fr);
     align-items: start;
     gap: 12px;
   }
 
+  body.studio-variant .opportunity-card-media {
+    width: 96px;
+  }
+
   body.studio-variant .opportunity-card-media,
   body.studio-variant .opportunity-card-image {
-    height: 60px;
+    height: 72px;
     min-height: 0;
   }
 
@@ -652,5 +655,172 @@ body.studio-variant .feed-actions .btn-link {
   body.studio-variant .feed-actions .btn-link[data-snooze] {
     flex-basis: calc(33.333% - 6px);
     padding: 0 6px;
+  }
+}
+
+/* ---------- Auctions: compact page header ----------
+   Title and the run button share one line, the counts become a single
+   sentence-like strip, and a healthy sync collapses to one line. Anything
+   that needs attention (stale data, a run in progress) keeps its full box. */
+
+body.studio-variant[data-view="opportunities"] .detail-card {
+  padding: 14px 16px;
+}
+
+body.studio-variant[data-view="opportunities"] .detail-main--full {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px 16px;
+}
+
+body.studio-variant[data-view="opportunities"] .detail-main--full > * {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+body.studio-variant[data-view="opportunities"] .detail-main--full > .eyebrow,
+body.studio-variant[data-view="opportunities"] .detail-main--full > .subtitle,
+body.studio-variant[data-view="opportunities"] .opportunity-sync-status--ready .opportunity-sync-status__head p,
+body.studio-variant[data-view="opportunities"] .opportunity-sync-status--empty .opportunity-sync-meta {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+body.studio-variant[data-view="opportunities"] .detail-main--full > h1 {
+  grid-column: 1;
+  grid-row: 1;
+  font-size: 1.5rem;
+  line-height: 1.2;
+}
+
+/* Idle: only the button, next to the title. */
+body.studio-variant[data-view="opportunities"] .opportunity-run-control {
+  grid-column: 2;
+  grid-row: 1;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+body.studio-variant[data-view="opportunities"] .opportunity-run-control > div {
+  display: none;
+}
+
+body.studio-variant[data-view="opportunities"] .opportunity-run-button {
+  min-height: 36px;
+  padding: 0 12px;
+  font-size: 0.82rem;
+}
+
+/* A run in progress or just finished: the explanation comes back, full width. */
+body.studio-variant[data-view="opportunities"] .opportunity-run-control:is([data-run-status="pending"], [data-run-status="running"], [data-run-status="syncing"], [data-run-status="completed"], [data-run-status="failed"]) {
+  grid-column: 1 / -1;
+  grid-row: auto;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+body.studio-variant[data-view="opportunities"] .opportunity-run-control:is([data-run-status="pending"], [data-run-status="running"], [data-run-status="syncing"], [data-run-status="completed"], [data-run-status="failed"]) > div {
+  display: grid;
+}
+
+body.studio-variant[data-view="opportunities"] .opportunity-summary-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+}
+
+body.studio-variant[data-view="opportunities"] .opportunity-summary-grid .mini-card {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 0;
+  background: transparent;
+}
+
+body.studio-variant[data-view="opportunities"] .opportunity-summary-grid .mini-card strong {
+  font-size: 1rem;
+}
+
+body.studio-variant[data-view="opportunities"] .opportunity-summary-grid .mini-card h4 {
+  font-size: 0.82rem;
+}
+
+body.studio-variant[data-view="opportunities"] .opportunity-sync-status--ready,
+body.studio-variant[data-view="opportunities"] .opportunity-sync-status--empty {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+body.studio-variant[data-view="opportunities"] .opportunity-sync-status--ready .opportunity-sync-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 0;
+}
+
+body.studio-variant[data-view="opportunities"] .opportunity-sync-status--ready .opportunity-sync-meta > div {
+  display: flex;
+  gap: 5px;
+  min-width: 0;
+}
+
+body.studio-variant[data-view="opportunities"] .opportunity-sync-status--ready .opportunity-sync-meta :is(dt, dd) {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 400;
+}
+
+body.studio-variant[data-view="opportunities"] .opportunity-sync-status:not(.opportunity-sync-status--ready, .opportunity-sync-status--empty) {
+  padding: 10px 12px;
+}
+
+@media (max-width: 720px) {
+  body.studio-variant[data-view="opportunities"] .detail-main--full > h1 {
+    font-size: 1.3rem;
+  }
+
+  body.studio-variant[data-view="opportunities"] .opportunity-summary-grid {
+    gap: 2px 14px;
+  }
+
+  /* The button's label does not fit beside the title on a phone. */
+  body.studio-variant[data-view="opportunities"] .opportunity-run-control {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+
+  body.studio-variant[data-view="opportunities"] .opportunity-run-button {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  body.studio-variant[data-view="opportunities"] .opportunity-view-switch {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 6px;
+  }
+
+  body.studio-variant[data-view="opportunities"] .opportunity-view-switch .brand-pill {
+    flex: 1 1 0;
+    width: auto;
+    min-width: 0;
+    padding: 0 6px;
+    font-size: 0.8rem;
+    white-space: nowrap;
   }
 }
