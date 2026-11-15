@@ -47,7 +47,25 @@ test("una variable ya presente en el entorno gana sobre el archivo", async () =>
 
 test("no revienta si el archivo no existe", () => {
   const result = loadLocalEnv({ file: path.join(os.tmpdir(), "no-existe-consolas.env") });
-  assert.deepEqual(result, { loaded: false, keys: [] });
+  assert.deepEqual(result, { loaded: false, keys: [], refused: [] });
+});
+
+test("nunca toma HOMEASSISTANT_TOKEN del archivo: sólo llega por el Llavero o el entorno", async () => {
+  await withEnvFile("HOMEASSISTANT_TOKEN=ficticio-no-usar\nCONSOLAS_TEST_E=ok\n", async (file) => {
+    const previous = process.env.HOMEASSISTANT_TOKEN;
+    delete process.env.HOMEASSISTANT_TOKEN;
+    delete process.env.CONSOLAS_TEST_E;
+    try {
+      const result = loadLocalEnv({ file });
+      assert.equal(process.env.HOMEASSISTANT_TOKEN, undefined);
+      assert.deepEqual(result.keys, ["CONSOLAS_TEST_E"]);
+      assert.deepEqual(result.refused, ["HOMEASSISTANT_TOKEN"]);
+    } finally {
+      delete process.env.CONSOLAS_TEST_E;
+      if (previous === undefined) delete process.env.HOMEASSISTANT_TOKEN;
+      else process.env.HOMEASSISTANT_TOKEN = previous;
+    }
+  });
 });
 
 test("descarta nombres de variable inválidos", async () => {
