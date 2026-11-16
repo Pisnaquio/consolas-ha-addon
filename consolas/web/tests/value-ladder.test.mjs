@@ -103,11 +103,20 @@ test("region text is escaped too", () => {
   assert.match(html, /&lt;script&gt;/);
 });
 
-test("a console without a guide says so instead of showing an empty section", () => {
+test("a console without a guide renders no section at all", () => {
   const html = ValueLadder.render(ValueLadder.findLadder(sample, "no-existe"), { consoleName: "Wii" });
 
-  assert.match(html, /Todavía no hay guía de variantes para Wii/);
-  assert.doesNotMatch(html, /data-ladder-own/);
+  // Nada de tarjeta vacía: sin guía real, la ficha no reserva lugar para ella.
+  assert.equal(html, "");
+  assert.equal(ValueLadder.render(null, { consoleName: "PS4 Pro Star Wars" }), "");
+});
+
+test("detail sections size blocks by content instead of stretching them", async () => {
+  const css = await readFile(new URL("../styles.css", import.meta.url), "utf8");
+  const sections = css.match(/\.detail-sections \{[^}]*\}/)[0];
+  const block = css.match(/\n\.detail-block \{[^}]*\}/)[0];
+  assert.match(sections, /align-items:\s*start/);
+  assert.match(block, /align-content:\s*start/);
 });
 
 test("a ladder with no variants counts as no guide at all", () => {

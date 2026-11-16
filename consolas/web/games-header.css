@@ -1,0 +1,207 @@
+/* Cabecera compacta de «Gestión de juegos»: una fila de búsqueda y filtros
+   frecuentes, «Más filtros» plegado y un resumen en una línea.
+   Se carga después de studio-theme.css y estante-shell.css; usa sus tokens. */
+
+body.studio-variant .detail-block--games {
+  gap: 12px;
+}
+
+body.studio-variant .games-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin: 0;
+}
+
+body.studio-variant .games-head-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+body.studio-variant .games-head h2 {
+  margin: 0;
+}
+
+body.studio-variant .games-head .muted {
+  margin: 0;
+  font-size: 0.82rem;
+}
+
+body.studio-variant .games-head .games-add-btn {
+  flex: none;
+  width: auto;
+  min-height: 34px;
+  padding: 6px 12px;
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+body.studio-variant .games-filter-shell {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 0;
+  background: var(--surface-2);
+}
+
+body.studio-variant .games-filterbar--primary,
+body.studio-variant .games-filterbar--more {
+  display: grid;
+  grid-template-columns: minmax(220px, 2fr) repeat(3, minmax(130px, 1fr)) auto;
+  align-items: end;
+  gap: 8px;
+}
+
+body.studio-variant .games-filterbar--more {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+body.studio-variant .games-filterbar--more[hidden] {
+  display: none;
+}
+
+body.studio-variant .games-filterbar--primary .filter-search {
+  grid-column: auto;
+}
+
+body.studio-variant .games-filterbar label {
+  gap: 3px;
+  font-size: 0.7rem;
+  letter-spacing: 0.02em;
+}
+
+body.studio-variant .games-filterbar input,
+body.studio-variant .games-filterbar select {
+  min-height: 34px;
+  padding: 6px 9px;
+  border-color: var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+body.studio-variant .games-more-filters summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 6px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font-size: 0.82rem;
+  white-space: nowrap;
+  cursor: pointer;
+  list-style: none;
+}
+
+body.studio-variant .games-more-filters summary::-webkit-details-marker {
+  display: none;
+}
+
+body.studio-variant .games-more-filters summary::after {
+  content: "▾";
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+body.studio-variant .games-more-filters[open] summary {
+  border-color: var(--accent);
+}
+
+body.studio-variant .games-more-filters[open] summary::after {
+  content: "▴";
+}
+
+body.studio-variant .games-more-count {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+}
+
+body.studio-variant .games-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+body.studio-variant .games-summary-chip strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+body.studio-variant .games-summary .games-count {
+  margin: 0 0 0 auto;
+  font-size: 0.78rem;
+}
+
+body.studio-variant .detail-block--games > .games-subsection:first-of-type {
+  margin-top: 0;
+}
+
+@media (max-width: 1020px) {
+  body.studio-variant .games-filterbar--primary {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  }
+
+  body.studio-variant .games-filterbar--primary .filter-search {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 720px) {
+  /* Título y botón en una fila; la descripción abajo, a lo ancho. */
+  body.studio-variant .games-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 4px 10px;
+  }
+
+  body.studio-variant .games-head-text {
+    display: contents;
+  }
+
+  body.studio-variant .games-head .muted {
+    grid-column: 1 / -1;
+    font-size: 0.78rem;
+  }
+
+  body.studio-variant .games-head .games-add-btn {
+    grid-row: 1;
+    grid-column: 2;
+    padding: 6px 10px;
+  }
+
+  /* En el teléfono: búsqueda a lo ancho y los filtros de a dos. */
+  body.studio-variant .games-filterbar--primary,
+  body.studio-variant .games-filterbar--more {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  body.studio-variant .games-filterbar--primary .filter-search {
+    grid-column: 1 / -1;
+  }
+
+  body.studio-variant .games-more-filters summary {
+    justify-content: center;
+    width: 100%;
+  }
+
+  body.studio-variant .games-summary .games-count {
+    margin-left: 0;
+    flex-basis: 100%;
+  }
+}

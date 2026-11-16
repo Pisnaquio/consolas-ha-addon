@@ -154,15 +154,10 @@
     return `<p class="ladder-owned is-missing">No registraste qué variante tenés. Marcala abajo y la guía te dice si vale la pena cambiarla.</p>`;
   }
 
-  function renderMissing(consoleName) {
-    return `<section class="detail-block value-ladder is-empty" aria-label="Guía de modelos y valor">
-      <div class="section-head"><h3>Guía de modelos y valor</h3></div>
-      <p>Todavía no hay guía de variantes para ${escapeHtml(consoleName || "esta consola")}. Se cargan primero las consolas que tenés, después las que buscás.</p>
-    </section>`;
-  }
-
   function render(ladder, options = {}) {
-    if (!ladder) return renderMissing(options.consoleName);
+    // Sin guía real no hay sección: un bloque vacío en la grilla de la ficha
+    // ocupaba media pantalla sin decir nada que sirva para decidir.
+    if (!ladder) return "";
     const context = {
       playPick: ladder.playPick || "",
       collectPick: ladder.collectPick || "",

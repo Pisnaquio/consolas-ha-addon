@@ -44,6 +44,8 @@ const appState = {
     type: "all",
     layout: "compact"
   },
+  // Vista, no estado del usuario: «Más filtros» arranca cerrado en cada visita.
+  gameMoreFiltersOpen: false,
   gameFilters: {
     q: "",
     status: "all",
@@ -337,7 +339,7 @@ function getConsoleGalleryImages(item = {}) {
 function renderPhotoGallery(item, galleryImages = getConsoleGalleryImages(item)) {
   const own = Array.isArray(item.fotosPropias) ? item.fotosPropias : [];
   const ownMeta = Array.isArray(item.fotosPropiasMeta) ? item.fotosPropiasMeta : [];
-  if (!own.length) return "<p class='muted'>Todavia no cargaste fotos propias.</p>";
+  if (!own.length) return "<p class='muted'>Todavía no cargaste fotos propias.</p>";
   return `
     <div class="own-photo-grid">
       ${own
@@ -409,7 +411,7 @@ function renderConsolePhotoDialog(item, galleryImages = getConsoleGalleryImages(
 }
 
 function renderOpportunities(item) {
-  if (!item.oportunidades?.length) return "<p class='muted'>Todavia no hay oportunidades registradas.</p>";
+  if (!item.oportunidades?.length) return "<p class='muted'>Todavía no hay oportunidades registradas.</p>";
 
   return `
     <div class="mini-grid">
@@ -1000,7 +1002,7 @@ function isPhysicalOnlyGameConsole(consoleId = "") {
 }
 
 function getOwnershipLabel(ownershipType = "none") {
-  if (ownershipType === "physical") return "Fisico";
+  if (ownershipType === "physical") return "Físico";
   if (ownershipType === "digital") return "Digital";
   if (ownershipType === "both") return "Ambos";
   return "";
@@ -1385,6 +1387,12 @@ function composeGamesForConsole(baseGames = [], legacyCurrent = []) {
   return reconcileGamesCatalog(baseGames, legacyCurrent);
 }
 
+const MORE_GAME_FILTER_DEFAULTS = { priority: "all", franchise: "all", genre: "all", sort: "default" };
+
+function countActiveMoreGameFilters(filters = appState.gameFilters) {
+  return Object.entries(MORE_GAME_FILTER_DEFAULTS).filter(([key, value]) => (filters[key] || value) !== value).length;
+}
+
 function renderGbaGamesSection(item) {
   const games = Array.isArray(item.juegosCatalogo) ? item.juegosCatalogo : [];
   const normalizedGames = games.map((game, index) => normalizeGameState(game, index));
@@ -1483,7 +1491,7 @@ function renderGbaGamesSection(item) {
               Tenencia
               <select class="js-game-ownership" data-index="${originalIdx}">
                 <option value="none" ${ownershipType === "none" ? "selected" : ""}>No lo tengo</option>
-                <option value="physical" ${ownershipType !== "none" ? "selected" : ""}>Fisico</option>
+                <option value="physical" ${ownershipType !== "none" ? "selected" : ""}>Físico</option>
               </select>
             </label>
           `
@@ -1492,7 +1500,7 @@ function renderGbaGamesSection(item) {
               Formato
               <select class="js-game-ownership" data-index="${originalIdx}">
                 <option value="none" ${ownershipType === "none" ? "selected" : ""}>No lo tengo</option>
-                <option value="physical" ${ownershipType === "physical" ? "selected" : ""}>Fisico</option>
+                <option value="physical" ${ownershipType === "physical" ? "selected" : ""}>Físico</option>
                 <option value="digital" ${ownershipType === "digital" ? "selected" : ""}>Digital</option>
                 <option value="both" ${ownershipType === "both" ? "selected" : ""}>Ambos</option>
               </select>
@@ -1510,7 +1518,7 @@ function renderGbaGamesSection(item) {
                   <div>
                     <h3 class="gba-game-title">${escapeHtml(game.nombre || "Juego")}</h3>
                     <p class="gba-game-meta">${escapeHtml(game.franquicia || "Franquicia N/D")} • ${escapeHtml(
-          game.genero || "Genero N/D"
+          game.genero || "Género N/D"
         )}</p>
                   </div>
                   <div class="gba-badges">
@@ -1568,13 +1576,13 @@ function renderGbaGamesSection(item) {
                   <summary>Editar estado y notas</summary>
                   <div class="gba-game-fields">
                     <label>
-                      Condicion
+                      Condición
                       <input class="js-gba-condition" data-index="${originalIdx}" type="text" placeholder="Ej: caja original, suelto, etc." value="${escapeHtml(
           game.condicion || ""
         )}" />
                     </label>
                     <label>
-                      Region
+                      Región
                       <input class="js-game-region" data-index="${originalIdx}" type="text" placeholder="Ej: NTSC, PAL" value="${escapeHtml(
           game.region || ""
         )}" />
@@ -1621,10 +1629,6 @@ function renderGbaGamesSection(item) {
     filteredRegisteredExtras.length;
 
   const manualGameFormBlock = `
-    <div class="manual-game-launcher">
-      <button id="openManualGameModalBtn" class="btn-link" type="button">Agregar juego manual (no listado)</button>
-    </div>
-
     <dialog id="manualGameDialog" class="manual-game-dialog">
       <form method="dialog" class="manual-game-dialog-shell">
         <header class="manual-game-dialog-head">
@@ -1658,7 +1662,7 @@ function renderGbaGamesSection(item) {
                 <div class="gba-game-head">
                   <div>
                     <h3 id="manualPreviewTitle" class="gba-game-title">Juego manual</h3>
-                    <p id="manualPreviewMeta" class="gba-game-meta">Franquicia N/D • Genero N/D</p>
+                    <p id="manualPreviewMeta" class="gba-game-meta">Franquicia N/D • Género N/D</p>
                   </div>
                   <div class="gba-badges">
                     <span id="manualPreviewPriority" class="gba-badge priority-media">Prioridad: media</span>
@@ -1677,7 +1681,7 @@ function renderGbaGamesSection(item) {
             Tenencia
             <select id="manualGameOwnership">
               <option value="none">No lo tengo</option>
-              <option value="physical">Fisico</option>
+              <option value="physical">Físico</option>
               ${physicalOnlyConsole ? "" : '<option value="digital">Digital</option><option value="both">Ambos</option>'}
             </select>
           </label>
@@ -1708,7 +1712,7 @@ function renderGbaGamesSection(item) {
           <summary>Campos avanzados</summary>
           <div class="manual-form-grid">
             <label>
-              Genero
+              Género
               <input id="manualGameGenre" type="text" placeholder="Opcional" />
             </label>
             <label>
@@ -1716,11 +1720,11 @@ function renderGbaGamesSection(item) {
               <input id="manualGameFranchise" type="text" placeholder="Opcional" />
             </label>
             <label>
-              Condicion
+              Condición
               <input id="manualGameCondition" type="text" placeholder="Opcional" />
             </label>
             <label>
-              Region
+              Región
               <input id="manualGameRegion" type="text" placeholder="Ej: NTSC, PAL" />
             </label>
             <label class="manual-notes">
@@ -1743,14 +1747,31 @@ function renderGbaGamesSection(item) {
     </dialog>
   `;
 
+  const moreFiltersActive = countActiveMoreGameFilters();
+  const summaryChips = [
+    [ownedCount === 1 ? "registrado" : "registrados", ownedCount, true],
+    [physicalCount === 1 ? "físico" : "físicos", physicalCount],
+    [digitalCount === 1 ? "digital" : "digitales", digitalCount],
+    ["ambos formatos", bothCount],
+    ["PSN pendientes", digitalPendingCount],
+    [extrasOwnedCount === 1 ? "extra" : "extras", extrasOwnedCount]
+  ]
+    // Un cero no ayuda a decidir: en una Nintendo «0 PSN pendientes» es ruido.
+    .filter(([, value, always]) => always || value > 0)
+    .map(([label, value]) => `<span class="games-summary-chip"><strong>${value}</strong> ${escapeHtml(label)}</span>`)
+    .join("");
+
   return `
     <article class="detail-block detail-block--games">
-      <div class="section-head">
-        <h2>Gestion de juegos</h2>
-        <p class="muted">Registrados y recomendados con el mismo formato visual. Lo que de verdad querés va en <a href="./nachos-wishlist.html">Nacho's Wishlist</a>.</p>
+      <div class="section-head games-head">
+        <div class="games-head-text">
+          <h2>Gestión de juegos</h2>
+          <p class="muted">Registrados y recomendados con el mismo formato visual. Lo que de verdad querés va en <a href="./nachos-wishlist.html">Nacho's Wishlist</a>.</p>
+        </div>
+        <button id="openManualGameModalBtn" class="btn-link games-add-btn" type="button">+ Agregar juego manual</button>
       </div>
       <div class="games-filter-shell">
-        <div class="games-filterbar">
+        <div class="games-filterbar games-filterbar--primary">
           <label class="filter-search">
             Buscar
             <input id="gameSearchInput" type="search" placeholder="Nombre, franquicia o notas..." value="${escapeHtml(
@@ -1776,6 +1797,22 @@ function renderGbaGamesSection(item) {
             </select>
           </label>
           <label>
+            Posesión
+            <select id="gameOwnershipFilter">
+              <option value="all" ${appState.gameFilters.ownership === "all" ? "selected" : ""}>Cualquiera</option>
+              <option value="none" ${appState.gameFilters.ownership === "none" ? "selected" : ""}>No lo tengo</option>
+              <option value="owned" ${appState.gameFilters.ownership === "owned" ? "selected" : ""}>Tengo alguno</option>
+              <option value="physical" ${appState.gameFilters.ownership === "physical" ? "selected" : ""}>Físico</option>
+              <option value="digital" ${appState.gameFilters.ownership === "digital" ? "selected" : ""}>Digital</option>
+              <option value="both" ${appState.gameFilters.ownership === "both" ? "selected" : ""}>Ambos</option>
+            </select>
+          </label>
+          <details id="gameMoreFilters" class="games-more-filters"${appState.gameMoreFiltersOpen ? " open" : ""}>
+            <summary>Más filtros${moreFiltersActive ? ` <span class="games-more-count">${moreFiltersActive}</span>` : ""}</summary>
+          </details>
+        </div>
+        <div class="games-filterbar games-filterbar--more"${appState.gameMoreFiltersOpen ? "" : " hidden"}>
+          <label>
             Prioridad
             <select id="gamePriorityFilter">
               <option value="all" ${appState.gameFilters.priority === "all" ? "selected" : ""}>Todas</option>
@@ -1793,21 +1830,10 @@ function renderGbaGamesSection(item) {
             </select>
           </label>
           <label>
-            Genero
+            Género
             <select id="gameGenreFilter">
               <option value="all" ${appState.gameFilters.genre === "all" ? "selected" : ""}>Todos</option>
               ${genres}
-            </select>
-          </label>
-          <label>
-            Posesion
-            <select id="gameOwnershipFilter">
-              <option value="all" ${appState.gameFilters.ownership === "all" ? "selected" : ""}>Cualquiera</option>
-              <option value="none" ${appState.gameFilters.ownership === "none" ? "selected" : ""}>No lo tengo</option>
-              <option value="owned" ${appState.gameFilters.ownership === "owned" ? "selected" : ""}>Tengo alguno</option>
-              <option value="physical" ${appState.gameFilters.ownership === "physical" ? "selected" : ""}>Fisico</option>
-              <option value="digital" ${appState.gameFilters.ownership === "digital" ? "selected" : ""}>Digital</option>
-              <option value="both" ${appState.gameFilters.ownership === "both" ? "selected" : ""}>Ambos</option>
             </select>
           </label>
           <label>
@@ -1817,38 +1843,15 @@ function renderGbaGamesSection(item) {
               <option value="priority-desc" ${appState.gameFilters.sort === "priority-desc" ? "selected" : ""}>Prioridad alta primero</option>
               <option value="name-asc" ${appState.gameFilters.sort === "name-asc" ? "selected" : ""}>Nombre A-Z</option>
               <option value="name-desc" ${appState.gameFilters.sort === "name-desc" ? "selected" : ""}>Nombre Z-A</option>
-              <option value="price-low" ${appState.gameFilters.sort === "price-low" ? "selected" : ""}>Low mas barato</option>
+              <option value="price-low" ${appState.gameFilters.sort === "price-low" ? "selected" : ""}>Low más barato</option>
             </select>
           </label>
         </div>
       </div>
 
-      <p class="games-count">${totalVisible} item(s) visibles de ${normalizedGames.length} (${normalizedMainGames.length} juegos + ${normalizedExtras.length} extras)</p>
-      <div class="games-stats-strip">
-        <article class="games-stat-item">
-          <small>Juegos tengo</small>
-          <strong>${ownedCount}</strong>
-        </article>
-        <article class="games-stat-item">
-          <small>Fisicos</small>
-          <strong>${physicalCount}</strong>
-        </article>
-        <article class="games-stat-item">
-          <small>Digitales</small>
-          <strong>${digitalCount}</strong>
-        </article>
-        <article class="games-stat-item">
-          <small>Ambos</small>
-          <strong>${bothCount}</strong>
-        </article>
-        <article class="games-stat-item">
-          <small>PSN pendientes</small>
-          <strong>${digitalPendingCount}</strong>
-        </article>
-        <article class="games-stat-item">
-          <small>Extras tengo</small>
-          <strong>${extrasOwnedCount}</strong>
-        </article>
+      <div class="games-summary">
+        ${summaryChips}
+        <span class="games-count">${totalVisible} de ${normalizedGames.length} visibles · ${normalizedMainGames.length} juegos + ${normalizedExtras.length} extras</span>
       </div>
       ${manualGameFormBlock}
 
@@ -1863,7 +1866,7 @@ function renderGbaGamesSection(item) {
           ${
             filteredRegisteredMain.length
               ? `<div class="gba-games-grid">${cardsRegisteredMain}</div>`
-              : `<p class="muted">Todavia no hay juegos registrados con estos filtros.</p>`
+              : `<p class="muted">Todavía no hay juegos registrados con estos filtros.</p>`
           }
         </details>
         <details class="games-subsection games-subsection-collapsible games-subsection-extras">
@@ -2429,7 +2432,7 @@ function renderDetail(item) {
       ${renderValueLadderSection(item)}
       <article class="detail-block">
         <div class="section-head">
-          <h2>Gestion de consola</h2>
+          <h2>Gestión de consola</h2>
           <p class="muted">Resumen + edición progresiva.</p>
         </div>
         <div class="info-pills">
@@ -2535,7 +2538,7 @@ function renderDetail(item) {
             <summary>Nueva oportunidad</summary>
             <div class="detail-form-grid">
               <label>
-                Titulo
+                Título
                 <input id="oppTitulo" type="text" placeholder="Ej: Lote GBA SP en remate" />
               </label>
               <label>
@@ -2573,11 +2576,27 @@ function renderDetail(item) {
 }
 
 function bindGbaGameEvents() {
+  const moreFilters = document.getElementById("gameMoreFilters");
+  const moreFiltersPanel = document.querySelector(".games-filterbar--more");
+  if (moreFilters && moreFiltersPanel) {
+    moreFilters.addEventListener("toggle", () => {
+      appState.gameMoreFiltersOpen = moreFilters.open;
+      moreFiltersPanel.hidden = !moreFilters.open;
+    });
+  }
+
   const gameSearchInput = document.getElementById("gameSearchInput");
   if (gameSearchInput) {
     gameSearchInput.addEventListener("input", (event) => {
+      const caret = event.target.selectionStart;
       appState.gameFilters.q = event.target.value;
       render();
+      // render() reemplaza el DOM: sin esto, cada tecla deja la búsqueda sin foco.
+      const nextInput = document.getElementById("gameSearchInput");
+      if (nextInput) {
+        nextInput.focus({ preventScroll: true });
+        if (caret !== null) nextInput.setSelectionRange(caret, caret);
+      }
     });
   }
 
@@ -2808,7 +2827,7 @@ function bindGbaGameEvents() {
     if (!previewTitle || !previewMeta || !previewPriority || !previewOwnership || !previewWish) return;
     const currentName = manualNameInput?.value?.trim() || detected?.detectedName || "Juego manual";
     const currentFranchise = manualFranchiseInput?.value?.trim() || detected?.detectedFranchise || "Franquicia N/D";
-    const currentGenre = manualGenreInput?.value?.trim() || detected?.detectedGenre || "Genero N/D";
+    const currentGenre = manualGenreInput?.value?.trim() || detected?.detectedGenre || "Género N/D";
     const currentPriority = sanitizePriority(manualPriorityInput?.value || "media");
     const currentOwnership = normalizeOwnershipType(manualOwnershipInput?.value || "none", false);
     const currentState = manualStateInput?.value || "want";
