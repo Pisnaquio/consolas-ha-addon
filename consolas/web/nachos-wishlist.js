@@ -318,7 +318,7 @@
             <input type="checkbox" data-pick-item="${escapeHtml(result.key)}"${chosen.has(result.key) ? " checked" : ""} />
             <img class="nw-thumb" src="${escapeHtml(result.coverUrl)}" alt="" loading="lazy" />
             <span><strong>${escapeHtml(result.title)}</strong><span class="muted"> · ${escapeHtml(result.platform)}${
-              result.owned ? " · ya lo tenés" : ""
+              result.hasReproduction ? " · tenés una reproducción" : result.owned ? " · ya lo tenés" : ""
             }</span></span>
           </label>
         </li>`
@@ -418,8 +418,9 @@
 
   function pieceRow(wish, entry) {
     const price = priceLine(entry.priceRange);
-    const action =
-      entry.source === "game"
+    const action = entry.hasReproduction
+      ? `<a class="btn-link" href="${escapeHtml(window.CollectionRepository.getConsoleGamesHref(entry.consoleId))}">Ver biblioteca</a>`
+      : entry.source === "game"
         ? `<button class="btn-link" type="button" data-mark-owned="${escapeHtml(wish.id)}|${escapeHtml(entry.key)}"${
             busy ? " disabled" : ""
           }>Ya lo tengo</button>`
@@ -429,7 +430,8 @@
       <div class="nw-piece-id">
         <p class="nw-piece-title">${escapeHtml(entry.title)}</p>
         <p class="muted">${escapeHtml([entry.platform, price].filter(Boolean).join(" · "))}${
-          entry.ownershipType === "digital" ? ` · <span class="nw-tag">la tenés en digital</span>` : ""
+          entry.hasReproduction ? ` · <span class="nw-tag">Tenés una reproducción</span>` :
+            entry.ownershipType === "digital" ? ` · <span class="nw-tag">la tenés en digital</span>` : ""
         }</p>
         ${entry.exists ? "" : `<p class="nw-warning">Este juego ya no está en la biblioteca de la consola.</p>`}
       </div>

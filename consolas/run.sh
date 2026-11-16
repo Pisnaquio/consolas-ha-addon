@@ -33,7 +33,7 @@ if command -v bashio::config >/dev/null 2>&1; then
   # /d522fbd3_consolas). Sin ella, los correos salen sin links de acción.
   export AUCTION_WATCH_LINK_BASE_URL="${AUCTION_WATCH_LINK_BASE_URL:-$(bashio::config 'auction_watch_link_base_url' 2>/dev/null || true)}"
   # Collection Radar entrega por su cuenta: asunto y destinatarios propios, con
-  # el transporte SMTP de Auction Watch como respaldo (ver server/app.py).
+  # el transporte SMTP de Auction Watch como respaldo (ver server/radar_notifications.py).
   export RADAR_EMAIL_MODE="${RADAR_EMAIL_MODE:-$(bashio::config 'radar_email_mode' 2>/dev/null || true)}"
   export RADAR_EMAIL_FROM="${RADAR_EMAIL_FROM:-$(bashio::config 'radar_email_from' 2>/dev/null || true)}"
   export RADAR_EMAIL_TO="${RADAR_EMAIL_TO:-$(bashio::config 'radar_email_to' 2>/dev/null || true)}"

@@ -12,6 +12,7 @@
     "sony-playstation": "ps1",
     "sony-playstation-4": "ps4",
     "sony-playstation-5": "ps5",
+    "playstation-portable-psp": "psp",
     "sega-dreamcast": "dreamcast",
     "sega-genesis-mega-drive": "genesis",
     "nintendo-gamecube": "gamecube",

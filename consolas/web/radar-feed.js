@@ -26,6 +26,9 @@
   let feed = null;
   let budget = null;
   let shipment = null;
+  // Qué detalles («La cuenta y por qué aparece») dejó abiertos el usuario.
+  // Cada acción vuelve a dibujar el feed entero; sin esto se cerrarían solos.
+  const openDetails = new Set();
   let dismissing = "";
   let purchasing = "";
   let editingBudget = false;
@@ -508,7 +511,7 @@
         </div>
       </div>
       ${signals ? `<div class="feed-signals">${signals}</div>` : ""}
-      ${detail ? `<details class="feed-more"><summary>La cuenta y por qué aparece</summary>${detail}</details>` : ""}
+      ${detail ? `<details class="feed-more" data-more="${escapeHtml(item.id)}"${openDetails.has(String(item.id)) ? " open" : ""}><summary>La cuenta y por qué aparece</summary>${detail}</details>` : ""}
       ${decisionLine(item)}
       ${actions(item)}
       ${dismissForm(item)}
@@ -576,6 +579,13 @@
   const each = (selector, handler) => (root.querySelectorAll?.(selector) || []).forEach(handler);
 
   function bindEvents() {
+    each("details[data-more]", (details) =>
+      details.addEventListener("toggle", () => {
+        if (details.open) openDetails.add(details.dataset.more);
+        else openDetails.delete(details.dataset.more);
+      })
+    );
+
     each("[data-verify-contents]", (button) =>
       button.addEventListener("click", () =>
         perform(

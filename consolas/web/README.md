@@ -17,7 +17,7 @@ Web personal para gestionar colección y wishlist de consolas. Hoy puede correr:
 - `web/data/consoles.json`: fuente única de datos para consolas.
 - `web/data/consoles-base.json`: base global de consolas (sin duplicar revisiones).
 - `web/assets/photos/`: carpeta para futuras fotos.
-- `server/app.py`: backend same-origin + SQLite para Home Assistant.
+- `server/`: backend same-origin + SQLite para Home Assistant (entrada `server/app.py`).
 - `ha-addon/consolas/`: add-on autocontenido de Home Assistant.
 
 ## Cómo abrirla

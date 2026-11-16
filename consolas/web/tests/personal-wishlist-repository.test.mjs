@@ -112,6 +112,25 @@ test("fulfilled wishes sort after pending ones", () => {
   assert.equal(model.totals.fulfilled, 1);
 });
 
+test("a registered reproduction survives editing and leaves the original pending", () => {
+  const gameId = "donkey-kong-country";
+  const { wishlist, collection } = loadRepositories({
+    snes: { gameEditsById: { [gameId]: { ownershipType: "physical", authenticityStatus: "reproduction" } } }
+  });
+  const base = snesGames();
+  collection.persistGamePatch("snes", gameId, { notas: "Probado" }, base);
+  const games = collection.getGamesForConsole({ snes: base }, "snes");
+  const model = wishlist.composeModel({
+    wishesById: { dk: { title: "Donkey Kong Country", items: [{ consoleId: "snes", gameId }] } },
+    gamesByConsole: { snes: games },
+    consolesById
+  });
+
+  assert.equal(collection.gameIsOwned(games.find((game) => game.id === gameId)), true);
+  assert.equal(model.wishes[0].fulfilled, false);
+  assert.equal(model.wishes[0].missing[0].hasReproduction, true);
+});
+
 test("a game that disappeared from the library stays visible as missing instead of vanishing", () => {
   const { wishlist } = loadRepositories();
   const model = wishlist.composeModel({

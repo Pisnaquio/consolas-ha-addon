@@ -337,6 +337,11 @@ class Handler(BaseHTTPRequestHandler):
         if path.startswith("/media/"):
             self.serve_media(path.removeprefix("/media/"))
             return
+        if path == "/api" or path.startswith("/api/"):
+            # Sin esto una ruta de API inexistente caía al fallback estático y
+            # devolvía index.html con 200: el cliente recibía HTML donde
+            # esperaba JSON y no podía distinguirlo de un endpoint válido.
+            raise ApiError(HTTPStatus.NOT_FOUND, "Unknown endpoint")
         self.serve_static(path)
 
     def route_put(self) -> None:

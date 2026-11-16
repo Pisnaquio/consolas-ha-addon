@@ -60,7 +60,7 @@ function defaultBudget(overrides = {}) {
 async function renderFeed({
   items = [], following = [], counts = {}, environment = "production", fail = false,
   budget = defaultBudget(), radarPurchase = null, openPurchaseFor = "", purchases = { items: [] },
-  clickUndo = false,
+  clickUndo = false, openDetailFor = "",
   shipment = { currency: "USD", limit: 200, merchandise: 0, headroom: 200, overLimit: false, count: 0, items: [] },
 } = {}) {
   let html = "";
@@ -70,6 +70,7 @@ async function renderFeed({
   // de manipular el estado interno de la página desde afuera.
   const purchaseClicks = [];
   const undoClicks = [];
+  const detailToggles = [];
   const root = {
     set innerHTML(value) { html = String(value); },
     get innerHTML() { return html; },
@@ -81,6 +82,14 @@ async function renderFeed({
         return [{
           dataset: { undoPurchase: String(first.id), listing: String(first.listingId || "") },
           addEventListener: (_event, handler) => undoClicks.push(handler),
+        }];
+      }
+      if (selector === "details[data-more]") {
+        if (!openDetailFor) return [];
+        return [{
+          dataset: { more: openDetailFor },
+          open: true,
+          addEventListener: (_event, handler) => detailToggles.push(handler),
         }];
       }
       if (!openPurchaseFor || selector !== "[data-purchase]") return [];
@@ -131,6 +140,7 @@ async function renderFeed({
   vm.runInContext(pageSource, context, { filename: "radar-feed.js" });
   await new Promise((resolve) => setImmediate(resolve));
   await new Promise((resolve) => setImmediate(resolve));
+  if (openDetailFor) detailToggles[0]?.();
   if (openPurchaseFor) purchaseClicks[0]?.();
   if (clickUndo) {
     await undoClicks[0]?.();
@@ -755,4 +765,13 @@ test("a declared CIB in the feed asks to check box and manual before paying for 
 
   assert.match(html, /radar-contents is-declared">CIB declarado por el vendedor, sin comprobar/);
   assert.match(html, /data-verify-contents="ebay-us-1">Comprobé caja y manual/);
+});
+
+test("a detail the user opened stays open when an action redraws the feed", async () => {
+  const listing = item();
+  const closed = await renderFeed({ items: [listing], openPurchaseFor: listing.id });
+  assert.match(closed.html, new RegExp(`<details class="feed-more" data-more="${listing.id}"><summary>`));
+
+  const opened = await renderFeed({ items: [listing], openPurchaseFor: listing.id, openDetailFor: listing.id });
+  assert.match(opened.html, new RegExp(`<details class="feed-more" data-more="${listing.id}" open><summary>`));
 });

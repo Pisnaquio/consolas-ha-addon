@@ -79,6 +79,7 @@
   function annotateGameItem(item, { gamesByConsole, consolesById }) {
     const game = findGame(gamesByConsole, item.consoleId, item.gameId);
     const ownershipType = game ? repo().normalizeOwnershipType(game.ownershipType, game.loTengo) : "none";
+    const hasReproduction = (ownershipType === "physical" || ownershipType === "both") && game?.authenticityStatus === "reproduction";
     return {
       key: itemKey(item),
       source: "game",
@@ -90,7 +91,8 @@
       coverUrl: gameCover(game),
       priceRange: game?.priceRange || null,
       ownershipType,
-      owned: ownershipType !== "none"
+      hasReproduction,
+      owned: ownershipType !== "none" && !hasReproduction
     };
   }
 

@@ -1337,6 +1337,7 @@ function reconcileGamesCatalog(baseGames = [], currentGames = []) {
       prioridad: sanitizePriority(source.prioridad ?? base.prioridad ?? "media"),
       status: source.status ?? base.status,
       condicion: source.condicion ?? base.condicion,
+      authenticityStatus: source.authenticityStatus ?? base.authenticityStatus,
       notas: source.notas ?? base.notas,
       coverImage: finalCover,
       coverUrl: finalCover || "",
