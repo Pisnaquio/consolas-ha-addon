@@ -169,6 +169,19 @@ class SearchConfigTests(unittest.TestCase):
         self.assertFalse(self.hits("Barco Odyssey para restaurar"))
         self.assertIn("odyssey", self.hits("Consola Odyssey con controles"))
 
+    def test_32x_needs_sega_context_and_is_not_a_measurement(self) -> None:
+        # Remotes, remate 8463, lote 57 (2026-11): las medidas entraban como Sega 32X.
+        self.assertFalse(
+            self.hits(
+                "Porta Espaciero en madera Bambu y especierodn en vidrio y madera "
+                "porta especiero de 8 recipientes 32x 17 x17 8 recipientes de 10x5x6 nuevo"
+            )
+        )
+        self.assertFalse(self.hits("Juego de 8 frascos 32x17 cm"))
+        self.assertIn("32x", self.hits("Sega 32X con cables"))
+        self.assertIn("32x", self.hits("Mega Drive con 32X y dos cartuchos"))
+        self.assertIn("32x", self.hits("Consola 32X sin probar"))
+
     def test_vintage_terms_and_risk_variants_are_scored(self) -> None:
         text = "Radofin Tele-Sports tipo Pong, a la vista y no se probó"
         hits = matched_terms(text, self.patterns)

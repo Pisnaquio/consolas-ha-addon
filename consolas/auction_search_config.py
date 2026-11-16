@@ -210,6 +210,25 @@ _CARTRIDGE_TERMS = {"cartucho", "cartuchos"}
 _FAMILY_TERMS = {"family"}
 _SATURN_TERMS = {"saturn"}
 _AMBIGUOUS_PLATFORM_TERMS = {"odyssey", "terminator"}
+# «32x» es el accesorio de Sega, pero también una medida: «porta especiero
+# 32x 17 x17» (Remotes, remate 8463, lote 57, 2026-11) entraba como 32X. Sólo
+# cuenta con contexto Sega o de consola; «juego» no alcanza porque también
+# significa «set» («juego de 8 frascos»).
+_SEGA_32X_TERMS = {"32x"}
+_SEGA_32X_CONTEXT_TERMS = [
+    "sega",
+    "mega drive",
+    "megadrive",
+    "genesis",
+    "sega cd",
+    "mega cd",
+    "consola",
+    "consolas",
+    "videojuego",
+    "videojuegos",
+    "cartucho",
+    "cartuchos",
+]
 _SPECIFIC_TERMS = {
     "wii u": {"wii"},
     "ds lite": {"ds"},
@@ -442,6 +461,11 @@ def _filter_contextual_hits(text_n: str, hits: list[str]) -> list[str]:
 
     if normalized_hits.intersection(_SATURN_TERMS) and not _has_gaming_context_excluding(text_n, _SATURN_TERMS):
         filtered_hits = [hit for hit in filtered_hits if normalize_text(hit) not in _SATURN_TERMS]
+
+    if normalized_hits.intersection(_SEGA_32X_TERMS) and not any(
+        _contains_term(text_n, normalize_text(term)) for term in _SEGA_32X_CONTEXT_TERMS
+    ):
+        filtered_hits = [hit for hit in filtered_hits if normalize_text(hit) not in _SEGA_32X_TERMS]
 
     if normalized_hits.intersection(_AMBIGUOUS_PLATFORM_TERMS) and not _has_gaming_context(text_n):
         filtered_hits = [

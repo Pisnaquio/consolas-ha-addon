@@ -175,7 +175,7 @@ except ImportError:  # Direct execution: `python3 server/app.py`.
     from state import ensure_state_media_migrated, read_state, write_state
 
 
-SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.98")
+SERVICE_VERSION = os.getenv("CONSOLAS_APP_VERSION", "0.1.99")
 
 
 _SPLIT_MODULES = (
